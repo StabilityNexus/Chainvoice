@@ -8,6 +8,8 @@ import "../src/Chainvoice.sol";
 contract TestChainvoice is Test {
     Chainvoice c;
 
+    receive() external payable {}
+
     function setUp() public {
         c = new Chainvoice();
     }
@@ -35,13 +37,11 @@ contract TestChainvoice is Test {
         assertEq(receivedInvoices[0].amountDue, amount);
         assertTrue(receivedInvoices[0].isPaid==false);
     }
-
     function testPayInvoice() public{
-        console.log("this balance :",address(this).balance);
         address receiver = 0x24F13d40CF7DE6a81a2a1949aA45F2242e81f1e2;
         uint256 amount = 100;
         c.createInvoice(amount, receiver);
-        vm.deal(receiver, amount);
+        vm.deal(receiver, 1000);
         console.log("Receiver Balance: ", address(receiver).balance);
         vm.prank(receiver);
         c.payInvoice{value:amount}(0);
@@ -56,6 +56,8 @@ contract TestChainvoice is Test {
         console.log("Invoice Amount Due: ", amount);
         console.log("Paid",sentInvoices[0].isPaid);
         console.log("-------------------------------------------");
-
     }
 }
+
+
+

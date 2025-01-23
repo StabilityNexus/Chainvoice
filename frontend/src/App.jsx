@@ -21,6 +21,9 @@ import Feature from './page/Feature';
 import About from './page/About';
 import Working from './page/Working';
 import Security from './page/Security';
+import CreateInvoice from './components/CreateInvoice';
+import SentInvoice from './page/SentInvoice';
+import PendingInvoice from './page/PendingInvoice';
 
 const AllChains = [
   ...Object.values(chains),
@@ -54,7 +57,11 @@ function App() {
               <Routes>
                 <Route path="/" element={<Applayout />}>
                   <Route index element={<Landing/>} />
-                  <Route path="home" element={<Home/>} />
+                  <Route path="home" element={<Home/>} >
+                      <Route path='create' element={<CreateInvoice/>}/>
+                      <Route path='sent' element={<SentInvoice/>}/>
+                      <Route path='pending' element={<PendingInvoice/>}/>
+                  </Route>
                   <Route path="feature" element={<Feature/>} />
                   <Route path="about" element={<About/>} />
                   <Route path="working" element={<Working/>} />

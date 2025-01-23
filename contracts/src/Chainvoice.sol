@@ -7,6 +7,7 @@ pragma solidity ^0.8.13;
  * @notice A contract that allows users to create and pay invoices seamlessly.
  */
 import {Test} from "../lib/forge-std/src/Test.sol";
+
 contract Chainvoice {
     struct InvoiceDetails {
         uint256 id;         // Unique ID for the invoice
@@ -58,7 +59,6 @@ contract Chainvoice {
      */
     function payInvoice(uint256 invoiceId) external payable {
         require(invoiceId < invoices.length, "Invalid invoice ID");
-
         InvoiceDetails storage invoice = invoices[invoiceId];
         require(msg.sender == invoice.to, "Not authorized to pay this invoice");
         require(!invoice.isPaid, "Invoice already paid");
@@ -67,9 +67,7 @@ contract Chainvoice {
         // Transfer Ether to the sender
         (bool success,) = payable(invoice.from).call{value: msg.value}("");
         require(success, "Payment transfer failed");
-        
         invoice.isPaid = true;
-
         emit InvoicePaid(invoiceId, invoice.from, msg.sender, msg.value);
     }
 
