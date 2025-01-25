@@ -35,7 +35,7 @@ function SentInvoice() {
             >
 
               <p className="col-span-4">
-                From: {invoice.from.substring(0, 10)}...{invoice.from.substring(invoice.from.length - 10)}
+                Client: {invoice.to.substring(0, 10)}...{invoice.to.substring(invoice.to.length - 10)}
               </p>
               <p className='col-span-4 text-start'>
                 Amount : {ethers.formatUnits(invoice.amountDue)} ETH (sepolia)
