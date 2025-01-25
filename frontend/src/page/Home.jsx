@@ -3,7 +3,6 @@ import React, { useState } from 'react'
 import { Outlet, useNavigate } from 'react-router-dom';
 
 function Home() {
-  const [title,setTitle]=useState("pending");
   const navigate=useNavigate();
   return (
     <>

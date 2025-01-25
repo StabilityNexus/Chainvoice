@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react'
-import { JsonRpcProvider, formatEther } from "ethers";
-import { useAccount } from 'wagmi';
+import {BrowserProvider, JsonRpcProvider, formatEther } from "ethers";
+import { useAccount, useWalletClient } from 'wagmi';
 
 function About() {
   const { address, isConnected } = useAccount();
   const [balance, setBalance] = useState('0');
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
     async function fetchBalance() {
       if (!isConnected || !address) {
@@ -16,7 +15,9 @@ function About() {
       }
 
       try {
-        const provider = new JsonRpcProvider(import.meta.env.VITE_BLOCKCHAIN_URI);
+        // const provider = new JsonRpcProvider(import.meta.env.VITE_BLOCKCHAIN_URI);
+        const provider = new BrowserProvider(window.ethereum);
+        // const signer = await provider.getSigner();
         const userBalance = await provider.getBalance(address);
         setBalance(formatEther(userBalance));
         setLoading(false);

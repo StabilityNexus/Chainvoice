@@ -7,7 +7,7 @@ pragma solidity ^0.8.13;
  * @notice A contract that allows users to create and pay invoices seamlessly.
  */
 import {Test} from "../lib/forge-std/src/Test.sol";
-
+import {console} from "../lib/forge-std/src/console.sol";
 contract Chainvoice {
     struct InvoiceDetails {
         uint256 id;         // Unique ID for the invoice
@@ -33,6 +33,7 @@ contract Chainvoice {
      * @param to The address of the receiver
      */
     function createInvoice(uint256 amountDue, address to) external {
+        console.log(to);
         require(amountDue > 0, "Amount must be greater than zero");
         require(to != address(0), "Receiver address cannot be zero");
         require(to != msg.sender, "Cannot create invoice for yourself");
@@ -70,7 +71,6 @@ contract Chainvoice {
         invoice.isPaid = true;
         emit InvoicePaid(invoiceId, invoice.from, msg.sender, msg.value);
     }
-
     /**
      * @dev Get all invoices sent by the caller
      * @return An array of InvoiceDetails for invoices sent by the caller
