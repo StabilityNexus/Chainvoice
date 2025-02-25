@@ -1,104 +1,176 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.13;
-
-/**
- * @title Chainvoice
- * @author 
- * @notice A contract that allows users to create and pay invoices seamlessly.
- */
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {console} from "../lib/forge-std/src/console.sol";
+import {AggregatorV3Interface} from "../lib/chainlink-brownie-contracts/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
+
 contract Chainvoice {
+    AggregatorV3Interface internal priceFeed;
+    struct UserDetails {
+        string fname;
+        string lname;
+        string email;
+        string country;
+        string city;
+        string postalcode;
+    }
+    struct ItemData {
+        string description;
+        int256 qty;
+        int256 unitPrice;
+        int256 discount;
+        int256 tax;
+        int256 amount;
+    }
     struct InvoiceDetails {
-        uint256 id;         // Unique ID for the invoice
-        address from;       // Sender's address (invoice creator)
-        address to;         // Receiver's address
-        uint256 amountDue;  // Amount requested
-        bool isPaid;        // Payment status
+        uint256 id;
+        address from;
+        UserDetails user; // Struct to store user details
+        address to;
+        UserDetails client; // Struct to store client details
+        uint256 amountDue;
+        bool isPaid;
     }
 
-    // Array to store all invoices
     InvoiceDetails[] public invoices;
+    mapping(address => uint256[]) public sentInvoices;
+    mapping(address => uint256[]) public receivedInvoices;
+    mapping(uint256 => ItemData[]) public itemDatas;
 
-    // Mappings to track invoice IDs for each user
-    mapping(address => uint256[]) public sentInvoices;    // Invoices created by a user
-    mapping(address => uint256[]) public receivedInvoices; // Invoices received by a user
+    address public owner;
+    address public treasuryAddress;
+    uint256 public feeAmountInUSD;
 
-    event InvoiceCreated(uint256 id, address indexed from, address indexed to, uint256 amountDue);
-    event InvoicePaid(uint256 id, address indexed from, address indexed to, uint256 amountPaid);
+    constructor(address _priceFeed) {
+        priceFeed = AggregatorV3Interface(_priceFeed);
+        owner = msg.sender;
+        feeAmountInUSD = 1 * 1e18;
+    }
 
-    /**
-     * @dev Create a new invoice request
-     * @param amountDue The amount requested in the invoice
-     * @param to The address of the receiver
-     */
-    function createInvoice(uint256 amountDue, address to) external {
-        console.log(to);
+    modifier OnlyOwner() {
+        require(msg.sender == owner, "Only Owner is accessible");
+        _;
+    }
+    event InvoiceCreated(
+        uint256 id,
+        address indexed from,
+        address indexed to,
+        uint256 amountDue
+    );
+    event InvoicePaid(
+        uint256 id,
+        address indexed from,
+        address indexed to,
+        uint256 amountPaid
+    );
+
+    function createInvoice(
+        uint256 amountDue,
+        address to,
+        UserDetails memory user,
+        UserDetails memory client,
+        ItemData[] memory _items
+    ) external {
         require(amountDue > 0, "Amount must be greater than zero");
         require(to != address(0), "Receiver address cannot be zero");
         require(to != msg.sender, "Cannot create invoice for yourself");
 
-        // Create the invoice and push to the invoices array
         uint256 invoiceId = invoices.length;
-        invoices.push(InvoiceDetails({
-            id: invoiceId,
-            from: msg.sender,
-            to: to,
-            amountDue: amountDue,
-            isPaid: false
-        }));
+        invoices.push(
+            InvoiceDetails({
+                id: invoiceId,
+                from: msg.sender,
+                user: user,
+                to: to,
+                client: client,
+                amountDue: amountDue,
+                isPaid: false
+            })
+        );
 
-        // Track the invoice IDs for both sender and receiver
+        for (uint256 i = 0; i < _items.length; i++) {
+            itemDatas[invoiceId].push(_items[i]);
+        }
+
         sentInvoices[msg.sender].push(invoiceId);
         receivedInvoices[to].push(invoiceId);
 
         emit InvoiceCreated(invoiceId, msg.sender, to, amountDue);
     }
-    /**
-     * @dev Pay an invoice request using Ether
-     * @param invoiceId The ID of the invoice to be paid
-     */
+
+    function usdToNativeCurrencyConversion() public view returns (uint256) {
+        (, int256 answer, , , ) = priceFeed.latestRoundData();
+        require(answer > 0, "Invalid price data");
+        uint256 price = uint256(answer);
+        uint256 ethPriceAdjusted = price * 1e10;
+        uint256 nativeAmount = (feeAmountInUSD * 1e18);
+
+        return nativeAmount / ethPriceAdjusted;
+    }
+
+    uint256 public accumulatedFees;
+
     function payInvoice(uint256 invoiceId) external payable {
         require(invoiceId < invoices.length, "Invalid invoice ID");
         InvoiceDetails storage invoice = invoices[invoiceId];
         require(msg.sender == invoice.to, "Not authorized to pay this invoice");
         require(!invoice.isPaid, "Invoice already paid");
-        require(msg.value == invoice.amountDue, "Incorrect payment amount");
 
-        // Transfer Ether to the sender
-        (bool success,) = payable(invoice.from).call{value: msg.value}("");
+        uint256 feeAmountInNativeCurrency = usdToNativeCurrencyConversion();
+        require(
+            msg.value >= invoice.amountDue + feeAmountInNativeCurrency,
+            "Payment must cover the invoice amount and fee"
+        );
+        uint256 amountToRecipient = msg.value - feeAmountInNativeCurrency;
+        (bool success, ) = payable(invoice.from).call{value: amountToRecipient}(
+            ""
+        );
         require(success, "Payment transfer failed");
+        accumulatedFees += feeAmountInNativeCurrency;
         invoice.isPaid = true;
-        emit InvoicePaid(invoiceId, invoice.from, msg.sender, msg.value);
     }
-    /**
-     * @dev Get all invoices sent by the caller
-     * @return An array of InvoiceDetails for invoices sent by the caller
-     */
-    function getMySentInvoices() external view returns (InvoiceDetails[] memory) {
+
+    function getMySentInvoices()
+        external
+        view
+        returns (InvoiceDetails[] memory)
+    {
         return _getInvoices(sentInvoices[msg.sender]);
     }
 
-    /**
-     * @dev Get all invoices received by the caller
-     * @return An array of InvoiceDetails for invoices received by the caller
-     */
-    function getMyReceivedInvoices(address add) external view returns (InvoiceDetails[] memory) {
+    function getMyReceivedInvoices(
+        address add
+    ) external view returns (InvoiceDetails[] memory) {
         return _getInvoices(receivedInvoices[add]);
     }
 
-    /**
-     * @dev Internal function to fetch invoices by IDs
-     * @param invoiceIds Array of invoice IDs to fetch
-     * @return An array of InvoiceDetails
-     */
-    function _getInvoices(uint256[] storage invoiceIds) internal view returns (InvoiceDetails[] memory) {
-        InvoiceDetails[] memory userInvoices = new InvoiceDetails[](invoiceIds.length);
-
+    function _getInvoices(
+        uint256[] storage invoiceIds
+    ) internal view returns (InvoiceDetails[] memory) {
+        InvoiceDetails[] memory userInvoices = new InvoiceDetails[](
+            invoiceIds.length
+        );
         for (uint256 i = 0; i < invoiceIds.length; i++) {
             userInvoices[i] = invoices[invoiceIds[i]];
         }
-
         return userInvoices;
+    }
+
+    function setTreasuryAddress(address add) public OnlyOwner {
+        require(add != address(0), "Treasury Address cannot be equal to zero");
+        treasuryAddress = add;
+    }
+
+    function setFeeAmount(uint16 fee) public OnlyOwner {
+        feeAmountInUSD = fee * 1e18;
+    }
+
+    function withdraw() external {
+        require(accumulatedFees > 0, "No fees to withdraw");
+        uint256 amount = accumulatedFees;
+        accumulatedFees = 0;
+
+        (bool success, ) = payable(treasuryAddress).call{value: amount}("");
+        require(success, "Fee withdrawal failed");
     }
 }

@@ -1,0 +1,1 @@
+{"id":"43e10bba56b7bc505bda0f99b94ffefd","source_id_to_path":{"0":"lib/chainlink-brownie-contracts/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol","1":"src/MockV3Aggregator.sol"},"language":"Solidity"}

@@ -1,0 +1,29 @@
+{
+  "_format": "hh-sol-artifact-1",
+  "contractName": "Cloneable",
+  "sourceName": "contracts/tokenbridge/libraries/Cloneable.sol",
+  "abi": [
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "isMaster",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ],
+  "bytecode": "0x6080604052348015600f57600080fd5b506000805460ff19166001179055607d8061002b6000396000f3fe6080604052348015600f57600080fd5b506004361060285760003560e01c80636f791d2914602d575b600080fd5b60005460ff16604051901515815260200160405180910390f3fea2646970667358221220ef510c11c4274cdd4d4ff00619cde358fd74fd512d18771e80054c11ee8fa11264736f6c63430008100033",
+  "deployedBytecode": "0x6080604052348015600f57600080fd5b506004361060285760003560e01c80636f791d2914602d575b600080fd5b60005460ff16604051901515815260200160405180910390f3fea2646970667358221220ef510c11c4274cdd4d4ff00619cde358fd74fd512d18771e80054c11ee8fa11264736f6c63430008100033",
+  "linkReferences": {},
+  "deployedLinkReferences": {}
+}
