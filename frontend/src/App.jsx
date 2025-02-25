@@ -20,7 +20,7 @@ import Home from './page/Home';
 import Feature from './page/Feature';
 import About from './page/About';
 import Working from './page/Working';
-import Security from './page/Security';
+import Treasure from './page/Treasure';
 import CreateInvoice from './components/CreateInvoice';
 import SentInvoice from './page/SentInvoice';
 import ReceivedInvoice from './page/ReceivedInvoice';
@@ -65,7 +65,7 @@ function App() {
                   <Route path="feature" element={<Feature/>} />
                   <Route path="about" element={<About/>} />
                   <Route path="working" element={<Working/>} />
-                  <Route path="security" element={<Security/>} />
+                  <Route path="treasure" element={<Treasure/>} />
                 </Route>
               </Routes>
             </Router>

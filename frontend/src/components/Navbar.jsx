@@ -26,7 +26,7 @@ function Navbar() {
               <Link to='working'>How It Works</Link>
             </li>
             <li>
-              <Link to='security'>Security</Link>
+              <Link to='treasure'>Treasure</Link>
             </li>
             <li>
               <Link to='about'>About Us</Link>

@@ -21,6 +21,7 @@ function SentInvoice() {
     fetchSentInvoices();
   }, [walletClient]);
 
+  
   return (
     <div>
       <h2 className="text-lg font-bold">Your Sent Invoice Requests</h2>
@@ -49,6 +50,26 @@ function SentInvoice() {
               >
                 {invoice.isPaid ? 'Paid' : 'Not Paid'}
               </button>
+              <div className='grid grid-cols-2 gap-96'>
+                <div>
+              <p>From_Details</p>
+              <p>{invoice.user.fname}</p>
+              <p>{invoice.user.lname}</p>
+              <p>{invoice.user.email}</p>
+              <p>{invoice.user.country}</p>
+              <p>{invoice.user.city}</p>
+              <p>{invoice.user.postalCode}</p>
+                </div>
+                <div>
+                <p>To_Details</p>
+              <p>{invoice.client.fname }</p>
+              <p>{invoice.client.lname}</p>
+              <p>{invoice.client.email}</p>
+              <p>{invoice.client.country}</p>
+              <p>{invoice.client.city}</p>
+              <p>{invoice.client.postalCode}</p>
+                </div>
+              </div>
             </li>
           ))}
         </ul>

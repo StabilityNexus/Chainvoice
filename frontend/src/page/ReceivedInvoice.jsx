@@ -8,7 +8,7 @@ function ReceivedInvoice() {
   const { address } = useAccount();
   const [loading, setLoading] = useState(false);
   const [receivedInvoices, setReceivedInvoice] = useState([]);
-
+  const [fee,setFee]=useState(0);
   useEffect(() => {
     const fetchReceivedInvoices = async () => {
       try {
@@ -17,9 +17,13 @@ function ReceivedInvoice() {
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
         const contract = new Contract(import.meta.env.VITE_CONTRACT_ADDRESS, ChainvoiceABI, signer);
+        console.log(address);
         const res = await contract.getMyReceivedInvoices(address);
         setReceivedInvoice(res);
         setLoading(false);
+        const fee=await contract.usdToNativeCurrencyConversion();
+        console.log(ethers.formatUnits(fee));
+        setFee(fee);
       } catch (error) {
         console.log(error);
       }
@@ -29,14 +33,15 @@ function ReceivedInvoice() {
 
   const payInvoice = async(id,amountDue) => {
     try {
-      console.log(ethers.toBigInt(id));
         if (!walletClient) return;
         const provider=new BrowserProvider(walletClient);
         const signer=await provider.getSigner();
         const contract= new Contract(import.meta.env.VITE_CONTRACT_ADDRESS,ChainvoiceABI,signer);
-  
+        console.log(amountDue);
+        const feeAmountInNativeCurrency = await contract.usdToNativeCurrencyConversion();
+        console.log(feeAmountInNativeCurrency);
         const res = await contract.payInvoice(ethers.toBigInt(id), {
-          value: amountDue  
+          value: amountDue + feeAmountInNativeCurrency 
       });
         console.log(res);
     } catch (error) {
@@ -70,6 +75,9 @@ function ReceivedInvoice() {
                   <button className="text-sm rounded-full text-white font-bold col-span-1 bg-green-600">Paid</button> :
                   <button className=' bg-red-500 p-1 rounded-md col-span-1' onClick={()=>{payInvoice(invoice.id,invoice.amountDue)}}>Pay Now</button>
               }
+              <span>
+              Fee:{ethers.formatUnits(fee)}ETH worth of 1$
+              </span>                  
             </li>
           ))}
         </ul>

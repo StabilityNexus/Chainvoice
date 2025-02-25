@@ -6,7 +6,7 @@ function Footer() {
             <footer className="text-black text-center py-2 pt-40">
                 <div className="container mx-auto">
                     <p className="text-sm">
-                        &copy; {new Date().getFullYear()} Stability Nexus. All rights reserved.
+                        &copy; {new Date().getFullYear()} Karan Kumawat. All rights reserved.
                     </p>
                 </div>
             </footer>
