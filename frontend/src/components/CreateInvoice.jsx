@@ -186,12 +186,12 @@ function CreateInvoice() {
             <Button
               // variant={"outline"}
               className={cn(
-                "w-[260px] justify-start text-left font-normal",
+                "w-[260px] justify-start text-left font-normal bg-white text-black hover:bg-white",
                 !dueDate && "text-muted-foreground"
               )}
             >
-              <CalendarIcon />
-              {dueDate ? format(dueDate, "PPP") : <span>Pick a due date</span>}
+              <CalendarIcon className=''/>
+              {dueDate ? format(dueDate, "PPP") : <span className=''>Pick a due date</span>}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0" align="start">
@@ -209,42 +209,42 @@ function CreateInvoice() {
 
           <div className='border border-gray-700 max-w-[550px] p-5 my-3 rounded-md'>
             <p className='my-2'>From (Your Information)</p>
-            <Input value={account?.address} className='w-[500px] outline-none border-gray-400 focus:border-green-400' disabled name="userAddress" />
+            <Input value={account?.address} className='w-[500px] outline-none border-gray-400 focus:border-green-400 transition duration-500 shadow-2xl' disabled name="userAddress" />
             <div className='mt-4'>
               <p className='text-gray-500 text-sm my-4'>Add Your Info</p>
               <div className='flex space-x-4'>
-                <Input type='text' placeholder='Your First Name' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="userFname" />
-                <Input type='text' placeholder='Your Last Name' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="userLname" />
+                <Input type='text' placeholder='Your First Name' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="userFname" />
+                <Input type='text' placeholder='Your Last Name' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="userLname" />
               </div>
 
               <div className='flex space-x-4 my-5'>
-                <Input type='email' placeholder='Email' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="userEmail" />
-                <Input type='text' placeholder='Country' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="userCountry" />
+                <Input type='email' placeholder='Email' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="userEmail" />
+                <Input type='text' placeholder='Country' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="userCountry" />
               </div>
               <div className='flex space-x-4 my-5'>
-                <Input type='text' placeholder='City' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="userCity" />
-                <Input type='text' placeholder='Postal Code' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="userPostalcode" />
+                <Input type='text' placeholder='City' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="userCity" />
+                <Input type='text' placeholder='Postal Code' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="userPostalcode" />
               </div>
             </div>
           </div>
 
           <div className='border border-gray-700 max-w-[550px] p-5 my-3 rounded-md'>
             <p className='my-2'>Client Information</p>
-            <Input placeholder='Client Wallet Address' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="clientAddress" />
+            <Input placeholder='Client Wallet Address' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="clientAddress" />
             <div className='mt-4'>
               <p className='text-white text-sm my-4'>Add Client Info</p>
               <div className='flex space-x-4'>
-                <Input type='text' placeholder='Client First Name' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="clientFname" />
-                <Input type='text' placeholder='Client Last Name' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="clientLname" />
+                <Input type='text' placeholder='Client First Name' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="clientFname" />
+                <Input type='text' placeholder='Client Last Name' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="clientLname" />
               </div>
 
               <div className='flex space-x-4 my-5'>
-                <Input type='email' placeholder='Email' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="clientEmail" />
-                <Input type='text' placeholder='Country' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="clientCountry" />
+                <Input type='email' placeholder='Email' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="clientEmail" />
+                <Input type='text' placeholder='Country' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="clientCountry" />
               </div>
               <div className='flex space-x-4 my-5'>
-                <Input type='text' placeholder='City' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="clientCity" />
-                <Input type='text' placeholder='Postal Code' className='w-[500px] outline-none border-gray-400 focus:border-green-400' name="clientPostalcode" />
+                <Input type='text' placeholder='City' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="clientCity" />
+                <Input type='text' placeholder='Postal Code' className='w-[500px] outline-none border-gray-600 focus:border-green-400 transition duration-500' name="clientPostalcode" />
               </div>
             </div>
           </div>
@@ -264,12 +264,12 @@ function CreateInvoice() {
               itemData
                 .map((_, index) => (
                   <div className="grid grid-cols-12 gap-3 my-2" key={index} >
-                    <Input type="text" placeholder="Enter Description" className="col-span-4 py-5 outline-none border-gray-400 focus:border-green-400" name="description" onChange={(e) => handleItemData(e, index)} />
-                    <Input type="number" placeholder="0" className="col-span-1 py-5 outline-none border-gray-400 focus:border-green-400" name="qty" onChange={(e) => handleItemData(e, index)} />
-                    <Input type="text" placeholder="0" className="col-span-2 py-5 outline-none border-gray-400 focus:border-green-400" name="unitPrice" onChange={(e) => handleItemData(e, index)} />
-                    <Input type="text" placeholder="0" className="col-span-1 py-5 outline-none border-gray-400 focus:border-green-400" name="discount" onChange={(e) => handleItemData(e, index)} />
-                    <Input type="text" placeholder="0" className="col-span-1 py-5 outline-none border-gray-400 focus:border-green-400" name="tax" onChange={(e) => handleItemData(e, index)} />
-                    <Input type="text" placeholder="0.00" className="col-span-3 py-5 outline-none border-gray-400 focus:border-green-400" name="amount" disabled value={
+                    <Input type="text" placeholder="Enter Description" className="col-span-4 py-5 outline-none border-gray-600 focus:border-green-400 transition duration-500" name="description" onChange={(e) => handleItemData(e, index)} />
+                    <Input type="number" placeholder="0" className="col-span-1 py-5 outline-none border-gray-600 focus:border-green-400 transition duration-500" name="qty" onChange={(e) => handleItemData(e, index)} />
+                    <Input type="text" placeholder="0" className="col-span-2 py-5 outline-none border-gray-600 focus:border-green-400 transition duration-500" name="unitPrice" onChange={(e) => handleItemData(e, index)} />
+                    <Input type="text" placeholder="0" className="col-span-1 py-5 outline-none border-gray-600 focus:border-green-400 transition duration-500" name="discount" onChange={(e) => handleItemData(e, index)} />
+                    <Input type="text" placeholder="0" className="col-span-1 py-5 outline-none border-gray-600 focus:border-green-400 transition duration-500" name="tax" onChange={(e) => handleItemData(e, index)} />
+                    <Input type="text" placeholder="0.00" className="col-span-3 py-5 outline-none border-gray-600 focus:border-green-400 transition duration-500" name="amount" disabled value={
                       (parseFloat(itemData[index].qty) || 0) * (parseFloat(itemData[index].unitPrice) || 0) - (parseFloat(itemData[index].discount) || 0) + (parseFloat(itemData[index].tax) || 0)
                     }
                     />
@@ -279,8 +279,8 @@ function CreateInvoice() {
           </div>
           <p className='text-right mr-20'>Total : {totalAmountDue}</p>
           <div className='flex justify-between items-center'>
-            <Button className='my-2' onClick={addItem} type="button"> <span className='text-xl'>+</span> Add Item</Button>
-            <Button className='mx-7' type="submit">Create Invoice</Button>
+            <Button className='my-2 bg-white text-black hover:bg-white' onClick={addItem} type="button"> <span className='text-xl'>+</span> Add Item</Button>
+            <Button className='mx-7 bg-green-500 hover:bg-green-700 transition duration-500' type="submit">Create Invoice</Button>
           </div>
         </div>
       </form>

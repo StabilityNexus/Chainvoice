@@ -55,7 +55,7 @@ export default function Home() {
           <Box
             sx={{
               overflow: 'auto',
-              background: 'linear-gradient(145deg, #161920, #161920)',
+              background: '#1b1f29',
               padding: '8px',
               borderRadius: '12px',
               boxShadow: '0px 4px 10px rgba(0, 0, 0, 0.5)',
@@ -92,7 +92,7 @@ export default function Home() {
             paddingLeft: '20px',
             scrollbarWidth: 'none',
           }}
-          className='bg-[#161920] rounded-md shadow-2xl text-white p-2'
+          className="bg-[#1b1f29] rounded-md shadow-2xl text-white p-2"
         >
           <Outlet />
         </Box>

@@ -24,6 +24,7 @@ function ReceivedInvoice() {
         const fee=await contract.usdToNativeCurrencyConversion();
         console.log(ethers.formatUnits(fee));
         setFee(fee);
+        console.log(res);
       } catch (error) {
         console.log(error);
       }
@@ -43,7 +44,7 @@ function ReceivedInvoice() {
         const res = await contract.payInvoice(ethers.toBigInt(id), {
           value: amountDue + feeAmountInNativeCurrency 
       });
-        console.log(res);
+        console.log(receivedInvoices);
     } catch (error) {
       console.log(error);
     }

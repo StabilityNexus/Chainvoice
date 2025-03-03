@@ -10,7 +10,7 @@ function Footer() {
                         <img src="logo-animated.gif" alt="" width={50} className='mb-2'/>
                         <img src="horizontal-nexus.png" alt="" />
                     </div> */}
-                    <p className="text-sm mt-3">
+                    <p className="text-sm my-3">
                         &copy; {new Date().getFullYear()} Chainvoice. All rights reserved.
                     </p>
                 </div>
