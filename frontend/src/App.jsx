@@ -40,6 +40,7 @@ const queryClient = new QueryClient();
 function App() {
 
   return (
+    <div className='bg-[#161920]'> 
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider
@@ -52,7 +53,7 @@ function App() {
             fontStack: "system",
             overlayBlur: "small",
           })}>
-          <div className=' mx-auto px-44 font-Montserrat h-screen'>
+          <div className='font-Montserrat h-screen'>
             <Router>
               <Routes>
                 <Route path="/" element={<Applayout />}>
@@ -73,6 +74,7 @@ function App() {
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
+    </div>
   )
 }
 
