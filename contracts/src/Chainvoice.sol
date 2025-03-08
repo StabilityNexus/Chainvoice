@@ -25,6 +25,8 @@ contract Chainvoice {
     struct InvoiceDetails {
         uint256 id;
         address from;
+        string dueDate;
+        string issueDate;
         UserDetails user; // Struct to store user details
         address to;
         UserDetails client; // Struct to store client details
@@ -67,6 +69,8 @@ contract Chainvoice {
     function createInvoice(
         uint256 amountDue,
         address to,
+        string memory _dueDate,
+        string memory _issueDate,
         UserDetails memory user,
         UserDetails memory client,
         ItemData[] memory _items
@@ -80,6 +84,8 @@ contract Chainvoice {
             InvoiceDetails({
                 id: invoiceId,
                 from: msg.sender,
+                dueDate:_dueDate,
+                issueDate: _issueDate,
                 user: user,
                 to: to,
                 client: client,
@@ -133,32 +139,40 @@ contract Chainvoice {
     function getMySentInvoices()
         external
         view
-        returns (InvoiceDetails[] memory)
+        returns (InvoiceDetails[] memory, ItemData[][] memory)
     {
         return _getInvoices(sentInvoices[msg.sender]);
     }
 
     function getMyReceivedInvoices(
         address add
-    ) external view returns (InvoiceDetails[] memory) {
+    ) external view returns (InvoiceDetails[] memory, ItemData[][] memory) {
         return _getInvoices(receivedInvoices[add]);
     }
 
     function _getInvoices(
         uint256[] storage invoiceIds
-    ) internal view returns (InvoiceDetails[] memory) {
+    ) internal view returns (InvoiceDetails[] memory, ItemData[][] memory) {
         InvoiceDetails[] memory userInvoices = new InvoiceDetails[](
             invoiceIds.length
         );
+        ItemData[][] memory items = new ItemData[][](invoiceIds.length);
+
         for (uint256 i = 0; i < invoiceIds.length; i++) {
             userInvoices[i] = invoices[invoiceIds[i]];
+            items[i] = itemDatas[invoiceIds[i]];
         }
-        return userInvoices;
+
+        return (userInvoices, items);
     }
 
     function setTreasuryAddress(address add) public OnlyOwner {
         require(add != address(0), "Treasury Address cannot be equal to zero");
         treasuryAddress = add;
+    }
+
+    function getTreasuryAddress() public view returns (address) {
+        return treasuryAddress;
     }
 
     function setFeeAmount(uint16 fee) public OnlyOwner {

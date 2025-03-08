@@ -790,8 +790,8 @@
 
 "@zksync/contracts@git+https://github.com/matter-labs/era-contracts.git#446d391d34bdb48255d5f8fef8a8248925fc98b9":
   version "0.1.0"
-  resolved "git+ssh://git@github.com/matter-labs/era-contracts.git"
-  integrity sha512-Wrk4T7OVwieuTHmNN4d5IMDjFaV0VB9/Tth3am7fcxctYFyQDgqjrxcOzfnh+f/AL0T/ktC9FWAc6QT5yTTjNQ==
+  resolved "git+ssh://git@github.com/matter-labs/era-contracts.git#446d391d34bdb48255d5f8fef8a8248925fc98b9"
+  integrity sha512-KhgPVqd/MgV/ICUEsQf1uyL321GNPqsyHSAPMCaa9vW94fbuQK6RwMWoyQOPlZP17cQD8tzLNCSXqz73652kow==
 
 aes-js@3.0.0:
   version "3.0.0"

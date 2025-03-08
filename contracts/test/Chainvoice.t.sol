@@ -49,18 +49,21 @@ contract TestChainvoice is Test {
 
         c.createInvoice(amount, receiverAdd, sender, receiver, items);
 
-        Chainvoice.InvoiceDetails[] memory sentInvoices = c.getMySentInvoices();
+         (Chainvoice.InvoiceDetails[] memory sentInvoices,Chainvoice.ItemData[][] memory itemsData) = c.getMySentInvoices();
         assertEq(sentInvoices.length, 1);
         assertEq(sentInvoices[0].to, receiverAdd);
         // assertEq(sentInvoices[0].amountDue, amount);
         assertTrue(sentInvoices[0].isPaid == false);
-        console.log("Sent Invoices Length: ", c.getMySentInvoices().length);
+        assertTrue(itemsData.length == 1);
+        assertTrue(itemsData[0].length == 1);
+        assertTrue(itemsData[0][0].amount == 950);
+        // console.log("Sent Invoices Length: ", c.getMySentInvoices().length);
         console.log("Sender Address: ", address(this));
         console.log("Receiver Address: ", receiverAdd);
         console.log("Invoice Amount Due: ", amount);
         console.log("-------------------------------------------");
 
-        Chainvoice.InvoiceDetails[] memory receivedInvoices = c
+        (Chainvoice.InvoiceDetails[] memory receivedInvoices,Chainvoice.ItemData[][] memory itemsDetail) = c
             .getMyReceivedInvoices(0x24F13d40CF7DE6a81a2a1949aA45F2242e81f1e2);
         assertEq(receivedInvoices.length, 1);
         assertEq(
@@ -106,7 +109,7 @@ contract TestChainvoice is Test {
         });
         c.createInvoice(amount, receiverAdd, sender, receiver, Items);
 
-        vm.deal(receiverAdd, 5000100);
+        vm.deal(receiverAdd, 500000000000100);
 
         uint256 feeAmountInNativeCurrency = c.usdToNativeCurrencyConversion();
         console.log("Fee in native currency : ", feeAmountInNativeCurrency);
@@ -115,7 +118,7 @@ contract TestChainvoice is Test {
         vm.prank(receiverAdd);
         c.payInvoice{value: amount + feeAmountInNativeCurrency}(0);
 
-        Chainvoice.InvoiceDetails[] memory sentInvoices = c.getMySentInvoices();
+        (Chainvoice.InvoiceDetails[] memory sentInvoices,Chainvoice.ItemData[][] memory itemsDetail) = c.getMySentInvoices();
         assertEq(sentInvoices.length, 1);
         assertEq(sentInvoices[0].to, receiverAdd);
         assertEq(sentInvoices[0].amountDue, amount);
@@ -129,7 +132,7 @@ contract TestChainvoice is Test {
             initialBalance - (amount + feeAmountInNativeCurrency)
         );
 
-        console.log("Sent Invoices Length: ", c.getMySentInvoices().length);
+        // console.log("Sent Invoices Length: ", c.getMySentInvoices().length);
         console.log("Sender Address: ", address(this));
         console.log("Receiver Address: ", receiverAdd);
         console.log("Invoice Amount Due: ", amount);
