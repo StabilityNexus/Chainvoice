@@ -38,6 +38,16 @@ export const ChainvoiceABI = [
 		  "internalType": "address"
 		},
 		{
+		  "name": "_dueDate",
+		  "type": "string",
+		  "internalType": "string"
+		},
+		{
+		  "name": "_issueDate",
+		  "type": "string",
+		  "internalType": "string"
+		},
+		{
 		  "name": "user",
 		  "type": "tuple",
 		  "internalType": "struct Chainvoice.UserDetails",
@@ -192,6 +202,16 @@ export const ChainvoiceABI = [
 			  "internalType": "address"
 			},
 			{
+			  "name": "dueDate",
+			  "type": "string",
+			  "internalType": "string"
+			},
+			{
+			  "name": "issueDate",
+			  "type": "string",
+			  "internalType": "string"
+			},
+			{
 			  "name": "user",
 			  "type": "tuple",
 			  "internalType": "struct Chainvoice.UserDetails",
@@ -279,6 +299,43 @@ export const ChainvoiceABI = [
 			  "name": "isPaid",
 			  "type": "bool",
 			  "internalType": "bool"
+			}
+		  ]
+		},
+		{
+		  "name": "",
+		  "type": "tuple[][]",
+		  "internalType": "struct Chainvoice.ItemData[][]",
+		  "components": [
+			{
+			  "name": "description",
+			  "type": "string",
+			  "internalType": "string"
+			},
+			{
+			  "name": "qty",
+			  "type": "int256",
+			  "internalType": "int256"
+			},
+			{
+			  "name": "unitPrice",
+			  "type": "int256",
+			  "internalType": "int256"
+			},
+			{
+			  "name": "discount",
+			  "type": "int256",
+			  "internalType": "int256"
+			},
+			{
+			  "name": "tax",
+			  "type": "int256",
+			  "internalType": "int256"
+			},
+			{
+			  "name": "amount",
+			  "type": "int256",
+			  "internalType": "int256"
 			}
 		  ]
 		}
@@ -306,6 +363,16 @@ export const ChainvoiceABI = [
 			  "internalType": "address"
 			},
 			{
+			  "name": "dueDate",
+			  "type": "string",
+			  "internalType": "string"
+			},
+			{
+			  "name": "issueDate",
+			  "type": "string",
+			  "internalType": "string"
+			},
+			{
 			  "name": "user",
 			  "type": "tuple",
 			  "internalType": "struct Chainvoice.UserDetails",
@@ -395,6 +462,56 @@ export const ChainvoiceABI = [
 			  "internalType": "bool"
 			}
 		  ]
+		},
+		{
+		  "name": "",
+		  "type": "tuple[][]",
+		  "internalType": "struct Chainvoice.ItemData[][]",
+		  "components": [
+			{
+			  "name": "description",
+			  "type": "string",
+			  "internalType": "string"
+			},
+			{
+			  "name": "qty",
+			  "type": "int256",
+			  "internalType": "int256"
+			},
+			{
+			  "name": "unitPrice",
+			  "type": "int256",
+			  "internalType": "int256"
+			},
+			{
+			  "name": "discount",
+			  "type": "int256",
+			  "internalType": "int256"
+			},
+			{
+			  "name": "tax",
+			  "type": "int256",
+			  "internalType": "int256"
+			},
+			{
+			  "name": "amount",
+			  "type": "int256",
+			  "internalType": "int256"
+			}
+		  ]
+		}
+	  ],
+	  "stateMutability": "view"
+	},
+	{
+	  "type": "function",
+	  "name": "getTreasuryAddress",
+	  "inputs": [],
+	  "outputs": [
+		{
+		  "name": "",
+		  "type": "address",
+		  "internalType": "address"
 		}
 	  ],
 	  "stateMutability": "view"
@@ -419,6 +536,16 @@ export const ChainvoiceABI = [
 		  "name": "from",
 		  "type": "address",
 		  "internalType": "address"
+		},
+		{
+		  "name": "dueDate",
+		  "type": "string",
+		  "internalType": "string"
+		},
+		{
+		  "name": "issueDate",
+		  "type": "string",
+		  "internalType": "string"
 		},
 		{
 		  "name": "user",

@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../node_modules/@mui/icons-material/esm/Leaderboard.js"],
+  "sourcesContent": ["\"use client\";\n\nimport createSvgIcon from \"./utils/createSvgIcon.js\";\nimport { jsx as _jsx } from \"react/jsx-runtime\";\nexport default createSvgIcon(/*#__PURE__*/_jsx(\"path\", {\n  d: \"M7.5 21H2V9h5.5zm7.25-18h-5.5v18h5.5zM22 11h-5.5v10H22z\"\n}), 'Leaderboard');"],
+  "mappings": ";;;;;;;;;;;;;;;;;;;;;AAGA,yBAA4B;AAC5B,IAAO,sBAAQ,kBAA2B,mBAAAA,KAAK,QAAQ;AAAA,EACrD,GAAG;AACL,CAAC,GAAG,aAAa;",
+  "names": ["_jsx"]
+}

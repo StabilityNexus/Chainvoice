@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../node_modules/eventemitter3/index.mjs"],
+  "sourcesContent": ["import EventEmitter from './index.js'\n\nexport { EventEmitter }\nexport default EventEmitter\n"],
+  "mappings": ";;;;;;;;AAAA,mBAAyB;",
+  "names": []
+}

@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../node_modules/@mui/material/utils/memoTheme.js"],
+  "sourcesContent": ["import { unstable_memoTheme } from '@mui/system';\nconst memoTheme = unstable_memoTheme;\nexport default memoTheme;"],
+  "mappings": ";;;;;AACA,IAAM,YAAY;AAClB,IAAO,oBAAQ;",
+  "names": []
+}

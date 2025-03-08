@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../node_modules/@mui/material/utils/isMuiElement.js"],
+  "sourcesContent": ["import isMuiElement from '@mui/utils/isMuiElement';\nexport default isMuiElement;"],
+  "mappings": ";;;;;AACA,IAAO,uBAAQ;",
+  "names": []
+}

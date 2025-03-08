@@ -3,7 +3,7 @@ import React from 'react'
 function Footer() {
     return (
         <>
-            <footer className=" text-center text-white mt-auto">
+            <footer className=" text-center text-white mt-auto bg-[#161920]">
                 <div className="container mx-auto">
                     {/* <p className='text-xl font-bold'>Project by</p>
                     <div className='flex justify-center items-center flex-col'>

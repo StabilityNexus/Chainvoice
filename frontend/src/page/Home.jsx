@@ -15,23 +15,25 @@ export default function Home() {
 
   const list = [
     {
-      text: 'Create New Invoice Request',
-      icon: <AddCircleIcon />,
-      route: 'create'
+      text: 'Sent Payment Requests',
+      icon: <MarkEmailReadIcon />,
+      route: 'sent'
     },
     {
-      text: 'Pending Payment Requests',
+      text: 'Received Payment Requests',
       icon: <PendingIcon />,
       route: 'pending'
     },
     {
-      text: 'Sent Payment Requests',
-      icon: <MarkEmailReadIcon />,
-      route: 'sent'
-    }
+      text: 'Create New Invoice Request',
+      icon: <AddCircleIcon />,
+      route: 'create'
+    },
   ]
   return (
     <>
+    <div className='md:px-44 '>
+
       <p className='text-4xl font-bold my-10 text-white '>
         Welcome <span className='text-green-500'>Back!</span>
       </p>
@@ -103,6 +105,7 @@ export default function Home() {
           <Outlet />
         </Box>
       </Box>
+              </div>
     </>
   );
 }

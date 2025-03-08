@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": ["../../node_modules/@mui/material/utils/isHostComponent.js"],
+  "sourcesContent": ["/**\n * Determines if a given element is a DOM element name (i.e. not a React component).\n */\nfunction isHostComponent(element) {\n  return typeof element === 'string';\n}\nexport default isHostComponent;"],
+  "mappings": ";AAGA,SAAS,gBAAgB,SAAS;AAChC,SAAO,OAAO,YAAY;AAC5B;AACA,IAAO,0BAAQ;",
+  "names": []
+}

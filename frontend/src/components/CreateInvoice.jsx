@@ -10,26 +10,25 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { CalendarIcon } from 'lucide-react';
+import { CalendarIcon, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { Label } from './ui/label';
-import { parseUnits } from 'viem';
-
+import { useNavigate } from 'react-router-dom';
 function CreateInvoice() {
   const { data: walletClient } = useWalletClient();
   const { isConnected } = useAccount();
   const account = useAccount();
-  const [dueDate, setDueDate] = useState();
+  const [dueDate, setDueDate] = useState(new Date());
   const [issueDate, setIssueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
-
+  const navigate = useNavigate();
   const createInvoiceRequest = async (data) => {
     if (!isConnected || !walletClient) {
       alert("Please connect your wallet");
       return;
     }
-  
+
     try {
       setLoading(true);
       const provider = new BrowserProvider(walletClient);
@@ -42,14 +41,18 @@ function CreateInvoice() {
       const sanitizedItemData = data.itemData.map((item) => ({
         ...item,
         qty: item.qty ? String(item.qty) : "0",
-        unitPrice: item.unitPrice ? ethers.parseUnits(String(item.unitPrice),18): "0",
+        unitPrice: item.unitPrice ? ethers.parseUnits(String(item.unitPrice), 18) : ethers.parseUnits("0", 18),
         discount: item.discount ? String(item.discount) : "0",
         tax: item.tax ? String(item.tax) : "0",
-        amount: item.amount ? String(item.amount) : "0",
+        amount: item.amount ? ethers.parseUnits(String(item.amount), 18) : ethers.parseUnits("0", 18),
       }));
+
+      console.log(sanitizedItemData);
       const res = await contract.createInvoice(
-        ethers.parseUnits(String(totalAmountDue),18),
+        ethers.parseUnits(String(totalAmountDue), 18),
         data.clientAddress,
+        dueDate.toLocaleString(undefined,{timeZone:"Asia/Kolkata"}).toString(),
+        issueDate.toLocaleString(undefined,{timeZone:"Asia/Kolkata"}).toString(),
         [
           data.userFname,
           data.userLname,
@@ -68,16 +71,19 @@ function CreateInvoice() {
         ],
         sanitizedItemData
       );
-  
+      setTimeout(()=>{
+        navigate('/home/sent');
+      },4000);
       console.log("Transaction successful", res);
     } catch (error) {
       console.error("Invoice creation error:", error);
+      setLoading(false);
       alert("Failed to create invoice");
     } finally {
       setLoading(false);
     }
   };
-  
+
 
   const [itemData, setItemData] = useState([{
     description: '',
@@ -134,11 +140,22 @@ function CreateInvoice() {
   const [totalAmountDue, setTotalAmountDue] = useState(0);
   const handleItemData = (e, index) => {
     const { name, value } = e.target;
-
+  
     setItemData((prevItemData) =>
-      prevItemData.map((item, i) =>
-        i === index ? { ...item, [name]: value } : item
-      )
+      prevItemData.map((item, i) => {
+        if (i === index) {
+          const updatedItem = { ...item, [name]: value };
+          if (name === 'qty' || name === 'unitPrice' || name === 'discount' || name === 'tax') {
+            const qty = parseFloat(updatedItem.qty) || 0;
+            const unitPrice = parseFloat(updatedItem.unitPrice) || 0;
+            const discount = parseFloat(updatedItem.discount) || 0;
+            const tax = parseFloat(updatedItem.tax) || 0;
+            updatedItem.amount = (qty * unitPrice - discount + tax).toString();
+          }
+          return updatedItem;
+        }
+        return item;
+      })
     );
   };
 
@@ -163,11 +180,11 @@ function CreateInvoice() {
   }, [itemData]);
 
   return (
-    <div className='font-Inter'>
+    <div className='font-Inter '>
       <h2 className="text-xl font-bold mb-7">Create New Invoice Request</h2>
       <div className="flex items-center space-x-5">
         <Label className='text-lg'>Invoice # </Label>
-        <Input value='1' className='w-48' disabled/>
+        <Input value='1' className='w-48' disabled />
         <p> Issued Date </p>
         <Button
           // variant={"outline"}
@@ -182,15 +199,16 @@ function CreateInvoice() {
 
         <p> Due Date </p>
         <Popover>
-          <PopoverTrigger asChild>
+          <PopoverTrigger asChild >
             <Button
               // variant={"outline"}
               className={cn(
                 "w-[260px] justify-start text-left font-normal bg-white text-black hover:bg-white",
                 !dueDate && "text-muted-foreground"
               )}
+              
             >
-              <CalendarIcon className=''/>
+              <CalendarIcon className='' />
               {dueDate ? format(dueDate, "PPP") : <span className=''>Pick a due date</span>}
             </Button>
           </PopoverTrigger>
@@ -269,10 +287,21 @@ function CreateInvoice() {
                     <Input type="text" placeholder="0" className="col-span-2 py-5 outline-none border-gray-600 focus:border-green-400 transition duration-500" name="unitPrice" onChange={(e) => handleItemData(e, index)} />
                     <Input type="text" placeholder="0" className="col-span-1 py-5 outline-none border-gray-600 focus:border-green-400 transition duration-500" name="discount" onChange={(e) => handleItemData(e, index)} />
                     <Input type="text" placeholder="0" className="col-span-1 py-5 outline-none border-gray-600 focus:border-green-400 transition duration-500" name="tax" onChange={(e) => handleItemData(e, index)} />
-                    <Input type="text" placeholder="0.00" className="col-span-3 py-5 outline-none border-gray-600 focus:border-green-400 transition duration-500" name="amount" disabled value={
-                      (parseFloat(itemData[index].qty) || 0) * (parseFloat(itemData[index].unitPrice) || 0) - (parseFloat(itemData[index].discount) || 0) + (parseFloat(itemData[index].tax) || 0)
-                    }
+                    <Input
+                      type="text"
+                      placeholder="0.00"
+                      className="col-span-3 py-5 outline-none border-gray-600 focus:border-green-400 transition duration-500"
+                      name="amount"
+                      disabled
+                      value={
+                        (parseFloat(itemData[index].qty) || 0) *
+                        (parseFloat(itemData[index].unitPrice) || 0) -
+                        (parseFloat(itemData[index].discount) || 0) +
+                        (parseFloat(itemData[index].tax) || 0)
+                      }
+                      onChange={(e) => handleItemData(e, index)}
                     />
+
                   </div>
                 ))
             }
@@ -280,8 +309,15 @@ function CreateInvoice() {
           <p className='text-right mr-20'>Total : {totalAmountDue}</p>
           <div className='flex justify-between items-center'>
             <Button className='my-2 bg-white text-black hover:bg-white' onClick={addItem} type="button"> <span className='text-xl'>+</span> Add Item</Button>
-            <Button className='mx-7 bg-green-500 hover:bg-green-700 transition duration-500' type="submit">Create Invoice</Button>
+            {
+              loading ? (
+                <Button className='mx-7 bg-green-500 hover:bg-green-700 transition duration-500' type="submit" disabled> <Loader2 className="animate-spin text-white w-10 h-10" />Create Invoice</Button>
+              ) : (
+                <Button className='mx-7 bg-green-500 hover:bg-green-700 transition duration-500' type="submit"> Create Invoice</Button>
+              )
+            }
           </div>
+
         </div>
       </form>
     </div>
