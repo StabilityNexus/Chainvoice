@@ -136,7 +136,7 @@ function SentInvoice() {
                   {sentInvoices.length > 0 && sentInvoices.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((invoice, index) => (
                     <TableRow key={index} className="hover:bg-[#32363F] transition duration-300">
                       {columns.map((column) => {
-                        const value = invoice?.user[column.id];
+                        const value = invoice?.client[column.id];
                         if (column.id === "to") {
                           return (
                             <TableCell key={column.id} align={column.align} sx={{ color: "white", borderColor: "#25272b" }}>

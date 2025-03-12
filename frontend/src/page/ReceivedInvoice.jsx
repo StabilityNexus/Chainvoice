@@ -202,7 +202,7 @@ function ReceivedInvoice() {
                               </TableCell>
                             );
                           }
-                          if(column.id==='pay' && !invoice.idPaid) {
+                          if(column.id==='pay' && !invoice.isPaid) {
                             return (
                               <TableCell key={column.id} align={column.align} sx={{ color: 'white', borderColor: '#25272b' }}>
                                 <button
@@ -210,6 +210,19 @@ function ReceivedInvoice() {
                                   onClick={() => payInvoice(invoice.id, invoice.amountDue)}
                                 >
                                   Pay Now
+                                </button>
+                              </TableCell>
+                            );
+                          }
+                          if(column.id==='pay' && invoice.isPaid) {
+                            return (
+                              <TableCell key={column.id} align={column.align} sx={{ color: 'white', borderColor: '#25272b' }}>
+                                <button
+                                  className="text-sm rounded-xl py-2 text-white font-bold px-6 bg-green-400"
+                                  onClick={() => payInvoice(invoice.id, invoice.amountDue)}
+                                  disabled
+                                >
+                                  Already Paid
                                 </button>
                               </TableCell>
                             );
