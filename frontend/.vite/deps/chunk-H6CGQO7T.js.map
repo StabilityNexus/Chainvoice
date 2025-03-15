@@ -1,7 +1,0 @@
-{
-  "version": 3,
-  "sources": ["../../node_modules/@mui/material/utils/useForkRef.js", "../../node_modules/@mui/material/utils/useEnhancedEffect.js", "../../node_modules/@mui/material/utils/useEventCallback.js"],
-  "sourcesContent": ["'use client';\n\nimport useForkRef from '@mui/utils/useForkRef';\nexport default useForkRef;", "'use client';\n\nimport useEnhancedEffect from '@mui/utils/useEnhancedEffect';\nexport default useEnhancedEffect;", "'use client';\n\nimport useEventCallback from '@mui/utils/useEventCallback';\nexport default useEventCallback;"],
-  "mappings": ";;;;;;;AAGA,IAAO,qBAAQ;;;ACAf,IAAOA,6BAAQ;;;ACAf,IAAOC,4BAAQ;",
-  "names": ["useEnhancedEffect_default", "useEventCallback_default"]
-}
