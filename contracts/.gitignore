@@ -1,1 +1,27 @@
 node_modules/
+dist/
+build/
+out/
+
+# Logs
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+pnpm-debug.log
+lerna-debug.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Editor & OS-specific files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Dependencies for Foundry projects
+lib/
+cache/
+out/
