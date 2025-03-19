@@ -43,3 +43,4 @@ contracts/.env
 contracts/.env.local
 contracts/.env.development
 contracts/.env.production
+.vite/
