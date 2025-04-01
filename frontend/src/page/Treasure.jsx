@@ -22,7 +22,7 @@ const Treasure = () => {
         const contract = new Contract(import.meta.env.VITE_CONTRACT_ADDRESS, ChainvoiceABI, signer);
         const amt = await contract.accumulatedFees();
         setTreasureAmount(ethers.formatUnits(amt));
-        const add = await contract.getTreasuryAddress();
+        const add = await contract.treasuryAddress();
         setTreasuryAddress(add);
       } catch (error) {
         console.error("Error fetching treasure amount:", error);

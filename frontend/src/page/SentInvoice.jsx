@@ -8,7 +8,7 @@ import TablePagination from '@mui/material/TablePagination';
 import TableRow from '@mui/material/TableRow';
 import { BrowserProvider, Contract, ethers } from 'ethers';
 import React, { useEffect, useState, Fragment } from 'react';
-import { useWalletClient } from 'wagmi';
+import { useAccount, useWalletClient } from 'wagmi';
 import { ChainvoiceABI } from '../contractsABI/ChainvoiceABI';
 import DescriptionIcon from '@mui/icons-material/Description';
 
@@ -48,6 +48,7 @@ function SentInvoice() {
   const [invoiceItems, setInvoiceItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fee, setFee] = useState(0);
+  const {address}=useAccount();
   useEffect(() => {
     if (!walletClient) return;
     const fetchSentInvoices = async () => {
@@ -57,11 +58,11 @@ function SentInvoice() {
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
         const contract = new Contract(import.meta.env.VITE_CONTRACT_ADDRESS, ChainvoiceABI, signer);
-        const res = await contract.getMySentInvoices();
+        const res = await contract.getSentInvoices(address);
         const [invoiceDetails, itemData] = res;
         setSentInvoices(invoiceDetails);
         setInvoiceItems(itemData);
-        const fee = await contract.usdToNativeCurrencyConversion();
+        const fee = await contract.fee();
         console.log(ethers.formatUnits(fee));
         setFee(fee);
         setLoading(false);

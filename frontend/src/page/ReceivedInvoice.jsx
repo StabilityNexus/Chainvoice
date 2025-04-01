@@ -61,12 +61,12 @@ function ReceivedInvoice() {
         const signer = await provider.getSigner();
         const contract = new Contract(import.meta.env.VITE_CONTRACT_ADDRESS, ChainvoiceABI, signer);
         console.log(address);
-        const res = await contract.getMyReceivedInvoices(address);
+        const res = await contract.getReceivedInvoices(address);
         const [invoiceDetails, itemData] = res;
         setReceivedInvoice(invoiceDetails);
         setInvoiceItems(itemData);
         setLoading(false);
-        const fee = await contract.usdToNativeCurrencyConversion();
+        const fee = await contract.fee();
         console.log(ethers.formatUnits(fee));
         setFee(fee);
         console.log(res);
@@ -84,10 +84,10 @@ function ReceivedInvoice() {
       const signer = await provider.getSigner();
       const contract = new Contract(import.meta.env.VITE_CONTRACT_ADDRESS, ChainvoiceABI, signer);
       console.log(amountDue);
-      const feeAmountInNativeCurrency = await contract.usdToNativeCurrencyConversion();
-      console.log(feeAmountInNativeCurrency);
+      const fee = await contract.fee();
+      console.log(fee);
       const res = await contract.payInvoice(ethers.toBigInt(id), {
-        value: amountDue + feeAmountInNativeCurrency
+        value: amountDue + fee
       });
     } catch (error) {
       console.log(error);
