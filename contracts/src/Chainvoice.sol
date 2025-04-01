@@ -2,10 +2,8 @@
 pragma solidity ^0.8.13;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {console} from "../lib/forge-std/src/console.sol";
-import {AggregatorV3Interface} from "../lib/chainlink-brownie-contracts/contracts/src/v0.8/shared/interfaces/AggregatorV3Interface.sol";
 
 contract Chainvoice {
-    AggregatorV3Interface internal priceFeed;
     struct UserDetails {
         string fname;
         string lname;
@@ -41,12 +39,11 @@ contract Chainvoice {
 
     address public owner;
     address public treasuryAddress;
-    uint256 public feeAmountInUSD;
+    uint256 public fee;
 
-    constructor(address _priceFeed) {
-        priceFeed = AggregatorV3Interface(_priceFeed);
+    constructor() {
         owner = msg.sender;
-        feeAmountInUSD = 1 * 1e18;
+        fee = 500000000000000 ; //0.0005 ether
     }
 
     modifier OnlyOwner() {
@@ -104,16 +101,6 @@ contract Chainvoice {
         emit InvoiceCreated(invoiceId, msg.sender, to, amountDue);
     }
 
-    function usdToNativeCurrencyConversion() public view returns (uint256) {
-        (, int256 answer, , , ) = priceFeed.latestRoundData();
-        require(answer > 0, "Invalid price data");
-        uint256 price = uint256(answer);
-        uint256 ethPriceAdjusted = price * 1e10;
-        uint256 nativeAmount = (feeAmountInUSD * 1e18);
-
-        return nativeAmount / ethPriceAdjusted;
-    }
-
     uint256 public accumulatedFees;
 
     function payInvoice(uint256 invoiceId) external payable {
@@ -121,33 +108,31 @@ contract Chainvoice {
         InvoiceDetails storage invoice = invoices[invoiceId];
         require(msg.sender == invoice.to, "Not authorized to pay this invoice");
         require(!invoice.isPaid, "Invoice already paid");
-
-        uint256 feeAmountInNativeCurrency = usdToNativeCurrencyConversion();
         require(
-            msg.value >= invoice.amountDue + feeAmountInNativeCurrency,
+            msg.value >= invoice.amountDue + fee,
             "Payment must cover the invoice amount and fee"
         );
-        uint256 amountToRecipient = msg.value - feeAmountInNativeCurrency;
+        uint256 amountToRecipient = msg.value - fee;
         (bool success, ) = payable(invoice.from).call{value: amountToRecipient}(
             ""
         );
         require(success, "Payment transfer failed");
-        accumulatedFees += feeAmountInNativeCurrency;
+        accumulatedFees += fee;
         invoice.isPaid = true;
     }
 
-    function getMySentInvoices()
+    function getSentInvoices(address _address)
         external
         view
         returns (InvoiceDetails[] memory, ItemData[][] memory)
     {
-        return _getInvoices(sentInvoices[msg.sender]);
+        return _getInvoices(sentInvoices[_address]);
     }
 
-    function getMyReceivedInvoices(
-        address add
+    function getReceivedInvoices(
+        address _address
     ) external view returns (InvoiceDetails[] memory, ItemData[][] memory) {
-        return _getInvoices(receivedInvoices[add]);
+        return _getInvoices(receivedInvoices[_address]);
     }
 
     function _getInvoices(
@@ -166,21 +151,20 @@ contract Chainvoice {
         return (userInvoices, items);
     }
 
-    function setTreasuryAddress(address add) public OnlyOwner {
-        require(add != address(0), "Treasury Address cannot be equal to zero");
-        treasuryAddress = add;
+    function setTreasuryAddress(address newTreauserAdd) public OnlyOwner {
+        require(newTreauserAdd != address(0), "Treasury Address cannot be equal to zero");
+        treasuryAddress = newTreauserAdd;
     }
 
-    function getTreasuryAddress() public view returns (address) {
-        return treasuryAddress;
-    }
-
-    function setFeeAmount(uint16 fee) public OnlyOwner {
-        feeAmountInUSD = fee * 1e18;
+   
+    function setFeeAmount(uint256 _fee) public OnlyOwner {
+        fee = _fee;
     }
 
     function withdraw() external {
+        require(treasuryAddress != address(0), "Treasury address not set");
         require(accumulatedFees > 0, "No fees to withdraw");
+        
         uint256 amount = accumulatedFees;
         accumulatedFees = 0;
 

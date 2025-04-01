@@ -4,22 +4,19 @@ pragma solidity ^0.8.13;
 import {Test} from "../lib/forge-std/src/Test.sol";
 import {console} from "../lib/forge-std/src/console.sol";
 import "../src/Chainvoice.sol";
-import "../src/MockV3Aggregator.sol";
 
 contract TestChainvoice is Test {
     Chainvoice c;
-    MockV3Aggregator mockPriceFeed;
-
     receive() external payable {}
-
     function setUp() public {
-        mockPriceFeed = new MockV3Aggregator(8, 200000000000);
-        c = new Chainvoice(address(mockPriceFeed));
+        c = new Chainvoice();
     }
 
     function testCreateInvoice() public {
         address receiverAdd = 0x24F13d40CF7DE6a81a2a1949aA45F2242e81f1e2;
         uint256 amount = 100;
+        string memory dueDate = "4/1/2025, 8:45:47 PM";
+        string memory issueDate = "4/19/2025, 8:45:47 PM";
         Chainvoice.UserDetails memory sender = Chainvoice.UserDetails({
             fname: "Alice",
             lname: "Doe",
@@ -47,9 +44,20 @@ contract TestChainvoice is Test {
             amount: 950
         });
 
-        c.createInvoice(amount, receiverAdd, sender, receiver, items);
+        c.createInvoice(
+            amount,
+            receiverAdd,
+            dueDate,
+            issueDate,
+            sender,
+            receiver,
+            items
+        );
 
-         (Chainvoice.InvoiceDetails[] memory sentInvoices,Chainvoice.ItemData[][] memory itemsData) = c.getMySentInvoices();
+        (
+            Chainvoice.InvoiceDetails[] memory sentInvoices,
+            Chainvoice.ItemData[][] memory itemsData
+        ) = c.getSentInvoices(address(this));
         assertEq(sentInvoices.length, 1);
         assertEq(sentInvoices[0].to, receiverAdd);
         // assertEq(sentInvoices[0].amountDue, amount);
@@ -57,14 +65,16 @@ contract TestChainvoice is Test {
         assertTrue(itemsData.length == 1);
         assertTrue(itemsData[0].length == 1);
         assertTrue(itemsData[0][0].amount == 950);
-        // console.log("Sent Invoices Length: ", c.getMySentInvoices().length);
+        // console.log("Sent Invoices Length: ", c.getSentInvoices().length);
         console.log("Sender Address: ", address(this));
         console.log("Receiver Address: ", receiverAdd);
         console.log("Invoice Amount Due: ", amount);
         console.log("-------------------------------------------");
 
-        (Chainvoice.InvoiceDetails[] memory receivedInvoices,Chainvoice.ItemData[][] memory itemsDetail) = c
-            .getMyReceivedInvoices(0x24F13d40CF7DE6a81a2a1949aA45F2242e81f1e2);
+        (
+            Chainvoice.InvoiceDetails[] memory receivedInvoices,
+            // Chainvoice.ItemData[][] memory itemsDetail
+        ) = c.getReceivedInvoices(0x24F13d40CF7DE6a81a2a1949aA45F2242e81f1e2);
         assertEq(receivedInvoices.length, 1);
         assertEq(
             receivedInvoices[0].to,
@@ -79,7 +89,9 @@ contract TestChainvoice is Test {
         // Set up invoice details
         address receiverAdd = 0x24F13d40CF7DE6a81a2a1949aA45F2242e81f1e2;
         uint256 amount = 100;
-
+        uint256 fee = 500000000000000; //0.0005 ether
+        string memory dueDate = "4/1/2025, 8:45:47 PM";
+        string memory issueDate = "4/19/2025, 8:45:47 PM";
         Chainvoice.UserDetails memory sender = Chainvoice.UserDetails({
             fname: "Alice",
             lname: "Doe",
@@ -107,32 +119,37 @@ contract TestChainvoice is Test {
             tax: 50,
             amount: 950
         });
-        c.createInvoice(amount, receiverAdd, sender, receiver, Items);
+        c.createInvoice(
+            amount,
+            receiverAdd,
+            issueDate,
+            dueDate,
+            sender,
+            receiver,
+            Items
+        );
 
         vm.deal(receiverAdd, 500000000000100);
 
-        uint256 feeAmountInNativeCurrency = c.usdToNativeCurrencyConversion();
-        console.log("Fee in native currency : ", feeAmountInNativeCurrency);
+        console.log("Fee in native currency : ", fee);
         uint256 initialBalance = receiverAdd.balance;
         console.log("Initial Receiver Balance: ", initialBalance);
         vm.prank(receiverAdd);
-        c.payInvoice{value: amount + feeAmountInNativeCurrency}(0);
+        c.payInvoice{value: amount + fee}(0);
 
-        (Chainvoice.InvoiceDetails[] memory sentInvoices,Chainvoice.ItemData[][] memory itemsDetail) = c.getMySentInvoices();
+        (Chainvoice.InvoiceDetails[] memory sentInvoices, ) = // Chainvoice.ItemData[][] memory itemsDetail
+        c.getSentInvoices(address(this));
         assertEq(sentInvoices.length, 1);
         assertEq(sentInvoices[0].to, receiverAdd);
         assertEq(sentInvoices[0].amountDue, amount);
         assertTrue(sentInvoices[0].isPaid == true);
 
-        assertEq(c.accumulatedFees(), feeAmountInNativeCurrency);
+        assertEq(c.accumulatedFees(), fee);
         uint256 finalBalance = receiverAdd.balance;
         console.log("Final Receiver Balance: ", finalBalance);
-        assertEq(
-            finalBalance,
-            initialBalance - (amount + feeAmountInNativeCurrency)
-        );
+        assertEq(finalBalance, initialBalance - (amount + fee));
 
-        // console.log("Sent Invoices Length: ", c.getMySentInvoices().length);
+        // console.log("Sent Invoices Length: ", c.getSentInvoices().length);
         console.log("Sender Address: ", address(this));
         console.log("Receiver Address: ", receiverAdd);
         console.log("Invoice Amount Due: ", amount);
@@ -140,6 +157,4 @@ contract TestChainvoice is Test {
         console.log("Accumulated Fees: ", c.accumulatedFees());
         console.log("-------------------------------------------");
     }
-
-    
 }
