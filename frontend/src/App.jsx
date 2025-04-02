@@ -20,7 +20,7 @@ import Home from './page/Home';
 import Feature from './page/Feature';
 import About from './page/About';
 import Working from './page/Working';
-import Security from './page/Security';
+import Treasure from './page/Treasure';
 import CreateInvoice from './components/CreateInvoice';
 import SentInvoice from './page/SentInvoice';
 import ReceivedInvoice from './page/ReceivedInvoice';
@@ -40,6 +40,7 @@ const queryClient = new QueryClient();
 function App() {
 
   return (
+    <div className='bg-[#161920]'> 
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider
@@ -52,7 +53,7 @@ function App() {
             fontStack: "system",
             overlayBlur: "small",
           })}>
-          <div className=' mx-auto px-44 font-Montserrat h-screen'>
+          <div className='font-Montserrat h-screen'>
             <Router>
               <Routes>
                 <Route path="/" element={<Applayout />}>
@@ -65,7 +66,7 @@ function App() {
                   <Route path="feature" element={<Feature/>} />
                   <Route path="about" element={<About/>} />
                   <Route path="working" element={<Working/>} />
-                  <Route path="security" element={<Security/>} />
+                  <Route path="treasure" element={<Treasure/>} />
                 </Route>
               </Routes>
             </Router>
@@ -73,6 +74,7 @@ function App() {
         </RainbowKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
+    </div>
   )
 }
 

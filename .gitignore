@@ -1,0 +1,46 @@
+# Node.js dependencies
+frontend/node_modules/
+contracts/node_modules/
+
+# Package lock files (if you don’t want to track them)
+frontend/package-lock.json
+contracts/package-lock.json
+
+# Build outputs
+frontend/out/
+frontend/dist/
+frontend/build/
+frontend/.next/
+contracts/out/
+contracts/build/
+
+# Chainlink libraries 
+contracts/node_modules/@chainlink/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Testing Coverage
+frontend/coverage/
+contracts/coverage/
+
+# OS & Editor-specific files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Environment Variables
+frontend/.env
+frontend/.env.local
+frontend/.env.development
+frontend/.env.production
+contracts/.env
+contracts/.env.local
+contracts/.env.development
+contracts/.env.production
+.vite/

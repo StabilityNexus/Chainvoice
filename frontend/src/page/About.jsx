@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react'
-import {BrowserProvider, JsonRpcProvider, formatEther } from "ethers";
-import { useAccount, useWalletClient } from 'wagmi';
+import React, { useState, useEffect, useRef } from 'react';
+import { BrowserProvider, formatEther } from "ethers";
+import { useAccount } from 'wagmi';
+import { convert } from '@/utils/CurrencyConversion';
 
 function About() {
   const { address, isConnected } = useAccount();
   const [balance, setBalance] = useState('0');
   const [loading, setLoading] = useState(true);
+  const [price,setPrice]=useState();
   useEffect(() => {
     async function fetchBalance() {
       if (!isConnected || !address) {
@@ -15,17 +17,20 @@ function About() {
       }
 
       try {
-        // const provider = new JsonRpcProvider(import.meta.env.VITE_BLOCKCHAIN_URI);
         const provider = new BrowserProvider(window.ethereum);
-        // const signer = await provider.getSigner();
         const userBalance = await provider.getBalance(address);
-        setBalance(formatEther(userBalance));
-        setLoading(false);
+        const ethBalance = formatEther(userBalance);
+        setBalance(ethBalance);
+
+        await convert.ready(); 
+        const p =convert.USD.ETH(1);
+        setPrice(p);
       } catch (error) {
         console.error('Balance fetch error:', error);
         setBalance('0');
-        setLoading(false);
       }
+
+      setLoading(false);
     }
 
     fetchBalance();
@@ -36,9 +41,10 @@ function About() {
 
   return (
     <div>
-      Balance: {balance} ETH
+      <p>Balance: {balance} ETH</p>
+      <p>$1 USD = {price} ETH</p>
     </div>
-  )
+  );
 }
 
-export default About
+export default About;
