@@ -1,13 +1,7 @@
 export const ChainvoiceABI = [
 	{
 	  "type": "constructor",
-	  "inputs": [
-		{
-		  "name": "_priceFeed",
-		  "type": "address",
-		  "internalType": "address"
-		}
-	  ],
+	  "inputs": [],
 	  "stateMutability": "nonpayable"
 	},
 	{
@@ -164,7 +158,7 @@ export const ChainvoiceABI = [
 	},
 	{
 	  "type": "function",
-	  "name": "feeAmountInUSD",
+	  "name": "fee",
 	  "inputs": [],
 	  "outputs": [
 		{
@@ -177,10 +171,10 @@ export const ChainvoiceABI = [
 	},
 	{
 	  "type": "function",
-	  "name": "getMyReceivedInvoices",
+	  "name": "getReceivedInvoices",
 	  "inputs": [
 		{
-		  "name": "add",
+		  "name": "_address",
 		  "type": "address",
 		  "internalType": "address"
 		}
@@ -344,8 +338,14 @@ export const ChainvoiceABI = [
 	},
 	{
 	  "type": "function",
-	  "name": "getMySentInvoices",
-	  "inputs": [],
+	  "name": "getSentInvoices",
+	  "inputs": [
+		{
+		  "name": "_address",
+		  "type": "address",
+		  "internalType": "address"
+		}
+	  ],
 	  "outputs": [
 		{
 		  "name": "",
@@ -499,19 +499,6 @@ export const ChainvoiceABI = [
 			  "internalType": "int256"
 			}
 		  ]
-		}
-	  ],
-	  "stateMutability": "view"
-	},
-	{
-	  "type": "function",
-	  "name": "getTreasuryAddress",
-	  "inputs": [],
-	  "outputs": [
-		{
-		  "name": "",
-		  "type": "address",
-		  "internalType": "address"
 		}
 	  ],
 	  "stateMutability": "view"
@@ -767,9 +754,9 @@ export const ChainvoiceABI = [
 	  "name": "setFeeAmount",
 	  "inputs": [
 		{
-		  "name": "fee",
-		  "type": "uint16",
-		  "internalType": "uint16"
+		  "name": "_fee",
+		  "type": "uint256",
+		  "internalType": "uint256"
 		}
 	  ],
 	  "outputs": [],
@@ -780,7 +767,7 @@ export const ChainvoiceABI = [
 	  "name": "setTreasuryAddress",
 	  "inputs": [
 		{
-		  "name": "add",
+		  "name": "newTreauserAdd",
 		  "type": "address",
 		  "internalType": "address"
 		}
@@ -797,19 +784,6 @@ export const ChainvoiceABI = [
 		  "name": "",
 		  "type": "address",
 		  "internalType": "address"
-		}
-	  ],
-	  "stateMutability": "view"
-	},
-	{
-	  "type": "function",
-	  "name": "usdToNativeCurrencyConversion",
-	  "inputs": [],
-	  "outputs": [
-		{
-		  "name": "",
-		  "type": "uint256",
-		  "internalType": "uint256"
 		}
 	  ],
 	  "stateMutability": "view"
