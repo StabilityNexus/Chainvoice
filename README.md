@@ -45,3 +45,46 @@ forge install
 ```bash
 forge test
 ```
+## Deploying to Ethereum Classic (ETC) with Foundry
+
+This guide explains how to deploy Chainvoice smart contracts to the Ethereum Classic Mainnet using Foundry (Forge).
+
+Prerequisites
+- Foundry installed
+- A funded wallet with ETC
+- RPC URL (e.g. from Rivet, Ankr, or Chainstack)
+
+1. Create .env File for Secrets
+
+    - Create a .env in your project root i.e. `contracts/`
+    - Copy all the varible from `contracts/.env-copy` to newly created `.env`
+    
+        `cp .env-copy .env`
+    - Assign valid values to the variable.
+
+2. Compile Contract
+        
+    `forge build`
+3. Load your .env in the terminal
+
+    `source .env`
+4. Deploy the Contract using forge create
+
+```
+forge create src/Contract.sol:Contract \
+  --rpc-url $SEPOLIA_RPC_URL \
+  --private-key $PRIVATE_KEY \
+  --broadcast \
+```
+5. Finally add Contract Address to Frontend `.env`
+    -  Create a new .env file by copying .env-copy:
+    
+        `cp frontend/.env-copy frontend/.env`
+    - Open the new .env file and update the variables, especially:
+    `VITE_CONTRACT_ADDRESS=your_deployed_contract_address_here`
+    
+    Replace your_deployed_contract_address_here with the actual contract address you got after deployment.
+
+    - Save the .env file.
+
+    - Restart your frontend development server so the new environment variables are loaded.
