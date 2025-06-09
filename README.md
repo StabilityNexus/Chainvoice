@@ -57,9 +57,9 @@ Prerequisites
 1. Create .env File for Secrets
 
     - Create a .env in your project root i.e. `contracts/`
-    - Copy all the varible from `contracts/.env-copy` to newly created `.env`
+    - Copy all the varible from `contracts/.env.example` to newly created `.env`
     
-        `cp .env-copy .env`
+        `cp .env.example .env`
     - Assign valid values to the variable.
 
 2. Compile Contract
@@ -77,9 +77,9 @@ forge create src/Contract.sol:Contract \
   --broadcast \
 ```
 5. Finally add Contract Address to Frontend `.env`
-    -  Create a new .env file by copying .env-copy:
+    -  Create a new .env file by copying .env.example:
     
-        `cp frontend/.env-copy frontend/.env`
+        `cp frontend/.env.example frontend/.env`
     - Open the new .env file and update the variables, especially:
     `VITE_CONTRACT_ADDRESS=your_deployed_contract_address_here`
     
