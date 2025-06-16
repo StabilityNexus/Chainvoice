@@ -22,135 +22,19 @@ export const ChainvoiceABI = [
 	  "name": "createInvoice",
 	  "inputs": [
 		{
-		  "name": "amountDue",
-		  "type": "uint256",
-		  "internalType": "uint256"
-		},
-		{
 		  "name": "to",
 		  "type": "address",
 		  "internalType": "address"
 		},
 		{
-		  "name": "_dueDate",
+		  "name": "encryptedInvoiceData",
 		  "type": "string",
 		  "internalType": "string"
 		},
 		{
-		  "name": "_issueDate",
+		  "name": "encryptedHash",
 		  "type": "string",
 		  "internalType": "string"
-		},
-		{
-		  "name": "user",
-		  "type": "tuple",
-		  "internalType": "struct Chainvoice.UserDetails",
-		  "components": [
-			{
-			  "name": "fname",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "lname",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "email",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "country",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "city",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "postalcode",
-			  "type": "string",
-			  "internalType": "string"
-			}
-		  ]
-		},
-		{
-		  "name": "client",
-		  "type": "tuple",
-		  "internalType": "struct Chainvoice.UserDetails",
-		  "components": [
-			{
-			  "name": "fname",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "lname",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "email",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "country",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "city",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "postalcode",
-			  "type": "string",
-			  "internalType": "string"
-			}
-		  ]
-		},
-		{
-		  "name": "_items",
-		  "type": "tuple[]",
-		  "internalType": "struct Chainvoice.ItemData[]",
-		  "components": [
-			{
-			  "name": "description",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "qty",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "unitPrice",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "discount",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "tax",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "amount",
-			  "type": "int256",
-			  "internalType": "int256"
-			}
-		  ]
 		}
 	  ],
 	  "outputs": [],
@@ -171,10 +55,61 @@ export const ChainvoiceABI = [
 	},
 	{
 	  "type": "function",
+	  "name": "getInvoice",
+	  "inputs": [
+		{
+		  "name": "invoiceId",
+		  "type": "uint256",
+		  "internalType": "uint256"
+		}
+	  ],
+	  "outputs": [
+		{
+		  "name": "",
+		  "type": "tuple",
+		  "internalType": "struct Chainvoice.InvoiceDetails",
+		  "components": [
+			{
+			  "name": "id",
+			  "type": "uint256",
+			  "internalType": "uint256"
+			},
+			{
+			  "name": "from",
+			  "type": "address",
+			  "internalType": "address"
+			},
+			{
+			  "name": "to",
+			  "type": "address",
+			  "internalType": "address"
+			},
+			{
+			  "name": "isPaid",
+			  "type": "bool",
+			  "internalType": "bool"
+			},
+			{
+			  "name": "encryptedInvoiceData",
+			  "type": "string",
+			  "internalType": "string"
+			},
+			{
+			  "name": "encryptedHash",
+			  "type": "string",
+			  "internalType": "string"
+			}
+		  ]
+		}
+	  ],
+	  "stateMutability": "view"
+	},
+	{
+	  "type": "function",
 	  "name": "getReceivedInvoices",
 	  "inputs": [
 		{
-		  "name": "_address",
+		  "name": "user",
 		  "type": "address",
 		  "internalType": "address"
 		}
@@ -196,140 +131,24 @@ export const ChainvoiceABI = [
 			  "internalType": "address"
 			},
 			{
-			  "name": "dueDate",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "issueDate",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "user",
-			  "type": "tuple",
-			  "internalType": "struct Chainvoice.UserDetails",
-			  "components": [
-				{
-				  "name": "fname",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "lname",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "email",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "country",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "city",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "postalcode",
-				  "type": "string",
-				  "internalType": "string"
-				}
-			  ]
-			},
-			{
 			  "name": "to",
 			  "type": "address",
 			  "internalType": "address"
 			},
 			{
-			  "name": "client",
-			  "type": "tuple",
-			  "internalType": "struct Chainvoice.UserDetails",
-			  "components": [
-				{
-				  "name": "fname",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "lname",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "email",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "country",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "city",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "postalcode",
-				  "type": "string",
-				  "internalType": "string"
-				}
-			  ]
-			},
-			{
-			  "name": "amountDue",
-			  "type": "uint256",
-			  "internalType": "uint256"
-			},
-			{
 			  "name": "isPaid",
 			  "type": "bool",
 			  "internalType": "bool"
-			}
-		  ]
-		},
-		{
-		  "name": "",
-		  "type": "tuple[][]",
-		  "internalType": "struct Chainvoice.ItemData[][]",
-		  "components": [
+			},
 			{
-			  "name": "description",
+			  "name": "encryptedInvoiceData",
 			  "type": "string",
 			  "internalType": "string"
 			},
 			{
-			  "name": "qty",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "unitPrice",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "discount",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "tax",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "amount",
-			  "type": "int256",
-			  "internalType": "int256"
+			  "name": "encryptedHash",
+			  "type": "string",
+			  "internalType": "string"
 			}
 		  ]
 		}
@@ -341,7 +160,7 @@ export const ChainvoiceABI = [
 	  "name": "getSentInvoices",
 	  "inputs": [
 		{
-		  "name": "_address",
+		  "name": "user",
 		  "type": "address",
 		  "internalType": "address"
 		}
@@ -363,140 +182,24 @@ export const ChainvoiceABI = [
 			  "internalType": "address"
 			},
 			{
-			  "name": "dueDate",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "issueDate",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "user",
-			  "type": "tuple",
-			  "internalType": "struct Chainvoice.UserDetails",
-			  "components": [
-				{
-				  "name": "fname",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "lname",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "email",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "country",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "city",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "postalcode",
-				  "type": "string",
-				  "internalType": "string"
-				}
-			  ]
-			},
-			{
 			  "name": "to",
 			  "type": "address",
 			  "internalType": "address"
 			},
 			{
-			  "name": "client",
-			  "type": "tuple",
-			  "internalType": "struct Chainvoice.UserDetails",
-			  "components": [
-				{
-				  "name": "fname",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "lname",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "email",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "country",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "city",
-				  "type": "string",
-				  "internalType": "string"
-				},
-				{
-				  "name": "postalcode",
-				  "type": "string",
-				  "internalType": "string"
-				}
-			  ]
-			},
-			{
-			  "name": "amountDue",
-			  "type": "uint256",
-			  "internalType": "uint256"
-			},
-			{
 			  "name": "isPaid",
 			  "type": "bool",
 			  "internalType": "bool"
-			}
-		  ]
-		},
-		{
-		  "name": "",
-		  "type": "tuple[][]",
-		  "internalType": "struct Chainvoice.ItemData[][]",
-		  "components": [
+			},
 			{
-			  "name": "description",
+			  "name": "encryptedInvoiceData",
 			  "type": "string",
 			  "internalType": "string"
 			},
 			{
-			  "name": "qty",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "unitPrice",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "discount",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "tax",
-			  "type": "int256",
-			  "internalType": "int256"
-			},
-			{
-			  "name": "amount",
-			  "type": "int256",
-			  "internalType": "int256"
+			  "name": "encryptedHash",
+			  "type": "string",
+			  "internalType": "string"
 			}
 		  ]
 		}
@@ -525,152 +228,24 @@ export const ChainvoiceABI = [
 		  "internalType": "address"
 		},
 		{
-		  "name": "dueDate",
-		  "type": "string",
-		  "internalType": "string"
-		},
-		{
-		  "name": "issueDate",
-		  "type": "string",
-		  "internalType": "string"
-		},
-		{
-		  "name": "user",
-		  "type": "tuple",
-		  "internalType": "struct Chainvoice.UserDetails",
-		  "components": [
-			{
-			  "name": "fname",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "lname",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "email",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "country",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "city",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "postalcode",
-			  "type": "string",
-			  "internalType": "string"
-			}
-		  ]
-		},
-		{
 		  "name": "to",
 		  "type": "address",
 		  "internalType": "address"
 		},
 		{
-		  "name": "client",
-		  "type": "tuple",
-		  "internalType": "struct Chainvoice.UserDetails",
-		  "components": [
-			{
-			  "name": "fname",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "lname",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "email",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "country",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "city",
-			  "type": "string",
-			  "internalType": "string"
-			},
-			{
-			  "name": "postalcode",
-			  "type": "string",
-			  "internalType": "string"
-			}
-		  ]
-		},
-		{
-		  "name": "amountDue",
-		  "type": "uint256",
-		  "internalType": "uint256"
-		},
-		{
 		  "name": "isPaid",
 		  "type": "bool",
 		  "internalType": "bool"
-		}
-	  ],
-	  "stateMutability": "view"
-	},
-	{
-	  "type": "function",
-	  "name": "itemDatas",
-	  "inputs": [
-		{
-		  "name": "",
-		  "type": "uint256",
-		  "internalType": "uint256"
 		},
 		{
-		  "name": "",
-		  "type": "uint256",
-		  "internalType": "uint256"
-		}
-	  ],
-	  "outputs": [
-		{
-		  "name": "description",
+		  "name": "encryptedInvoiceData",
 		  "type": "string",
 		  "internalType": "string"
 		},
 		{
-		  "name": "qty",
-		  "type": "int256",
-		  "internalType": "int256"
-		},
-		{
-		  "name": "unitPrice",
-		  "type": "int256",
-		  "internalType": "int256"
-		},
-		{
-		  "name": "discount",
-		  "type": "int256",
-		  "internalType": "int256"
-		},
-		{
-		  "name": "tax",
-		  "type": "int256",
-		  "internalType": "int256"
-		},
-		{
-		  "name": "amount",
-		  "type": "int256",
-		  "internalType": "int256"
+		  "name": "encryptedHash",
+		  "type": "string",
+		  "internalType": "string"
 		}
 	  ],
 	  "stateMutability": "view"
@@ -767,7 +342,7 @@ export const ChainvoiceABI = [
 	  "name": "setTreasuryAddress",
 	  "inputs": [
 		{
-		  "name": "newTreauserAdd",
+		  "name": "newTreasury",
 		  "type": "address",
 		  "internalType": "address"
 		}
@@ -790,7 +365,7 @@ export const ChainvoiceABI = [
 	},
 	{
 	  "type": "function",
-	  "name": "withdraw",
+	  "name": "withdrawFees",
 	  "inputs": [],
 	  "outputs": [],
 	  "stateMutability": "nonpayable"
@@ -802,7 +377,7 @@ export const ChainvoiceABI = [
 		{
 		  "name": "id",
 		  "type": "uint256",
-		  "indexed": false,
+		  "indexed": true,
 		  "internalType": "uint256"
 		},
 		{
@@ -816,12 +391,6 @@ export const ChainvoiceABI = [
 		  "type": "address",
 		  "indexed": true,
 		  "internalType": "address"
-		},
-		{
-		  "name": "amountDue",
-		  "type": "uint256",
-		  "indexed": false,
-		  "internalType": "uint256"
 		}
 	  ],
 	  "anonymous": false
@@ -833,7 +402,7 @@ export const ChainvoiceABI = [
 		{
 		  "name": "id",
 		  "type": "uint256",
-		  "indexed": false,
+		  "indexed": true,
 		  "internalType": "uint256"
 		},
 		{
@@ -849,7 +418,7 @@ export const ChainvoiceABI = [
 		  "internalType": "address"
 		},
 		{
-		  "name": "amountPaid",
+		  "name": "amount",
 		  "type": "uint256",
 		  "indexed": false,
 		  "internalType": "uint256"
@@ -858,3 +427,4 @@ export const ChainvoiceABI = [
 	  "anonymous": false
 	}
   ]
+  
