@@ -52,12 +52,29 @@ function ReceivedInvoice() {
   const { address } = useAccount();
   const [loading, setLoading] = useState(false);
   const [receivedInvoices, setReceivedInvoice] = useState([]);
-  const [invoiceItems, setInvoiceItems] = useState([]);
-
   const [fee, setFee] = useState(0);
+  const [litReady, setLitReady] = useState(false);
+  const litClientRef = useRef(null);
 
   useEffect(() => {
-    if (!walletClient) return;
+    const initLit = async () => {
+      if (!litClientRef.current) {
+        const client = new LitNodeClient({
+          litNetwork: LIT_NETWORK.DatilDev,
+          debug: false,
+        });
+        await client.connect();
+        litClientRef.current = client;
+        setLitReady(true);
+        console.log(litClientRef.current);
+      }
+    };
+    setLoading(true);
+    initLit();
+  }, []);
+
+  useEffect(() => {
+    if (!walletClient || !litReady) return;
 
     const fetchReceivedInvoices = async () => {
       try {
@@ -67,10 +84,12 @@ function ReceivedInvoice() {
         const signer = await provider.getSigner();
 
         // 1. Setup Lit Node
-        const litNodeClient = new LitNodeClient({
-          litNetwork: LIT_NETWORK.DatilDev,
-        });
-        await litNodeClient.connect();
+
+        const litNodeClient = litClientRef.current;
+        if (!litNodeClient) {
+          alert("Lit client not initialized");
+          return;
+        }
 
         // 2. Get data from contract
         const contract = new Contract(
@@ -82,17 +101,7 @@ function ReceivedInvoice() {
         const res = await contract.getReceivedInvoices(address);
         console.log("getReceivedInvoices raw response:", res);
 
-        console.log(typeof res);
-        // if (!res || !Array.isArray(res) || res.length !== 2) {
-        //   console.warn("Unexpected contract response format.");
-        //   setReceivedInvoice([]);
-        //   setInvoiceItems([]);
-        //   setLoading(false);
-        //   return;
-        // }
-
         const decryptedInvoices = [];
-        const allItems = [];
 
         for (const invoice of res) {
           const id = invoice[0];
@@ -171,12 +180,10 @@ function ReceivedInvoice() {
           parsed["id"] = id;
           parsed["isPaid"] = isPaid;
           decryptedInvoices.push(parsed);
-          allItems.push(null); // placeholder
         }
 
         console.log("decrypted : ", decryptedInvoices);
         setReceivedInvoice(decryptedInvoices);
-        setInvoiceItems(allItems);
 
         const fee = await contract.fee();
         setFee(fee);
@@ -190,7 +197,7 @@ function ReceivedInvoice() {
 
     fetchReceivedInvoices();
     console.log("invoices : ", receivedInvoices);
-  }, [walletClient]);
+  }, [walletClient,litReady]);
 
   const payInvoice = async (id, amountDue) => {
     try {

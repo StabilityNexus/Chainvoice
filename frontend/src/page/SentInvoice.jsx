@@ -7,7 +7,7 @@ import TableHead from "@mui/material/TableHead";
 import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { BrowserProvider, Contract, ethers } from "ethers";
-import React, { useEffect, useState, Fragment, useRef } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import DescriptionIcon from "@mui/icons-material/Description";
@@ -53,9 +53,28 @@ function SentInvoice() {
   const [loading, setLoading] = useState(false);
   const [fee, setFee] = useState(0);
   const { address } = useAccount();
+  const [litReady, setLitReady] = useState(false);
+  const litClientRef = useRef(null);
 
   useEffect(() => {
-    if (!walletClient) return;
+      const initLit = async () => {
+        if (!litClientRef.current) {
+          const client = new LitNodeClient({
+            litNetwork: LIT_NETWORK.DatilDev,
+            debug: false,
+          });
+          await client.connect();
+          litClientRef.current = client;
+          setLitReady(true);
+          console.log(litClientRef.current);
+        }
+      };
+      setLoading(true);
+      initLit();
+  }, []);
+  
+  useEffect(() => {
+    if (!walletClient || !litReady) return;
 
     const fetchSentInvoices = async () => {
       try {
@@ -66,10 +85,12 @@ function SentInvoice() {
         const signer = await provider.getSigner();
 
         // 2. Connect to Lit Node
-        const litNodeClient = new LitNodeClient({
-          litNetwork: LIT_NETWORK.DatilDev,
-        });
-        await litNodeClient.connect();
+
+        const litNodeClient = litClientRef.current;
+        if (!litNodeClient) {
+          alert("Lit client not initialized");
+          return;
+        }
 
         // 3. Contract call to get encrypted invoice
         const contract = new Contract(
@@ -90,7 +111,6 @@ function SentInvoice() {
         }
 
         const decryptedInvoices = [];
-        const allItems = [];
 
         for (const invoice of res) {
           const id = invoice[0];
@@ -168,11 +188,9 @@ function SentInvoice() {
           parsed["id"] = id;
           parsed["isPaid"] = isPaid;
           decryptedInvoices.push(parsed);
-          allItems.push(null); // placeholder
         }
 
         setSentInvoices(decryptedInvoices);
-        setInvoiceItems(allItems); // if items are separate, replace nulls
         const fee = await contract.fee();
         setFee(fee);
       } catch (error) {
@@ -186,7 +204,7 @@ function SentInvoice() {
     fetchSentInvoices();
 
     console.log("invoices : ", sentInvoices);
-  }, [walletClient]);
+  }, [walletClient, litReady]);
 
   const [drawerState, setDrawerState] = useState({
     open: false,

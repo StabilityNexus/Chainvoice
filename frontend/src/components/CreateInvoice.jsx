@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { BrowserProvider, Contract, ethers } from "ethers";
@@ -33,6 +33,7 @@ function CreateInvoice() {
   const [issueDate, setIssueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const litClientRef = useRef(null);
 
   const [itemData, setItemData] = useState([
     {
@@ -59,6 +60,21 @@ function CreateInvoice() {
 
     setTotalAmountDue(total);
   }, [itemData]);
+
+  useEffect(() => {
+    const initLit = async () => {
+      if (!litClientRef.current) {
+        const client = new LitNodeClient({
+          litNetwork: LIT_NETWORK.DatilDev,
+          debug: false,
+        });
+        await client.connect();
+        litClientRef.current = client;
+        console.log(litClientRef.current);
+      }
+    };
+    initLit();
+  }, []);
 
   const handleItemData = (e, index) => {
     const { name, value } = e.target;
@@ -143,11 +159,12 @@ function CreateInvoice() {
       const invoiceString = JSON.stringify(invoicePayload);
 
       // 2. Setup Lit
-      const litNodeClient = new LitNodeClient({
-        litNetwork: LIT_NETWORK.DatilDev,
-        debug: false,
-      });
-      await litNodeClient.connect();
+
+      const litNodeClient = litClientRef.current;
+      if (!litNodeClient) {
+        alert("Lit client not initialized");
+        return;
+      }
 
       const accessControlConditions = [
         {
