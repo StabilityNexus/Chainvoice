@@ -81,7 +81,7 @@ forge create contracts/src/Chainvoice.sol:Chainvoice \
     
         `cp frontend/.env.example frontend/.env`
     - Open the new .env file and update the variables, especially:
-    `VITE_TRACT_ADDRESS=your_deployed_contract_address_here`
+    `VITE_CONTRACT_ADDRESS=your_deployed_contract_address_here`
     
     Replace your_deployed_contract_address_here with the actual contract address you got after deployment.
 
