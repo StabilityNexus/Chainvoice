@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
-import { BrowserProvider, Contract, ethers } from "ethers";
+import { BrowserProvider, Contract, ethers, formatUnits, parseUnits } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import {
@@ -49,16 +49,20 @@ function CreateInvoice() {
   const [totalAmountDue, setTotalAmountDue] = useState(0);
 
   useEffect(() => {
-    let total = itemData.reduce((sum, item) => {
-      return (
-        sum +
-        ((parseFloat(item.qty) || 0) * (parseFloat(item.unitPrice) || 0) -
-          (parseFloat(item.discount) || 0) +
-          (parseFloat(item.tax) || 0))
-      );
-    }, 0);
+    const total = itemData.reduce((sum, item) => {
+      const qty = parseUnits(item.qty || "0", 18);     
+      const unitPrice = parseUnits(item.unitPrice || "0", 18);
+      const discount = parseUnits(item.discount || "0", 18);
+      const tax = parseUnits(item.tax || "0", 18);
+      // qty * price (then divide by 1e18 to cancel double scaling)
+      const lineTotal = qty * unitPrice / parseUnits("1", 18);
+      const adjusted = lineTotal - discount + tax;
+    
+      return sum + adjusted;
+    }, 0n); 
 
-    setTotalAmountDue(total);
+    setTotalAmountDue(formatUnits(total, 18));
+  
   }, [itemData]);
 
   useEffect(() => {
