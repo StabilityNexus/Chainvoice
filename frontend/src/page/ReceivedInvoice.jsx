@@ -57,21 +57,25 @@ function ReceivedInvoice() {
   const litClientRef = useRef(null);
 
   useEffect(() => {
-    const initLit = async () => {
-      if (!litClientRef.current) {
-        const client = new LitNodeClient({
-          litNetwork: LIT_NETWORK.DatilDev,
-          debug: false,
-        });
-        await client.connect();
-        litClientRef.current = client;
-        setLitReady(true);
-        console.log(litClientRef.current);
-      }
-    };
-    setLoading(true);
-    initLit();
-  }, []);
+      const initLit = async () => {
+        try {
+          setLoading(true);
+          if (!litClientRef.current) {
+            const client = new LitNodeClient({
+              litNetwork: LIT_NETWORK.DatilDev,
+              debug: false,
+            });
+            await client.connect();
+            litClientRef.current = client;
+            setLitReady(true);
+            console.log(litClientRef.current);
+          }
+        } catch (error) {
+          console.log("error while lit client initialization");
+        } 
+      };
+      initLit();
+    }, []);
 
   useEffect(() => {
     if (!walletClient || !litReady) return;
@@ -105,9 +109,9 @@ function ReceivedInvoice() {
 
         for (const invoice of res) {
           const id = invoice[0];
-          const isPaid = invoice[3];
-          const encryptedStringBase64 = invoice[4]; // encryptedData
-          const dataToEncryptHash = invoice[5];
+          const isPaid = invoice[4];
+          const encryptedStringBase64 = invoice[5]; // encryptedData
+          const dataToEncryptHash = invoice[6];
 
           if (!encryptedStringBase64 || !dataToEncryptHash) continue;
 
@@ -197,7 +201,7 @@ function ReceivedInvoice() {
 
     fetchReceivedInvoices();
     console.log("invoices : ", receivedInvoices);
-  }, [walletClient,litReady]);
+  }, [walletClient, litReady]);
 
   const payInvoice = async (id, amountDue) => {
     try {

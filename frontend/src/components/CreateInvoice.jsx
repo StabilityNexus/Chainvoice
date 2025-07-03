@@ -114,7 +114,6 @@ function CreateInvoice() {
         amount: "",
       },
     ]);
-    console.log(itemData.length);
   };
 
   const createInvoiceRequest = async (data) => {
@@ -239,9 +238,10 @@ function CreateInvoice() {
         ChainvoiceABI,
         signer
       );
-
+      console.log("amt : ",ethers.parseEther(totalAmountDue.toString()));
       const tx = await contract.createInvoice(
         data.clientAddress,
+        ethers.parseEther(totalAmountDue.toString()),
         encryptedStringBase64,
         dataToEncryptHash
       );

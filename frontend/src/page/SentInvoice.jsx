@@ -57,7 +57,9 @@ function SentInvoice() {
   const litClientRef = useRef(null);
 
   useEffect(() => {
-      const initLit = async () => {
+    const initLit = async () => {
+      try {
+        setLoading(true);
         if (!litClientRef.current) {
           const client = new LitNodeClient({
             litNetwork: LIT_NETWORK.DatilDev,
@@ -68,9 +70,11 @@ function SentInvoice() {
           setLitReady(true);
           console.log(litClientRef.current);
         }
-      };
-      setLoading(true);
-      initLit();
+      } catch (error) {
+        console.log("error while lit client initialization");
+      } 
+    };
+    initLit();
   }, []);
   
   useEffect(() => {
@@ -114,9 +118,9 @@ function SentInvoice() {
 
         for (const invoice of res) {
           const id = invoice[0];
-          const isPaid = invoice[3];
-          const encryptedStringBase64 = invoice[4]; // encryptedData
-          const dataToEncryptHash = invoice[5];
+          const isPaid = invoice[4];
+          const encryptedStringBase64 = invoice[5]; // encryptedData
+          const dataToEncryptHash = invoice[6];
 
           if (!encryptedStringBase64 || !dataToEncryptHash) continue;
 

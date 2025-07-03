@@ -6,6 +6,7 @@ contract Chainvoice {
         uint256 id;
         address from;
         address to;
+        uint256 amountDue;
         bool isPaid;
         string encryptedInvoiceData; //  Base64-encoded ciphertext
         string encryptedHash;
@@ -46,6 +47,7 @@ contract Chainvoice {
 
     function createInvoice(
         address to,
+        uint256 amountDue,
         string memory encryptedInvoiceData,
         string memory encryptedHash
     ) external {
@@ -59,9 +61,10 @@ contract Chainvoice {
                 id: invoiceId,
                 from: msg.sender,
                 to: to,
+                amountDue: amountDue,
                 isPaid: false,
                 encryptedInvoiceData: encryptedInvoiceData,
-                encryptedHash:encryptedHash
+                encryptedHash: encryptedHash
             })
         );
 
@@ -77,15 +80,14 @@ contract Chainvoice {
         InvoiceDetails storage invoice = invoices[invoiceId];
         require(msg.sender == invoice.to, "Not authorized");
         require(!invoice.isPaid, "Already paid");
-        require(msg.value > fee, "Insufficient payment for invoice + fee");
+        require(msg.value == invoice.amountDue + fee, "Incorrect payment amount");
+
+        accumulatedFees += fee;
+        invoice.isPaid = true;
 
         uint256 amountToSender = msg.value - fee;
-        accumulatedFees += fee;
-
         (bool sent, ) = payable(invoice.from).call{value: amountToSender}("");
         require(sent, "Transfer failed");
-
-        invoice.isPaid = true;
 
         emit InvoicePaid(invoiceId, invoice.from, invoice.to, msg.value);
     }
