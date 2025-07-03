@@ -537,7 +537,7 @@ function ReceivedInvoice() {
                   </tr>
                 </thead>
                 {drawerState.selectedInvoice?.items?.map((item, index) => (
-                  <tbody>
+                  <tbody key={index}>
                     <tr>
                       <td className="border p-2">{item.description}</td>
                       <td className="border p-2">{item.qty.toString()}</td>
