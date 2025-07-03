@@ -57,25 +57,27 @@ function ReceivedInvoice() {
   const litClientRef = useRef(null);
 
   useEffect(() => {
-      const initLit = async () => {
-        try {
-          setLoading(true);
-          if (!litClientRef.current) {
-            const client = new LitNodeClient({
-              litNetwork: LIT_NETWORK.DatilDev,
-              debug: false,
-            });
-            await client.connect();
-            litClientRef.current = client;
-            setLitReady(true);
-            console.log(litClientRef.current);
-          }
-        } catch (error) {
-          console.log("error while lit client initialization");
-        } 
-      };
-      initLit();
-    }, []);
+    const initLit = async () => {
+      try {
+        setLoading(true);
+        if (!litClientRef.current) {
+          const client = new LitNodeClient({
+            litNetwork: LIT_NETWORK.DatilDev,
+            debug: false,
+          });
+          await client.connect();
+          litClientRef.current = client;
+          setLitReady(true);
+          console.log(litClientRef.current);
+        }
+      } catch (error) {
+        console.error("Error while lit client initialization:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    initLit();
+  }, []);
 
   useEffect(() => {
     if (!walletClient || !litReady) return;
@@ -109,14 +111,21 @@ function ReceivedInvoice() {
 
         for (const invoice of res) {
           const id = invoice[0];
+          const from = invoice[1].toLowerCase();
+          const to = invoice[2].toLowerCase();
           const isPaid = invoice[4];
           const encryptedStringBase64 = invoice[5]; // encryptedData
           const dataToEncryptHash = invoice[6];
 
           if (!encryptedStringBase64 || !dataToEncryptHash) continue;
-
+          const currentUserAddress = address.toLowerCase();
+          if (currentUserAddress !== from && currentUserAddress !== to) {
+            console.warn(
+              `User ${currentUserAddress} not authorized to decrypt invoice ${id}`
+            );
+            continue;
+          }
           const ciphertext = atob(encryptedStringBase64);
-
           const accessControlConditions = [
             {
               contractAddress: "",
@@ -324,7 +333,7 @@ function ReceivedInvoice() {
                         className="hover:bg-[#32363F] transition duration-300"
                       >
                         {columns.map((column) => {
-                          const value = invoice.user[column.id] || "";
+                          const value = invoice?.user[column.id] || "";
                           if (column.id === "to") {
                             return (
                               <TableCell
@@ -332,7 +341,7 @@ function ReceivedInvoice() {
                                 align={column.align}
                                 sx={{ color: "white", borderColor: "#25272b" }}
                               >
-                                {invoice.user.address
+                                {invoice.user?.address
                                   ? `${invoice.user.address.substring(
                                       0,
                                       10
@@ -558,10 +567,7 @@ function ReceivedInvoice() {
               <div className="mt-4 text-xs">
                 <p className="text-right font-semibold">
                   {/* Fee for invoice pay : {ethers.formatUnits(fee)} ETH */}
-                  Fee for invoice pay : {parseFloat(
-                    ethers.formatUnits(fee)
-                  )}{" "}
-                  ETH
+                  Fee for invoice pay : {ethers.formatUnits(fee)} ETH
                 </p>
                 <p className="text-right font-semibold">
                   {" "}

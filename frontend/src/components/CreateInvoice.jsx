@@ -93,11 +93,15 @@ function CreateInvoice() {
             name === "discount" ||
             name === "tax"
           ) {
-            const qty = parseFloat(updatedItem.qty) || 0;
-            const unitPrice = parseFloat(updatedItem.unitPrice) || 0;
-            const discount = parseFloat(updatedItem.discount) || 0;
-            const tax = parseFloat(updatedItem.tax) || 0;
-            updatedItem.amount = (qty * unitPrice - discount + tax).toString();
+            const qty = parseUnits(updatedItem.qty || "0", 18);
+            const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
+            const discount = parseUnits(updatedItem.discount || "0", 18);
+            const tax = parseUnits(updatedItem.tax || "0", 18);
+
+            const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
+            const finalAmount = lineTotal - discount + tax;
+
+            updatedItem.amount = formatUnits(finalAmount, 18);
           }
           return updatedItem;
         }

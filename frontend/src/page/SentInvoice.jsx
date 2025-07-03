@@ -71,12 +71,14 @@ function SentInvoice() {
           console.log(litClientRef.current);
         }
       } catch (error) {
-        console.log("error while lit client initialization");
-      } 
+        console.error("Error while lit client initialization:", error);
+      } finally {
+        setLoading(false);
+      }
     };
     initLit();
   }, []);
-  
+
   useEffect(() => {
     if (!walletClient || !litReady) return;
 
@@ -118,12 +120,20 @@ function SentInvoice() {
 
         for (const invoice of res) {
           const id = invoice[0];
+          const from = invoice[1].toLowerCase();
+          const to = invoice[2].toLowerCase();
           const isPaid = invoice[4];
           const encryptedStringBase64 = invoice[5]; // encryptedData
           const dataToEncryptHash = invoice[6];
 
           if (!encryptedStringBase64 || !dataToEncryptHash) continue;
-
+          const currentUserAddress = address.toLowerCase();
+          if (currentUserAddress !== from && currentUserAddress !== to) {
+            console.warn(
+              `User ${currentUserAddress} not authorized to decrypt invoice ${id}`
+            );
+            continue;
+          }
           const ciphertext = atob(encryptedStringBase64);
           const accessControlConditions = [
             {
@@ -322,7 +332,7 @@ function SentInvoice() {
                                     borderColor: "#25272b",
                                   }}
                                 >
-                                  {invoice.client.address
+                                  {invoice.client?.address
                                     ? `${invoice.client.address.substring(
                                         0,
                                         10
@@ -519,8 +529,7 @@ function SentInvoice() {
               </table>
               <div className="mt-4 text-xs">
                 <p className="text-right font-semibold">
-                  Fee for invoice pay : {fee} ETH
-                  {/* Fee for invoice pay : {ethers.formatUnits(fee)} ETH */}
+                  Fee for invoice pay : {ethers.formatUnits(fee)} ETH
                 </p>
                 <p className="text-right font-semibold">
                   {" "}
