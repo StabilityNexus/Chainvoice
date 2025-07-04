@@ -12,6 +12,10 @@
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
+    "@lit-protocol/auth-helpers": "^7.2.0",
+    "@lit-protocol/constants": "^7.2.0",
+    "@lit-protocol/encryption": "^7.2.0",
+    "@lit-protocol/lit-node-client": "^7.2.0",
     "@mui/icons-material": "^6.4.6",
     "@mui/material": "^6.4.6",
     "@radix-ui/react-label": "^2.1.1",

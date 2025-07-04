@@ -1,37 +1,41 @@
-import Paper from '@mui/material/Paper';
-import Table from '@mui/material/Table';
-import TableBody from '@mui/material/TableBody';
-import TableCell from '@mui/material/TableCell';
-import TableContainer from '@mui/material/TableContainer';
-import TableHead from '@mui/material/TableHead';
-import TablePagination from '@mui/material/TablePagination';
-import TableRow from '@mui/material/TableRow';
-import { ChainvoiceABI } from '@/contractsABI/ChainvoiceABI';
-import { BrowserProvider, Contract, ethers } from 'ethers'
-import React, { useEffect, useState } from 'react'
-import { useAccount, useWalletClient } from 'wagmi'
-import DescriptionIcon from '@mui/icons-material/Description';
-import SwipeableDrawer from '@mui/material/SwipeableDrawer';
-import Button from '@mui/material/Button';
+import Paper from "@mui/material/Paper";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TablePagination from "@mui/material/TablePagination";
+import TableRow from "@mui/material/TableRow";
+import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
+import { BrowserProvider, Contract, ethers } from "ethers";
+import React, { useEffect, useState } from "react";
+import { useAccount, useWalletClient } from "wagmi";
+import DescriptionIcon from "@mui/icons-material/Description";
+import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import { useRef } from "react";
-import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
+import { LitNodeClient } from "@lit-protocol/lit-node-client";
+import { decryptToString } from "@lit-protocol/encryption/src/lib/encryption.js";
+import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
+import {
+  createSiweMessageWithRecaps,
+  generateAuthSig,
+  LitAccessControlConditionResource,
+} from "@lit-protocol/auth-helpers";
 
 const columns = [
-  { id: 'fname', label: 'First Name', minWidth: 100 },
-  { id: 'lname', label: 'Last Name', minWidth: 100 },
-  { id: 'to', label: 'Address', minWidth: 200 },
-  { id: 'email', label: 'Email', minWidth: 170 },
+  { id: "fname", label: "First Name", minWidth: 100 },
+  { id: "lname", label: "Last Name", minWidth: 100 },
+  { id: "to", label: "Sender's address", minWidth: 200 },
+  { id: "email", label: "Email", minWidth: 170 },
   // { id: 'country', label: 'Country', minWidth: 100 },
-  { id: 'amountDue', label: 'Total Amount', minWidth: 100, align: 'right' },
-  { id: 'isPaid', label: 'Status', minWidth: 100 },
-  { id: 'detail', label: 'Detail Invoice', minWidth: 100 },
-  { id: 'pay', label: 'Pay / Paid' , minWidth: 100 },
+  { id: "amountDue", label: "Total Amount", minWidth: 100, align: "right" },
+  { id: "isPaid", label: "Status", minWidth: 100 },
+  { id: "detail", label: "Detail Invoice", minWidth: 100 },
+  { id: "pay", label: "Pay / Paid", minWidth: 100 },
 ];
 
-
 function ReceivedInvoice() {
-
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
@@ -48,59 +52,208 @@ function ReceivedInvoice() {
   const { address } = useAccount();
   const [loading, setLoading] = useState(false);
   const [receivedInvoices, setReceivedInvoice] = useState([]);
-  const [invoiceItems, setInvoiceItems] = useState([]);
-
   const [fee, setFee] = useState(0);
+  const [litReady, setLitReady] = useState(false);
+  const litClientRef = useRef(null);
+
   useEffect(() => {
-    if (!walletClient) return;
+    const initLit = async () => {
+      try {
+        setLoading(true);
+        if (!litClientRef.current) {
+          const client = new LitNodeClient({
+            litNetwork: LIT_NETWORK.DatilDev,
+            debug: false,
+          });
+          await client.connect();
+          litClientRef.current = client;
+          setLitReady(true);
+          console.log(litClientRef.current);
+        }
+      } catch (error) {
+        console.error("Error while lit client initialization:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    initLit();
+  }, []);
+
+  useEffect(() => {
+    if (!walletClient || !litReady) return;
+
     const fetchReceivedInvoices = async () => {
       try {
         setLoading(true);
-        if (!walletClient) return;
+
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
-        const contract = new Contract(import.meta.env.VITE_CONTRACT_ADDRESS, ChainvoiceABI, signer);
-        console.log(address);
+
+        // 1. Setup Lit Node
+
+        const litNodeClient = litClientRef.current;
+        if (!litNodeClient) {
+          alert("Lit client not initialized");
+          return;
+        }
+
+        // 2. Get data from contract
+        const contract = new Contract(
+          import.meta.env.VITE_CONTRACT_ADDRESS,
+          ChainvoiceABI,
+          signer
+        );
+
         const res = await contract.getReceivedInvoices(address);
-        const [invoiceDetails, itemData] = res;
-        setReceivedInvoice(invoiceDetails);
-        setInvoiceItems(itemData);
-        setLoading(false);
+        console.log("getReceivedInvoices raw response:", res);
+
+        const decryptedInvoices = [];
+
+        for (const invoice of res) {
+          const id = invoice[0];
+          const from = invoice[1].toLowerCase();
+          const to = invoice[2].toLowerCase();
+          const isPaid = invoice[4];
+          const encryptedStringBase64 = invoice[5]; // encryptedData
+          const dataToEncryptHash = invoice[6];
+
+          if (!encryptedStringBase64 || !dataToEncryptHash) continue;
+          const currentUserAddress = address.toLowerCase();
+          if (currentUserAddress !== from && currentUserAddress !== to) {
+            console.warn(
+              `User ${currentUserAddress} not authorized to decrypt invoice ${id}`
+            );
+            continue;
+          }
+          const ciphertext = atob(encryptedStringBase64);
+          const accessControlConditions = [
+            {
+              contractAddress: "",
+              standardContractType: "",
+              chain: "ethereum",
+              method: "",
+              parameters: [":userAddress"],
+              returnValueTest: {
+                comparator: "=",
+                value: invoice[1].toLowerCase(), // from
+              },
+            },
+            { operator: "or" },
+            {
+              contractAddress: "",
+              standardContractType: "",
+              chain: "ethereum",
+              method: "",
+              parameters: [":userAddress"],
+              returnValueTest: {
+                comparator: "=",
+                value: invoice[2].toLowerCase(), // to
+              },
+            },
+          ];
+
+          const sessionSigs = await litNodeClient.getSessionSigs({
+            chain: "ethereum",
+            resourceAbilityRequests: [
+              {
+                resource: new LitAccessControlConditionResource("*"),
+                ability: LIT_ABILITY.AccessControlConditionDecryption,
+              },
+            ],
+            authNeededCallback: async ({
+              uri,
+              expiration,
+              resourceAbilityRequests,
+            }) => {
+              const nonce = await litNodeClient.getLatestBlockhash();
+              const toSign = await createSiweMessageWithRecaps({
+                uri,
+                expiration,
+                resources: resourceAbilityRequests,
+                walletAddress: address,
+                nonce,
+                litNodeClient,
+              });
+              return await generateAuthSig({ signer, toSign });
+            },
+          });
+
+          const decryptedString = await decryptToString(
+            {
+              accessControlConditions,
+              chain: "ethereum",
+              ciphertext,
+              dataToEncryptHash,
+              sessionSigs,
+            },
+            litNodeClient
+          );
+
+          const parsed = JSON.parse(decryptedString);
+          parsed["id"] = id;
+          parsed["isPaid"] = isPaid;
+          decryptedInvoices.push(parsed);
+        }
+
+        console.log("decrypted : ", decryptedInvoices);
+        setReceivedInvoice(decryptedInvoices);
+
         const fee = await contract.fee();
-        console.log(ethers.formatUnits(fee));
         setFee(fee);
-        console.log(res);
       } catch (error) {
-        console.log(error);
+        console.error("Decryption error:", error);
+        alert("Failed to fetch or decrypt received invoices.");
+      } finally {
+        setLoading(false);
       }
-    }
+    };
+
     fetchReceivedInvoices();
-  }, [walletClient]);
+    console.log("invoices : ", receivedInvoices);
+  }, [walletClient, litReady]);
 
   const payInvoice = async (id, amountDue) => {
     try {
       if (!walletClient) return;
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
-      const contract = new Contract(import.meta.env.VITE_CONTRACT_ADDRESS, ChainvoiceABI, signer);
-      console.log(amountDue);
+      const contract = new Contract(
+        import.meta.env.VITE_CONTRACT_ADDRESS,
+        ChainvoiceABI,
+        signer
+      );
+      console.log(ethers.parseUnits(String(amountDue), 18));
       const fee = await contract.fee();
       console.log(fee);
-      const res = await contract.payInvoice(ethers.toBigInt(id), {
-        value: amountDue + fee
+      const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
+      const feeInWei = BigInt(fee);
+      const total = amountDueInWei + feeInWei;
+
+      const res = await contract.payInvoice(BigInt(id), {
+        value: total,
       });
     } catch (error) {
       console.log(error);
     }
-  }
+  };
 
-  const [drawerState, setDrawerState] = useState({ open: false, selectedInvoice: null });
+  const [drawerState, setDrawerState] = useState({
+    open: false,
+    selectedInvoice: null,
+  });
 
   const toggleDrawer = (invoice) => (event) => {
-    if (event && event.type === "keydown" && (event.key === "Tab" || event.key === "Shift")) {
+    if (
+      event &&
+      event.type === "keydown" &&
+      (event.key === "Tab" || event.key === "Shift")
+    ) {
       return;
     }
-    setDrawerState({ open: !drawerState.open, selectedInvoice: invoice || null });
+    setDrawerState({
+      open: !drawerState.open,
+      selectedInvoice: invoice || null,
+    });
   };
 
   const contentRef = useRef();
@@ -134,20 +287,37 @@ function ReceivedInvoice() {
     <div>
       <h2 className="text-lg font-bold">Received Invoice Request</h2>
       <h2 className="text-sm mb-4">Pay to your client request</h2>
-      <Paper sx={{ width: '100%', overflow: 'hidden', backgroundColor: '#1b1f29', color: 'white', boxShadow: 'none' }} >
+      <Paper
+        sx={{
+          width: "100%",
+          overflow: "hidden",
+          backgroundColor: "#1b1f29",
+          color: "white",
+          boxShadow: "none",
+        }}
+      >
         {loading ? (
           <p>loading........</p>
-        ) : receivedInvoices.length > 0 ? (
+        ) : receivedInvoices?.length > 0 ? (
           <>
             <TableContainer sx={{ maxHeight: 540 }}>
-              <Table stickyHeader aria-label="sticky table" sx={{ borderCollapse: 'separate', borderSpacing: 0 }}>
+              <Table
+                stickyHeader
+                aria-label="sticky table"
+                sx={{ borderCollapse: "separate", borderSpacing: 0 }}
+              >
                 <TableHead>
-                  <TableRow >
+                  <TableRow>
                     {columns.map((column) => (
                       <TableCell
                         key={column.id}
                         align={column.align}
-                        sx={{ minWidth: column.minWidth, backgroundColor: '#1b1f29', color: 'white', borderColor: '#25272b' }}
+                        sx={{
+                          minWidth: column.minWidth,
+                          backgroundColor: "#1b1f29",
+                          color: "white",
+                          borderColor: "#25272b",
+                        }}
                       >
                         {column.label}
                       </TableCell>
@@ -158,41 +328,69 @@ function ReceivedInvoice() {
                   {receivedInvoices
                     .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                     .map((invoice, index) => (
-                      <TableRow key={index}  
-                      className='hover:bg-[#32363F] transition duration-300'
-        
+                      <TableRow
+                        key={index}
+                        className="hover:bg-[#32363F] transition duration-300"
                       >
                         {columns.map((column) => {
-                          console.log(invoice.to);
-                          const value = invoice.user[column.id] || '';
-                          if (column.id === 'to') {
+                          const value = invoice?.user[column.id] || "";
+                          if (column.id === "to") {
                             return (
-                              <TableCell key={column.id} align={column.align} sx={{ color: 'white', borderColor: '#25272b' }}>
-                                {invoice.to.substring(0, 10)}...{invoice.to.substring(invoice.to.length - 10)}
+                              <TableCell
+                                key={column.id}
+                                align={column.align}
+                                sx={{ color: "white", borderColor: "#25272b" }}
+                              >
+                                {invoice.user?.address
+                                  ? `${invoice.user.address.substring(
+                                      0,
+                                      10
+                                    )}...${invoice.user.address.substring(
+                                      invoice.user.address.length - 10
+                                    )}`
+                                  : "N/A"}
                               </TableCell>
                             );
                           }
-                          if (column.id === 'amountDue') {
+                          if (column.id === "amountDue") {
                             return (
-                              <TableCell key={column.id} align={column.align} sx={{ color: 'white', borderColor: '#25272b' }}>
-                                {ethers.formatUnits(invoice.amountDue)} ETH
+                              <TableCell
+                                key={column.id}
+                                align={column.align}
+                                sx={{ color: "white", borderColor: "#25272b" }}
+                              >
+                                {/* {ethers.formatUnits(invoice.amountDue)} ETH */}
+                                {invoice.amountDue} ETH
                               </TableCell>
                             );
                           }
-                          if (column.id === 'isPaid') {
+                          if (column.id === "isPaid") {
                             return (
-                              <TableCell key={column.id} align={column.align} sx={{ color: 'white', borderColor: '#25272b' }} className=' '>
+                              <TableCell
+                                key={column.id}
+                                align={column.align}
+                                sx={{ color: "white", borderColor: "#25272b" }}
+                                className=" "
+                              >
                                 <button
-                                  className={`text-sm rounded-full text-white font-bold px-3 ${invoice.isPaid ? 'bg-green-600' : 'bg-red-600'}`}
+                                  className={`text-sm rounded-full text-white font-bold px-3 ${
+                                    invoice.isPaid
+                                      ? "bg-green-600"
+                                      : "bg-red-600"
+                                  }`}
                                 >
-                                  {invoice.isPaid ? 'Paid' : 'Not Paid'}
+                                  {invoice.isPaid ? "Paid" : "Not Paid"}
                                 </button>
                               </TableCell>
-                            )
+                            );
                           }
                           if (column.id === "detail") {
                             return (
-                              <TableCell key={column.id} align={column.align} sx={{ color: "white", borderColor: "#25272b" }}>
+                              <TableCell
+                                key={column.id}
+                                align={column.align}
+                                sx={{ color: "white", borderColor: "#25272b" }}
+                              >
                                 <button
                                   className="text-sm rounded-full text-white font-bold px-3 hover:text-blue-500 transition duration-500"
                                   onClick={toggleDrawer(invoice)}
@@ -202,24 +400,36 @@ function ReceivedInvoice() {
                               </TableCell>
                             );
                           }
-                          if(column.id==='pay' && !invoice.isPaid) {
+                          if (column.id === "pay" && !invoice.isPaid) {
                             return (
-                              <TableCell key={column.id} align={column.align} sx={{ color: 'white', borderColor: '#25272b' }}>
+                              <TableCell
+                                key={column.id}
+                                align={column.align}
+                                sx={{ color: "white", borderColor: "#25272b" }}
+                              >
                                 <button
                                   className="text-sm rounded-xl py-2 text-white font-bold px-6 bg-green-600"
-                                  onClick={() => payInvoice(invoice.id, invoice.amountDue)}
+                                  onClick={() =>
+                                    payInvoice(invoice.id, invoice.amountDue)
+                                  }
                                 >
                                   Pay Now
                                 </button>
                               </TableCell>
                             );
                           }
-                          if(column.id==='pay' && invoice.isPaid) {
+                          if (column.id === "pay" && invoice.isPaid) {
                             return (
-                              <TableCell key={column.id} align={column.align} sx={{ color: 'white', borderColor: '#25272b' }}>
+                              <TableCell
+                                key={column.id}
+                                align={column.align}
+                                sx={{ color: "white", borderColor: "#25272b" }}
+                              >
                                 <button
                                   className="text-sm rounded-xl py-2 text-white font-bold px-6 bg-green-400"
-                                  onClick={() => payInvoice(invoice.id, invoice.amountDue)}
+                                  onClick={() =>
+                                    payInvoice(invoice.id, invoice.amountDue)
+                                  }
                                   disabled
                                 >
                                   Already Paid
@@ -228,7 +438,11 @@ function ReceivedInvoice() {
                             );
                           }
                           return (
-                            <TableCell key={column.id} align={column.align} sx={{ color: 'white', borderColor: '#25272b' }}>
+                            <TableCell
+                              key={column.id}
+                              align={column.align}
+                              sx={{ color: "white", borderColor: "#25272b" }}
+                            >
                               {value}
                             </TableCell>
                           );
@@ -247,59 +461,77 @@ function ReceivedInvoice() {
               onPageChange={handleChangePage}
               onRowsPerPageChange={handleChangeRowsPerPage}
               sx={{
-                color: 'white',
-                backgroundColor: '#1b1f29',
+                color: "white",
+                backgroundColor: "#1b1f29",
                 "& .MuiTablePagination-actions svg": {
-                  color: 'white',
+                  color: "white",
                 },
                 "& .MuiSelect-icon": {
-                  color: 'white',
+                  color: "white",
                 },
                 "& .MuiInputBase-root": {
-                  color: 'white',
+                  color: "white",
                 },
-                "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows": {
-                  color: 'white',
-                },
-
+                "& .MuiTablePagination-selectLabel, & .MuiTablePagination-displayedRows":
+                  {
+                    color: "white",
+                  },
               }}
             />
-
           </>
         ) : (
           <p>No invoices found</p>
         )}
       </Paper>
 
-      <SwipeableDrawer anchor="right" open={drawerState.open} onClose={toggleDrawer(null)} onOpen={toggleDrawer(null)}>
+      <SwipeableDrawer
+        anchor="right"
+        open={drawerState.open}
+        onClose={toggleDrawer(null)}
+        onOpen={toggleDrawer(null)}
+      >
         {drawerState.selectedInvoice && (
           <div style={{ width: 650, padding: 20 }}>
             <div className="bg-white p-6 shadow-lg w-full max-w-2xl font-Montserrat">
               <div className="flex justify-between items-center">
                 <img src="/whiteLogo.png" alt="none" />
                 <div>
-                  <p className="text-gray-700 text-xs py-1">Issued on March 4, 2025</p>
-                  <p className="text-gray-700 text-xs">Payment due by April 3, 2025</p>
+                  <p className="text-gray-700 text-xs py-1">
+                    Issued by {drawerState.selectedInvoice.issueDate}
+                  </p>
+                  <p className="text-gray-700 text-xs">
+                    Payment Due by {drawerState.selectedInvoice.dueDate}
+                  </p>
                 </div>
               </div>
 
               <div className="border-b border-green-500 pb-4 mb-4">
-                <h1 className="text-sm font-bold">Invoice #{drawerState.selectedInvoice.id}</h1>
+                <h1 className="text-sm font-bold">
+                  Invoice # {drawerState.selectedInvoice.id.toString()}
+                </h1>
               </div>
 
               <div className="mb-4">
                 <h2 className="text-sm font-semibold">From</h2>
-                <p className="text-gray-700 text-xs">{drawerState.selectedInvoice.from}</p>
+                <p className="text-gray-700 text-xs">
+                  {drawerState.selectedInvoice.client.from}
+                </p>
                 <p className="text-gray-700 text-xs">{`${drawerState.selectedInvoice.user.fname} ${drawerState.selectedInvoice.user.lname}`}</p>
-                <p className="text-blue-500 underline text-xs">{drawerState.selectedInvoice.user.email}</p>
+                <p className="text-blue-500 underline text-xs">
+                  {drawerState.selectedInvoice.user.email}
+                </p>
                 <p className="text-gray-700 text-xs">{`${drawerState.selectedInvoice.user.city}, ${drawerState.selectedInvoice.user.country} (${drawerState.selectedInvoice.user.postalcode})`}</p>
               </div>
 
               <div className="mb-4">
                 <h2 className="text-sm font-semibold">Billed to</h2>
-                <p className="text-gray-700 text-xs">{drawerState.selectedInvoice.from}</p>
+                <p className="text-gray-700 text-xs">
+                  {drawerState.selectedInvoice.client.address}
+                </p>
                 <p className="text-gray-700 text-xs">{`${drawerState.selectedInvoice.client.fname} ${drawerState.selectedInvoice.client.lname}`}</p>
-                <p className="text-blue-500 underline text-xs">{drawerState.selectedInvoice.client.email}</p>
+                <p className="text-blue-500 underline text-xs">
+                  {drawerState.selectedInvoice.client.email}
+                </p>
                 <p className="text-gray-700 text-xs">{`${drawerState.selectedInvoice.client.city}, ${drawerState.selectedInvoice.client.country} (${drawerState.selectedInvoice.client.postalcode})`}</p>
               </div>
               <table className="w-full border-collapse border border-gray-300 text-xs">
@@ -313,27 +545,42 @@ function ReceivedInvoice() {
                     <th className=" p-2">Amount</th>
                   </tr>
                 </thead>
-                {
-                  invoiceItems[drawerState.selectedInvoice.id].map((item, index) => (
-                    <tbody >
-                      <tr>
-                        <td className="border p-2">{item.description}</td>
-                        <td className="border p-2">{item.qty.toString()}</td>
-                        <td className="border p-2">{ethers.formatUnits(item.unitPrice)}</td>
-                        <td className="border p-2">{item.discount.toString()}</td>
-                        <td className="border p-2">{item.tax.toString()}</td>
-                        <td className="border p-2">
-                          {ethers.formatUnits(item.amount)} ETH
-                        </td>
-                      </tr>
-                    </tbody>
-                  ))
-                }
+                {drawerState.selectedInvoice?.items?.map((item, index) => (
+                  <tbody key={index}>
+                    <tr>
+                      <td className="border p-2">{item.description}</td>
+                      <td className="border p-2">{item.qty.toString()}</td>
+                      <td className="border p-2">
+                        {/* {ethers.formatUnits(item.unitPrice)} */}
+                        {item.unitPrice}
+                      </td>
+                      <td className="border p-2">{item.discount.toString()}</td>
+                      <td className="border p-2">{item.tax.toString()}</td>
+                      <td className="border p-2">
+                        {item.amount} ETH
+                        {/* {ethers.formatUnits(item.amount)} ETH */}
+                      </td>
+                    </tr>
+                  </tbody>
+                ))}
               </table>
               <div className="mt-4 text-xs">
-                <p className="text-right font-semibold">Fee for invoice pay : {ethers.formatUnits(fee)} ETH</p>
-                <p className="text-right font-semibold"> Amount: {ethers.formatUnits(drawerState.selectedInvoice.amountDue)} ETH</p>
-                <p className="text-right font-semibold"> Total Amount: {ethers.formatUnits(drawerState.selectedInvoice.amountDue+fee)} ETH</p>
+                <p className="text-right font-semibold">
+                  {/* Fee for invoice pay : {ethers.formatUnits(fee)} ETH */}
+                  Fee for invoice pay : {ethers.formatUnits(fee)} ETH
+                </p>
+                <p className="text-right font-semibold">
+                  {" "}
+                  Amount: {drawerState.selectedInvoice.amountDue}{" "}
+                  {/* {ethers.formatUnits(drawerState.selectedInvoice.amountDue)}{" "} */}
+                  ETH
+                </p>
+                <p className="text-right font-semibold">
+                  Total Amount:{" "}
+                  {parseFloat(drawerState.selectedInvoice.amountDue) +
+                    parseFloat(ethers.formatUnits(fee))}{" "}
+                  ETH
+                </p>
               </div>
               <div className="p-2 flex items-center">
                 <h1 className="text-xs text-center pr-1">Powered by</h1>
@@ -341,11 +588,10 @@ function ReceivedInvoice() {
               </div>
             </div>
           </div>
-        )
-        }
-      </SwipeableDrawer >
+        )}
+      </SwipeableDrawer>
     </div>
-  )
+  );
 }
 
-export default ReceivedInvoice
+export default ReceivedInvoice;
