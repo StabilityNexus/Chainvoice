@@ -166,14 +166,10 @@ function CreateInvoice() {
       const invoiceString = JSON.stringify(invoicePayload);
 
       // 2. Setup Lit
-
-      const litNodeClient = litClientRef.current;
-
       if (!litNodeClient) {
         alert("Lit client not initialized");
         return;
       }
-      
       const accessControlConditions = [
         {
           contractAddress: "",
@@ -199,7 +195,7 @@ function CreateInvoice() {
           },
         },
       ];
-      
+
       // 3. Encrypt
       const { ciphertext, dataToEncryptHash } = await encryptString(
         {
@@ -208,7 +204,7 @@ function CreateInvoice() {
         },
         litNodeClient
       );
-      
+
       const sessionSigs = await litNodeClient.getSessionSigs({
         chain: "ethereum",
         resourceAbilityRequests: [
@@ -240,7 +236,7 @@ function CreateInvoice() {
       });
 
       const encryptedStringBase64 = btoa(ciphertext);
-      
+
       // 4. Send to contract
       const contract = new Contract(
         import.meta.env.VITE_CONTRACT_ADDRESS,
@@ -259,6 +255,7 @@ function CreateInvoice() {
 
       console.log("Transaction receipt:", receipt);
       setTimeout(() => navigate("/dashboard/sent"), 4000);
+
     } catch (err) {
       console.error("Encryption or transaction failed:", err);
       alert("Failed to create invoice.");
@@ -475,7 +472,6 @@ function CreateInvoice() {
               </div>
             </div>
           </div>
-
           {/* Client Information */}
           <div className="border border-gray-200 flex-1 p-6 rounded-lg shadow-sm bg-white">
             <h3 className="text-lg font-semibold mb-4 text-gray-800">
@@ -565,6 +561,7 @@ function CreateInvoice() {
             </div>
           </div>
         </div>
+
 
         {/* Invoice Items Section */}
         <div className="mb-8">

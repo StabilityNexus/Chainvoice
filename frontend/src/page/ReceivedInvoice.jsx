@@ -115,13 +115,15 @@ function ReceivedInvoice() {
 
         const res = await contract.getReceivedInvoices(address);
         console.log("getReceivedInvoices raw response:", res);
+
         // First check if user has any invoices
-        if (!res || !Array.isArray(res) || res.length === 0) {
-          setReceivedInvoice([]);
-          const fee = await contract.fee();
-          setFee(fee);
-          return;
-        }
+//         if (!res || !Array.isArray(res) || res.length === 0) {
+//           setReceivedInvoice([]);
+//           const fee = await contract.fee();
+//           setFee(fee);
+//           return;
+//         }
+
 
         const decryptedInvoices = [];
 
@@ -353,7 +355,9 @@ function ReceivedInvoice() {
                         className="hover:bg-[#32363F] transition duration-300"
                       >
                         {columns.map((column) => {
-                          const value = invoice.user[column.id] || "";
+
+                          const value = invoice?.user[column.id] || "";
+
                           if (column.id === "to") {
                             return (
                               <TableCell
@@ -361,7 +365,7 @@ function ReceivedInvoice() {
                                 align={column.align}
                                 sx={{ color: "white", borderColor: "#25272b" }}
                               >
-                                {invoice.user.address
+                                {invoice.user?.address
                                   ? `${invoice.user.address.substring(
                                       0,
                                       10
@@ -564,7 +568,8 @@ function ReceivedInvoice() {
                   </tr>
                 </thead>
                 {drawerState.selectedInvoice?.items?.map((item, index) => (
-                  <tbody>
+
+                  <tbody key={index}>
                     <tr>
                       <td className="border p-2">{item.description}</td>
                       <td className="border p-2">{item.qty.toString()}</td>
@@ -585,9 +590,8 @@ function ReceivedInvoice() {
               <div className="mt-4 text-xs">
                 <p className="text-right font-semibold">
                   {/* Fee for invoice pay : {ethers.formatUnits(fee)} ETH */}
-                  Fee for invoice pay : {parseFloat(
-                    ethers.formatUnits(fee)
-                  )}{" "}
+
+                  Fee for invoice pay : {parseFloat(ethers.formatUnits(fee))}{" "}
                   ETH
                 </p>
                 <p className="text-right font-semibold">

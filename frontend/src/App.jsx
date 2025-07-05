@@ -7,6 +7,7 @@ import {
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import * as chains from "wagmi/chains";
+
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import Landing from "./page/Landing";
 import Applayout from "./page/Applayout";
