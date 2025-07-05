@@ -94,7 +94,7 @@ const Treasure = () => {
         ChainvoiceABI,
         signer
       );
-      const tx = await contract.withdraw();
+      const tx = await contract.withdrawFees();
       await tx.wait();
       const newAmt = await contract.accumulatedFees();
       setTreasureAmount(ethers.formatUnits(newAmt));

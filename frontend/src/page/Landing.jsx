@@ -180,7 +180,7 @@ function Landing() {
                 <ul className="mt-2 space-y-1">
                   {[
                     "Blog & Article",
-                    "Terms ans Conditions",
+                    "Terms and Conditions",
                     "Privacy Policy",
                     "Contact Us",
                     "Invoice",
