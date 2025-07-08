@@ -52,6 +52,7 @@ function SentInvoice() {
   const [invoiceItems, setInvoiceItems] = useState([]);
   const [loading, setLoading] = useState(false);
   const [fee, setFee] = useState(0);
+  const [error, setError] = useState(null);
   const { address } = useAccount();
   const [litReady, setLitReady] = useState(false);
   const litClientRef = useRef(null);
@@ -216,8 +217,6 @@ function SentInvoice() {
     };
 
     fetchSentInvoices();
-
-    console.log("invoices : ", sentInvoices);
   }, [walletClient, litReady]);
 
   const [drawerState, setDrawerState] = useState({
@@ -270,7 +269,7 @@ function SentInvoice() {
 
   return (
     <div>
-      <h2 className="text-lg font-bold">Your Sent Invoice Request</h2>
+      <h2 className="text-lg font-bold m-3">Your Sent Invoice Request</h2>
       <Paper
         sx={{
           width: "100%",
@@ -281,8 +280,12 @@ function SentInvoice() {
         }}
       >
         {loading ? (
-          <p>Loading...</p>
-        ) : sentInvoices?.length > 0 ? (
+          <p className="p-4">Loading invoices...</p>
+        ) : error ? (
+          <p className="p-4 text-red-400">{error}</p>
+        ) : sentInvoices.length === 0 ? (
+          <p className="p-4">No invoices found</p>
+        ) : (
           <>
             <TableContainer sx={{ maxHeight: 540 }}>
               <Table
@@ -309,108 +312,103 @@ function SentInvoice() {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {sentInvoices.length > 0 &&
-                    sentInvoices
-                      .slice(
-                        page * rowsPerPage,
-                        page * rowsPerPage + rowsPerPage
-                      )
-                      .map((invoice, index) => (
-                        <TableRow
-                          key={index}
-                          className="hover:bg-[#32363F] transition duration-300"
-                        >
-                          {columns.map((column) => {
-                            const value = invoice?.client[column.id];
-                            if (column.id === "to") {
-                              return (
-                                <TableCell
-                                  key={column.id}
-                                  align={column.align}
-                                  sx={{
-                                    color: "white",
-                                    borderColor: "#25272b",
-                                  }}
-                                >
-                                  {invoice.client?.address
-                                    ? `${invoice.client.address.substring(
-                                        0,
-                                        10
-                                      )}...${invoice.client.address.substring(
-                                        invoice.client.address.length - 10
-                                      )}`
-                                    : "N/A"}
-                                </TableCell>
-                              );
-                            }
-                            if (column.id === "amountDue") {
-                              return (
-                                <TableCell
-                                  key={column.id}
-                                  align={column.align}
-                                  sx={{
-                                    color: "white",
-                                    borderColor: "#25272b",
-                                  }}
-                                >
-                                  {invoice.amountDue} ETH
-                                  {/* {ethers.formatUnits(invoice.amountDue)} ETH */}
-                                </TableCell>
-                              );
-                            }
-                            if (column.id === "isPaid") {
-                              return (
-                                <TableCell
-                                  key={column.id}
-                                  align={column.align}
-                                  sx={{
-                                    color: "white",
-                                    borderColor: "#25272b",
-                                  }}
-                                >
-                                  <button
-                                    className={`text-sm rounded-full text-white font-bold px-3 ${
-                                      invoice.isPaid
-                                        ? "bg-green-600"
-                                        : "bg-red-600"
-                                    }`}
-                                  >
-                                    {invoice.isPaid ? "Paid" : "Not Paid"}
-                                  </button>
-                                </TableCell>
-                              );
-                            }
-                            if (column.id === "detail") {
-                              return (
-                                <TableCell
-                                  key={column.id}
-                                  align={column.align}
-                                  sx={{
-                                    color: "white",
-                                    borderColor: "#25272b",
-                                  }}
-                                >
-                                  <button
-                                    className="text-sm rounded-full text-white font-bold px-3 hover:text-blue-500 transition duration-500"
-                                    onClick={toggleDrawer(invoice)}
-                                  >
-                                    <DescriptionIcon />
-                                  </button>
-                                </TableCell>
-                              );
-                            }
+                  {sentInvoices
+                    .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                    .map((invoice, index) => (
+                      <TableRow
+                        key={index}
+                        className="hover:bg-[#32363F] transition duration-300"
+                      >
+                        {columns.map((column) => {
+                          const value = invoice?.client[column.id];
+                          if (column.id === "to") {
                             return (
                               <TableCell
                                 key={column.id}
                                 align={column.align}
-                                sx={{ color: "white", borderColor: "#25272b" }}
+                                sx={{
+                                  color: "white",
+                                  borderColor: "#25272b",
+                                }}
                               >
-                                {value}
+                                {invoice.client.address
+                                  ? `${invoice.client.address.substring(
+                                      0,
+                                      10
+                                    )}...${invoice.client.address.substring(
+                                      invoice.client.address.length - 10
+                                    )}`
+                                  : "N/A"}
                               </TableCell>
                             );
-                          })}
-                        </TableRow>
-                      ))}
+                          }
+                          if (column.id === "amountDue") {
+                            return (
+                              <TableCell
+                                key={column.id}
+                                align={column.align}
+                                sx={{
+                                  color: "white",
+                                  borderColor: "#25272b",
+                                }}
+                              >
+                                {invoice.amountDue} ETH
+                              </TableCell>
+                            );
+                          }
+                          if (column.id === "isPaid") {
+                            return (
+                              <TableCell
+                                key={column.id}
+                                align={column.align}
+                                sx={{
+                                  color: "white",
+                                  borderColor: "#25272b",
+                                }}
+                              >
+                                <button
+                                  className={`text-sm rounded-full text-white font-bold px-3 ${
+                                    invoice.isPaid
+                                      ? "bg-green-600"
+                                      : "bg-red-600"
+                                  }`}
+                                >
+                                  {invoice.isPaid ? "Paid" : "Not Paid"}
+                                </button>
+                              </TableCell>
+                            );
+                          }
+                          if (column.id === "detail") {
+                            return (
+                              <TableCell
+                                key={column.id}
+                                align={column.align}
+                                sx={{
+                                  color: "white",
+                                  borderColor: "#25272b",
+                                }}
+                              >
+                                <button
+                                  className="text-sm rounded-full text-white font-bold px-3 hover:text-blue-500 transition duration-500"
+                                  onClick={toggleDrawer(invoice)}
+                                >
+                                  <DescriptionIcon />
+                                </button>
+                              </TableCell>
+                            );
+                          }
+                          return (
+                            <TableCell
+                              key={column.id}
+                              align={column.align}
+                              sx={{ color: "white", borderColor: "#25272b" }}
+                            >
+                              {value}
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    ))}
                 </TableBody>
               </Table>
             </TableContainer>
@@ -442,8 +440,6 @@ function SentInvoice() {
               }}
             />
           </>
-        ) : (
-          <p>No invoices found</p>
         )}
       </Paper>
 
@@ -514,13 +510,11 @@ function SentInvoice() {
                       <td className="border p-2">{item.description}</td>
                       <td className="border p-2">{item.qty.toString()}</td>
                       <td className="border p-2">
-                        {/* {ethers.formatUnits(item.unitPrice)} */}
                         {item.unitPrice}
                       </td>
                       <td className="border p-2">{item.discount.toString()}</td>
                       <td className="border p-2">{item.tax.toString()}</td>
                       <td className="border p-2">
-                        {/* {ethers.formatUnits(item.amount)} */}
                         {item.amount}
                       </td>
                     </tr>
@@ -529,12 +523,12 @@ function SentInvoice() {
               </table>
               <div className="mt-4 text-xs">
                 <p className="text-right font-semibold">
-                  Fee for invoice pay : {ethers.formatUnits(fee)} ETH
+                  Fee for invoice pay : {parseFloat(ethers.formatUnits(fee))}{" "}
+                  ETH
                 </p>
                 <p className="text-right font-semibold">
                   {" "}
                   Amount:{" "}
-                  {/* {ethers.formatUnits(drawerState.selectedInvoice.amountDue)}{" "} */}
                   {drawerState.selectedInvoice.amountDue} ETH
                 </p>
                 <p className="text-right font-semibold">

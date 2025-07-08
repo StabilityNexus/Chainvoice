@@ -38,6 +38,14 @@ const columns = [
 function ReceivedInvoice() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const { data: walletClient } = useWalletClient();
+  const { address } = useAccount();
+  const [loading, setLoading] = useState(false);
+  const [receivedInvoices, setReceivedInvoice] = useState([]);
+  const [fee, setFee] = useState(0);
+  const [error, setError] = useState(null);
+  const [litReady, setLitReady] = useState(false);
+  const litClientRef = useRef(null);
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -47,14 +55,6 @@ function ReceivedInvoice() {
     setRowsPerPage(+event.target.value);
     setPage(0);
   };
-
-  const { data: walletClient } = useWalletClient();
-  const { address } = useAccount();
-  const [loading, setLoading] = useState(false);
-  const [receivedInvoices, setReceivedInvoice] = useState([]);
-  const [fee, setFee] = useState(0);
-  const [litReady, setLitReady] = useState(false);
-  const litClientRef = useRef(null);
 
   useEffect(() => {
     const initLit = async () => {
@@ -80,15 +80,24 @@ function ReceivedInvoice() {
   }, []);
 
   useEffect(() => {
-    if (!walletClient || !litReady) return;
+    if (!walletClient || !address || !litReady) return;
 
     const fetchReceivedInvoices = async () => {
       try {
         setLoading(true);
-
+        setError(null);
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
+        const network = await provider.getNetwork();
 
+        if (network.chainId != 5115) {
+          setError(
+            `Failed to load invoices. You're connected to the "${network.name}" network, but your invoices are on the "Citrea" testnet. Please switch to Sepolia and try again.`
+          );
+
+          setLoading(false);
+          return;
+        }
         // 1. Setup Lit Node
 
         const litNodeClient = litClientRef.current;
@@ -106,6 +115,15 @@ function ReceivedInvoice() {
 
         const res = await contract.getReceivedInvoices(address);
         console.log("getReceivedInvoices raw response:", res);
+
+        // First check if user has any invoices
+//         if (!res || !Array.isArray(res) || res.length === 0) {
+//           setReceivedInvoice([]);
+//           const fee = await contract.fee();
+//           setFee(fee);
+//           return;
+//         }
+
 
         const decryptedInvoices = [];
 
@@ -297,8 +315,12 @@ function ReceivedInvoice() {
         }}
       >
         {loading ? (
-          <p>loading........</p>
-        ) : receivedInvoices?.length > 0 ? (
+          <p className="p-4">Loading invoices...</p>
+        ) : error ? (
+          <p className="p-4 text-red-400">{error}</p>
+        ) : receivedInvoices.length === 0 ? (
+          <p className="p-4">No invoices found</p>
+        ) : (
           <>
             <TableContainer sx={{ maxHeight: 540 }}>
               <Table
@@ -333,7 +355,9 @@ function ReceivedInvoice() {
                         className="hover:bg-[#32363F] transition duration-300"
                       >
                         {columns.map((column) => {
+
                           const value = invoice?.user[column.id] || "";
+
                           if (column.id === "to") {
                             return (
                               <TableCell
@@ -479,8 +503,6 @@ function ReceivedInvoice() {
               }}
             />
           </>
-        ) : (
-          <p>No invoices found</p>
         )}
       </Paper>
 
@@ -514,7 +536,7 @@ function ReceivedInvoice() {
               <div className="mb-4">
                 <h2 className="text-sm font-semibold">From</h2>
                 <p className="text-gray-700 text-xs">
-                  {drawerState.selectedInvoice.client.from}
+                  {drawerState.selectedInvoice.user.address}
                 </p>
                 <p className="text-gray-700 text-xs">{`${drawerState.selectedInvoice.user.fname} ${drawerState.selectedInvoice.user.lname}`}</p>
                 <p className="text-blue-500 underline text-xs">
@@ -546,6 +568,7 @@ function ReceivedInvoice() {
                   </tr>
                 </thead>
                 {drawerState.selectedInvoice?.items?.map((item, index) => (
+
                   <tbody key={index}>
                     <tr>
                       <td className="border p-2">{item.description}</td>
@@ -567,7 +590,9 @@ function ReceivedInvoice() {
               <div className="mt-4 text-xs">
                 <p className="text-right font-semibold">
                   {/* Fee for invoice pay : {ethers.formatUnits(fee)} ETH */}
-                  Fee for invoice pay : {ethers.formatUnits(fee)} ETH
+
+                  Fee for invoice pay : {parseFloat(ethers.formatUnits(fee))}{" "}
+                  ETH
                 </p>
                 <p className="text-right font-semibold">
                   {" "}
