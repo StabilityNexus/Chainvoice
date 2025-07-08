@@ -217,8 +217,6 @@ function SentInvoice() {
     };
 
     fetchSentInvoices();
-
-    console.log("invoices : ", sentInvoices);
   }, [walletClient, litReady]);
 
   const [drawerState, setDrawerState] = useState({
@@ -512,13 +510,11 @@ function SentInvoice() {
                       <td className="border p-2">{item.description}</td>
                       <td className="border p-2">{item.qty.toString()}</td>
                       <td className="border p-2">
-                        {/* {ethers.formatUnits(item.unitPrice)} */}
                         {item.unitPrice}
                       </td>
                       <td className="border p-2">{item.discount.toString()}</td>
                       <td className="border p-2">{item.tax.toString()}</td>
                       <td className="border p-2">
-                        {/* {ethers.formatUnits(item.amount)} */}
                         {item.amount}
                       </td>
                     </tr>
@@ -529,12 +525,10 @@ function SentInvoice() {
                 <p className="text-right font-semibold">
                   Fee for invoice pay : {parseFloat(ethers.formatUnits(fee))}{" "}
                   ETH
-                  {/* Fee for invoice pay : {ethers.formatUnits(fee)} ETH */}
                 </p>
                 <p className="text-right font-semibold">
                   {" "}
                   Amount:{" "}
-                  {/* {ethers.formatUnits(drawerState.selectedInvoice.amountDue)}{" "} */}
                   {drawerState.selectedInvoice.amountDue} ETH
                 </p>
                 <p className="text-right font-semibold">

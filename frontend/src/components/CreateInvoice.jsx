@@ -135,8 +135,6 @@ function CreateInvoice() {
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
 
-      console.log("data >>>>>> ", data);
-      console.log("acc :", account.address);
       // 1. Prepare invoice data
       const invoicePayload = {
         amountDue: totalAmountDue,
@@ -243,7 +241,6 @@ function CreateInvoice() {
         ChainvoiceABI,
         signer
       );
-      console.log("amt : ",ethers.parseEther(totalAmountDue.toString()));
       const tx = await contract.createInvoice(
         data.clientAddress,
         ethers.parseEther(totalAmountDue.toString()),
@@ -252,8 +249,6 @@ function CreateInvoice() {
       );
 
       const receipt = await tx.wait();
-
-      console.log("Transaction receipt:", receipt);
       setTimeout(() => navigate("/dashboard/sent"), 4000);
 
     } catch (err) {
@@ -450,10 +445,6 @@ function CreateInvoice() {
                   <Input
                     type="text"
                     placeholder="City"
-                    Create
-                    New
-                    Invoice
-                    Request
                     className="w-full mt-1 border-gray-300 text-black"
                     name="userCity"
                   />
@@ -647,10 +638,8 @@ function CreateInvoice() {
                   <button
                     type="button"
                     onClick={() => {
-                      // Create a function to handle item deletion
                       const newItems = [...itemData];
                       newItems.splice(index, 1);
-                      // Update your state with the new items array
                       setItemData(newItems);
                     }}
                     className="absolute right-14 top-1/2 transform -translate-y-1/2 bg-green-500 text-white rounded-full p-1 hover:bg-green-600 transition-colors"

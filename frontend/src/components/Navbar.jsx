@@ -8,7 +8,9 @@ import HomeIcon from "@mui/icons-material/Home";
 import DashboardIcon from "@mui/icons-material/Dashboard";
 import FeaturedPlayListIcon from "@mui/icons-material/FeaturedPlayList";
 import DesignServicesIcon from "@mui/icons-material/DesignServices";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
+import CloseIcon from "@mui/icons-material/Close";
+import MenuIcon from "@mui/icons-material/Menu";
 
 function Navbar() {
   const { address, isConnected } = useAccount();
@@ -16,6 +18,7 @@ function Navbar() {
   const location = useLocation();
   const [hasConnected, setHasConnected] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // Improved active route detection
   const isActive = (path) => {
@@ -110,6 +113,15 @@ function Navbar() {
       path: "/treasure",
     },
   ];
+
+  const toggleMobileMenu = () => {
+    setIsMobileMenuOpen(!isMobileMenuOpen);
+  };
+
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+
   return (
     <motion.div
       initial={{ y: -100 }}
@@ -121,13 +133,16 @@ function Navbar() {
           : "bg-[#161920]"
       }`}
     >
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 z-10">
         <div className="flex justify-between items-center h-24">
           <motion.div
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
             className="flex items-center space-x-2 cursor-pointer"
-            onClick={() => navigate("/")}
+            onClick={() => {
+              navigate("/");
+              closeMobileMenu();
+            }}
           >
             <img src="/logo.png" alt="logo" width={50} />
             <p className="text-3xl font-bold text-green-500">
@@ -135,6 +150,7 @@ function Navbar() {
             </p>
           </motion.div>
 
+          {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-2">
             {navItems.map((item) => (
               <motion.button
@@ -207,28 +223,93 @@ function Navbar() {
 
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center">
-            <ConnectButton
-              accountStatus="avatar"
-              chainStatus="none"
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               className="mr-4"
-            />
-            <button className="text-gray-300 hover:text-white focus:outline-none">
-              <svg
-                className="h-6 w-6"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-            </button>
+            >
+              <ConnectButton
+                accountStatus="avatar"
+                chainStatus="none"
+                showBalance={false}
+              />
+            </motion.div>
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
+              onClick={toggleMobileMenu}
+              className="text-gray-300 hover:text-white focus:outline-none"
+            >
+              {isMobileMenuOpen ? (
+                <CloseIcon className="h-6 w-6" />
+              ) : (
+                <MenuIcon className="h-6 w-6" />
+              )}
+            </motion.button>
           </div>
         </div>
+
+        {/* Mobile Menu */}
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.3 }}
+              className="md:hidden overflow-hidden"
+            >
+              <div className="pt-2 pb-4 space-y-2">
+                {/* Navigation Links */}
+                {navItems.map((item) => (
+                  <motion.button
+                    key={`mobile-${item.name}`}
+                    whileTap={{ scale: 0.95 }}
+                    onClick={() => {
+                      item.action();
+                      closeMobileMenu();
+                    }}
+                    className={`w-full flex items-center px-4 py-3 rounded-lg transition-colors ${
+                      isActive(item.path)
+                        ? "bg-green-900/30 text-green-400 font-medium"
+                        : "text-white hover:bg-gray-800"
+                    }`}
+                  >
+                    <span className="mr-3">{item.icon}</span>
+                    {item.name}
+                  </motion.button>
+                ))}
+
+                {isConnected &&
+                  appItems.map((item) => (
+                    <Link
+                      key={`mobile-app-${item.name}`}
+                      to={item.path === "/dashboard" ? "/dashboard/create" : item.path}
+                      onClick={closeMobileMenu}
+                      className={`block w-full text-left px-4 py-3 rounded-lg transition-colors ${
+                        isActive(item.path)
+                          ? "bg-green-900/30 text-green-400 font-medium"
+                          : "text-white hover:bg-gray-800"
+                      }`}
+                    >
+                      <div className="flex items-center">
+                        <span className="mr-3">{item.icon}</span>
+                        {item.name}
+                      </div>
+                    </Link>
+                  ))}
+
+                <div className="px-4 py-2">
+                  <ConnectButton
+                    accountStatus="full"
+                    chainStatus="none"
+                    showBalance={false}
+                  />
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </motion.div>
   );

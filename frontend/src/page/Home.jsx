@@ -39,19 +39,27 @@ export default function Home() {
 
   return (
     <div className="px-10">
-      <header className="">
-        {" "}
-        <h1 className="text-2xl mb-2 text-white">
-          {" "}
+      <header className="mb-6">
+        <h1 className="text-2xl text-white">
           Welcome <span className="font-medium text-green-400">Back!</span>
         </h1>
       </header>
 
-      <Box sx={{ display: "flex", minHeight: "calc(100vh - 180px)" }}>
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", lg: "row" }, // Stack on mobile, row on desktop
+          minHeight: "calc(100vh - 180px)",
+          gap: "24px", // Add gap between sidebar and main content
+        }}
+      >
         {/* Sidebar Navigation */}
-        <nav className="lg:w-64 flex-shrink-0 pr-6">
-          {" "}
-          {/* Added right padding */}
+        <Box
+          sx={{
+            width: { lg: "264px" }, // Fixed width on desktop
+            flexShrink: 0,
+          }}
+        >
           <Drawer
             variant="permanent"
             sx={{
@@ -61,13 +69,11 @@ export default function Home() {
                 backgroundColor: "transparent",
                 position: "relative",
                 height: "auto",
-                top: 0, // Ensure it stays at top
+                top: 0,
               },
             }}
           >
             <List className="space-y-2">
-              {" "}
-              {/* Increased spacing */}
               {menuItems.map((item) => (
                 <ListItem
                   key={item.route}
@@ -78,26 +84,26 @@ export default function Home() {
                     onClick={() => navigate(item.route)}
                     selected={location.pathname.includes(item.route)}
                     sx={{
-                      borderRadius: "8px", // Slightly larger radius
+                      borderRadius: "8px",
                       transition: "all 0.2s ease",
                       backgroundColor: location.pathname.includes(item.route)
-                        ? "rgba(255, 255, 255, 0.08)" // Darker selected state
+                        ? "rgba(255, 255, 255, 0.08)"
                         : "transparent",
                       "&:hover": {
                         backgroundColor: "rgba(255, 255, 255, 0.05)",
-                        transform: "translateX(4px)", // Nice hover effect
+                        transform: "translateX(4px)",
                       },
                       "&.Mui-selected": {
-                        borderLeft: `4px solid ${item.color}`, // Thicker border
+                        borderLeft: `4px solid ${item.color}`,
                       },
-                      padding: "12px 16px", // More padding
+                      padding: "12px 16px",
                     }}
                   >
                     <ListItemIcon
                       sx={{
                         minWidth: "36px",
                         color: item.color,
-                        fontSize: "1.25rem", // Larger icons
+                        fontSize: "1.25rem",
                       }}
                     >
                       {item.icon}
@@ -105,9 +111,9 @@ export default function Home() {
                     <ListItemText
                       primary={item.text}
                       primaryTypographyProps={{
-                        fontSize: "1rem", // Slightly larger text
+                        fontSize: "1rem",
                         fontWeight: location.pathname.includes(item.route)
-                          ? 600 // Bolder selected text
+                          ? 600
                           : 500,
                       }}
                     />
@@ -116,8 +122,9 @@ export default function Home() {
               ))}
             </List>
           </Drawer>
-        </nav>
+        </Box>
 
+        {/* Main Content */}
         <Box
           component="main"
           sx={{
@@ -130,8 +137,9 @@ export default function Home() {
               display: "none",
             },
             transition: "all 0.3s ease",
+            borderLeft: { lg: "2px solid #1f2937" }, // Only show border on desktop
           }}
-          className="text-white border-l-2 border-gray-800"
+          className="text-white"
         >
           <Outlet />
         </Box>

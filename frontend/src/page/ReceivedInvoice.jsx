@@ -536,7 +536,7 @@ function ReceivedInvoice() {
               <div className="mb-4">
                 <h2 className="text-sm font-semibold">From</h2>
                 <p className="text-gray-700 text-xs">
-                  {drawerState.selectedInvoice.client.from}
+                  {drawerState.selectedInvoice.user.address}
                 </p>
                 <p className="text-gray-700 text-xs">{`${drawerState.selectedInvoice.user.fname} ${drawerState.selectedInvoice.user.lname}`}</p>
                 <p className="text-blue-500 underline text-xs">
