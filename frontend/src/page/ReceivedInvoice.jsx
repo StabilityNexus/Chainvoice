@@ -22,6 +22,7 @@ import {
   generateAuthSig,
   LitAccessControlConditionResource,
 } from "@lit-protocol/auth-helpers";
+import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 
 const columns = [
   { id: "fname", label: "First Name", minWidth: 100 },
@@ -230,9 +231,38 @@ function ReceivedInvoice() {
     console.log("invoices : ", receivedInvoices);
   }, [walletClient, litReady]);
 
-  const payInvoice = async (id, amountDue) => {
+  // const payInvoice = async (id, amountDue) => {
+  //   try {
+  //     if (!walletClient) return;
+  //     const provider = new BrowserProvider(walletClient);
+  //     const signer = await provider.getSigner();
+  //     const contract = new Contract(
+  //       import.meta.env.VITE_CONTRACT_ADDRESS,
+  //       ChainvoiceABI,
+  //       signer
+  //     );
+  //     console.log(ethers.parseUnits(String(amountDue), 18));
+  //     const fee = await contract.fee();
+  //     console.log(fee);
+  //     const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
+  //     const feeInWei = BigInt(fee);
+  //     const total = amountDueInWei + feeInWei;
+
+  //     const res = await contract.payInvoice(BigInt(id), {
+  //       value: total,
+  //     });
+  //   } catch (error) {
+  //     console.log(error);
+  //   }
+  // };
+
+  const payInvoice = async (invoiceId, amountDue, tokenAddress) => {
+    if (!walletClient) {
+      console.error("Wallet not connected");
+      return;
+    }
+
     try {
-      if (!walletClient) return;
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
       const contract = new Contract(
@@ -240,21 +270,60 @@ function ReceivedInvoice() {
         ChainvoiceABI,
         signer
       );
-      console.log(ethers.parseUnits(String(amountDue), 18));
-      const fee = await contract.fee();
-      console.log(fee);
-      const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
-      const feeInWei = BigInt(fee);
-      const total = amountDueInWei + feeInWei;
 
-      const res = await contract.payInvoice(BigInt(id), {
-        value: total,
-      });
+      const fee = await contract.fee();
+      const isNativeToken = tokenAddress === ethers.ZeroAddress; 
+
+      if (!isNativeToken) {
+        const tokenContract = new Contract(
+          tokenAddress,
+          ERC20_ABI,
+          signer
+        );
+
+        const currentAllowance = await tokenContract.allowance(
+          await signer.getAddress(),
+          contract.address
+        );
+
+        const amountDueInWei = ethers.parseUnits(
+          String(amountDue),
+          await tokenContract.decimals()
+        );
+
+        if (currentAllowance < amountDueInWei) {
+          const approveTx = await tokenContract.approve(
+            contract.address,
+            amountDueInWei
+          );
+          await approveTx.wait(); 
+        }
+
+        const tx = await contract.payInvoice(BigInt(invoiceId), {
+          value: fee, 
+        });
+        await tx.wait();
+      } else {
+        const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
+        const total = amountDueInWei + BigInt(fee);
+
+        const tx = await contract.payInvoice(BigInt(invoiceId), {
+          value: total,
+        });
+        await tx.wait();
+      }
+      console.log("Payment successful!");
     } catch (error) {
-      console.log(error);
+      console.error("Payment failed:", error);
+      if (error.code === "ACTION_REJECTED") {
+        alert("Transaction was rejected by user");
+      } else if (error.message.includes("insufficient balance")) {
+        alert("Insufficient balance for this transaction");
+      } else {
+        alert("Payment failed: " + error.message);
+      }
     }
   };
-
   const [drawerState, setDrawerState] = useState({
     open: false,
     selectedInvoice: null,
@@ -434,7 +503,7 @@ function ReceivedInvoice() {
                                 <button
                                   className="text-sm rounded-xl py-2 text-white font-bold px-6 bg-green-600"
                                   onClick={() =>
-                                    payInvoice(invoice.id, invoice.amountDue)
+                                    payInvoice(invoice.id, invoice.amountDue,invoice.tokenAddress)
                                   }
                                 >
                                   Pay Now
