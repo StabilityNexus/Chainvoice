@@ -41,7 +41,7 @@ function App() {
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider
             coolMode
-            initialChain={citreaTestnet}
+            // initialChain={citreaTestnet}
             theme={darkTheme({
               accentColor: "#22c55e",
               accentColorForeground: "white",

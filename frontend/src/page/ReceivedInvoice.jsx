@@ -91,9 +91,9 @@ function ReceivedInvoice() {
         const signer = await provider.getSigner();
         const network = await provider.getNetwork();
 
-        if (network.chainId != 5115) {
+        if (network.chainId != 11155111) {
           setError(
-            `Failed to load invoices. You're connected to the "${network.name}" network, but your invoices are on the "Citrea" testnet. Please switch to Sepolia and try again.`
+            `Failed to load invoices. You're connected to the "${network.name}" network, but your invoices are on the "Sepolia" testnet. Please switch to Sepolia and try again.`
           );
 
           setLoading(false);
@@ -132,9 +132,9 @@ function ReceivedInvoice() {
           const id = invoice[0];
           const from = invoice[1].toLowerCase();
           const to = invoice[2].toLowerCase();
-          const isPaid = invoice[4];
-          const encryptedStringBase64 = invoice[5]; // encryptedData
-          const dataToEncryptHash = invoice[6];
+          const isPaid = invoice[5];
+          const encryptedStringBase64 = invoice[6]; // encryptedData
+          const dataToEncryptHash = invoice[7];
 
           if (!encryptedStringBase64 || !dataToEncryptHash) continue;
           const currentUserAddress = address.toLowerCase();
@@ -231,31 +231,6 @@ function ReceivedInvoice() {
     console.log("invoices : ", receivedInvoices);
   }, [walletClient, litReady]);
 
-  // const payInvoice = async (id, amountDue) => {
-  //   try {
-  //     if (!walletClient) return;
-  //     const provider = new BrowserProvider(walletClient);
-  //     const signer = await provider.getSigner();
-  //     const contract = new Contract(
-  //       import.meta.env.VITE_CONTRACT_ADDRESS,
-  //       ChainvoiceABI,
-  //       signer
-  //     );
-  //     console.log(ethers.parseUnits(String(amountDue), 18));
-  //     const fee = await contract.fee();
-  //     console.log(fee);
-  //     const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
-  //     const feeInWei = BigInt(fee);
-  //     const total = amountDueInWei + feeInWei;
-
-  //     const res = await contract.payInvoice(BigInt(id), {
-  //       value: total,
-  //     });
-  //   } catch (error) {
-  //     console.log(error);
-  //   }
-  // };
-
   const payInvoice = async (invoiceId, amountDue, tokenAddress) => {
     if (!walletClient) {
       console.error("Wallet not connected");
@@ -270,30 +245,31 @@ function ReceivedInvoice() {
         ChainvoiceABI,
         signer
       );
-
+      
       const fee = await contract.fee();
       const isNativeToken = tokenAddress === ethers.ZeroAddress; 
-
+      
+      if (!ethers.isAddress(tokenAddress)) {
+        throw new Error(`Invalid token address: ${tokenAddress}`);
+      }
       if (!isNativeToken) {
         const tokenContract = new Contract(
           tokenAddress,
           ERC20_ABI,
           signer
         );
-
+        
         const currentAllowance = await tokenContract.allowance(
           await signer.getAddress(),
-          contract.address
+          import.meta.env.VITE_CONTRACT_ADDRESS
         );
-
         const amountDueInWei = ethers.parseUnits(
           String(amountDue),
           await tokenContract.decimals()
         );
-
         if (currentAllowance < amountDueInWei) {
           const approveTx = await tokenContract.approve(
-            contract.address,
+            import.meta.env.VITE_CONTRACT_ADDRESS,
             amountDueInWei
           );
           await approveTx.wait(); 
@@ -312,7 +288,6 @@ function ReceivedInvoice() {
         });
         await tx.wait();
       }
-      console.log("Payment successful!");
     } catch (error) {
       console.error("Payment failed:", error);
       if (error.code === "ACTION_REJECTED") {
@@ -424,7 +399,6 @@ function ReceivedInvoice() {
                         className="hover:bg-[#32363F] transition duration-300"
                       >
                         {columns.map((column) => {
-
                           const value = invoice?.user[column.id] || "";
 
                           if (column.id === "to") {
@@ -453,7 +427,8 @@ function ReceivedInvoice() {
                                 sx={{ color: "white", borderColor: "#25272b" }}
                               >
                                 {/* {ethers.formatUnits(invoice.amountDue)} ETH */}
-                                {invoice.amountDue} ETH
+                                {invoice.amountDue}{" "}
+                                {invoice.paymentToken?.symbol}
                               </TableCell>
                             );
                           }
@@ -503,7 +478,11 @@ function ReceivedInvoice() {
                                 <button
                                   className="text-sm rounded-xl py-2 text-white font-bold px-6 bg-green-600"
                                   onClick={() =>
-                                    payInvoice(invoice.id, invoice.amountDue,invoice.tokenAddress)
+                                    payInvoice(
+                                      invoice.id,
+                                      invoice.amountDue,
+                                      invoice.paymentToken.address
+                                    )
                                   }
                                 >
                                   Pay Now
@@ -637,20 +616,31 @@ function ReceivedInvoice() {
                   </tr>
                 </thead>
                 {drawerState.selectedInvoice?.items?.map((item, index) => (
-
                   <tbody key={index}>
                     <tr>
-                      <td className="border p-2">{item.description}</td>
-                      <td className="border p-2">{item.qty.toString()}</td>
-                      <td className="border p-2">
-                        {/* {ethers.formatUnits(item.unitPrice)} */}
+                      <td className="border p-2 text-center">
+                        {item.description}
+                      </td>
+                      <td className="border p-2 text-center">
+                        {item.qty.toString()}
+                      </td>
+                      <td className="border p-2 text-center">
                         {item.unitPrice}
                       </td>
-                      <td className="border p-2">{item.discount.toString()}</td>
-                      <td className="border p-2">{item.tax.toString()}</td>
-                      <td className="border p-2">
-                        {item.amount} ETH
-                        {/* {ethers.formatUnits(item.amount)} ETH */}
+                      <td className="border p-2 text-center">
+                        {item.discount.toString() == ""
+                          ? "NIL"
+                          : item.discount.toString()}
+                      </td>
+                      <td className="border p-2 text-center">
+                        {item.tax.toString() == ""
+                          ? "NIL"
+                          : item.tax.toString()}
+                      </td>
+                      <td className="border p-2 text-center">
+                        {item.amount}
+                        {"  "}
+                        {drawerState.selectedInvoice?.paymentToken?.symbol}
                       </td>
                     </tr>
                   </tbody>
@@ -659,21 +649,24 @@ function ReceivedInvoice() {
               <div className="mt-4 text-xs">
                 <p className="text-right font-semibold">
                   {/* Fee for invoice pay : {ethers.formatUnits(fee)} ETH */}
-
-                  Fee for invoice pay : {parseFloat(ethers.formatUnits(fee))}{" "}
+                  Fee for invoice pay : {parseFloat(
+                    ethers.formatUnits(fee)
+                  )}{" "}
                   ETH
                 </p>
                 <p className="text-right font-semibold">
                   {" "}
                   Amount: {drawerState.selectedInvoice.amountDue}{" "}
-                  {/* {ethers.formatUnits(drawerState.selectedInvoice.amountDue)}{" "} */}
-                  ETH
+                  {drawerState.selectedInvoice?.paymentToken?.symbol}
                 </p>
                 <p className="text-right font-semibold">
                   Total Amount:{" "}
-                  {parseFloat(drawerState.selectedInvoice.amountDue) +
-                    parseFloat(ethers.formatUnits(fee))}{" "}
-                  ETH
+                  {drawerState.selectedInvoice?.paymentToken?.symbol == "ETH"
+                    ? parseFloat(drawerState.selectedInvoice.amountDue) +
+                      parseFloat(ethers.formatUnits(fee))
+                    : `${parseFloat(drawerState.selectedInvoice.amountDue)} ${
+                        drawerState.selectedInvoice?.paymentToken?.symbol
+                      } + ${parseFloat(ethers.formatUnits(fee))} ETH`}
                 </p>
               </div>
               <div className="p-2 flex items-center">

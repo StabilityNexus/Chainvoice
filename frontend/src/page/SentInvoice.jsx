@@ -123,9 +123,9 @@ function SentInvoice() {
           const id = invoice[0];
           const from = invoice[1].toLowerCase();
           const to = invoice[2].toLowerCase();
-          const isPaid = invoice[4];
-          const encryptedStringBase64 = invoice[5]; // encryptedData
-          const dataToEncryptHash = invoice[6];
+          const isPaid = invoice[5];
+          const encryptedStringBase64 = invoice[6]; // encryptedData
+          const dataToEncryptHash = invoice[7];
 
           if (!encryptedStringBase64 || !dataToEncryptHash) continue;
           const currentUserAddress = address.toLowerCase();
@@ -213,6 +213,7 @@ function SentInvoice() {
         alert("Failed to decrypt invoice.");
       } finally {
         setLoading(false);
+        console.log(sentInvoices);
       }
     };
 
@@ -352,7 +353,8 @@ function SentInvoice() {
                                   borderColor: "#25272b",
                                 }}
                               >
-                                {invoice.amountDue} ETH
+                                {invoice.amountDue}{" "}
+                                {invoice.paymentToken?.symbol}
                               </TableCell>
                             );
                           }
@@ -507,15 +509,28 @@ function SentInvoice() {
                 {drawerState.selectedInvoice?.items?.map((item, index) => (
                   <tbody key={index}>
                     <tr>
-                      <td className="border p-2">{item.description}</td>
-                      <td className="border p-2">{item.qty.toString()}</td>
-                      <td className="border p-2">
+                      <td className="border p-2 text-center">
+                        {item.description}
+                      </td>
+                      <td className="border p-2 text-center">
+                        {item.qty.toString()}
+                      </td>
+                      <td className="border p-2 text-center">
                         {item.unitPrice}
                       </td>
-                      <td className="border p-2">{item.discount.toString()}</td>
-                      <td className="border p-2">{item.tax.toString()}</td>
-                      <td className="border p-2">
-                        {item.amount}
+                      <td className="border p-2 text-center">
+                        {item.discount.toString() == ""
+                          ? "NIL"
+                          : item.discount.toString()}
+                      </td>
+                      <td className="border p-2 text-center">
+                        {item.tax.toString() == ""
+                          ? "NIL"
+                          : item.tax.toString()}
+                      </td>
+                      <td className="border p-2 text-center">
+                        {item.amount}{" "}
+                        {drawerState.selectedInvoice?.paymentToken?.symbol}
                       </td>
                     </tr>
                   </tbody>
@@ -528,15 +543,18 @@ function SentInvoice() {
                 </p>
                 <p className="text-right font-semibold">
                   {" "}
-                  Amount:{" "}
-                  {drawerState.selectedInvoice.amountDue} ETH
+                  Amount: {drawerState.selectedInvoice.amountDue}{" "}
+                  {drawerState.selectedInvoice?.paymentToken?.symbol}
                 </p>
                 <p className="text-right font-semibold">
                   Total Amount:{" "}
-                  {parseFloat(drawerState.selectedInvoice.amountDue) +
-                    parseFloat(ethers.formatUnits(fee))}{" "}
-                  ETH
-                </p>
+                  {drawerState.selectedInvoice?.paymentToken?.symbol == "ETH"
+                    ? parseFloat(drawerState.selectedInvoice.amountDue) +
+                      parseFloat(ethers.formatUnits(fee))
+                    : `${parseFloat(drawerState.selectedInvoice.amountDue)} ${
+                        drawerState.selectedInvoice?.paymentToken?.symbol
+                      } + ${parseFloat(ethers.formatUnits(fee))} ETH`}
+                 </p>
               </div>
               <div className="p-2 flex items-center">
                 <h1 className="text-xs text-center pr-1">Powered by</h1>

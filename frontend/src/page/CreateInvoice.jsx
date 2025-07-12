@@ -178,7 +178,6 @@ function CreateInvoice() {
         contract.name().catch(() => "Unknown Token"),
         contract.decimals().catch(() => 18),
       ]);
-      console.log({ address, symbol, name, decimals });
       setVerifiedToken({ address, symbol, name, decimals });
       setTokenVerificationState("success");
     } catch (error) {
@@ -203,13 +202,13 @@ function CreateInvoice() {
 
       // 1. Prepare invoice data
       const invoicePayload = {
-        amountDue: totalAmountDue,
+        amountDue: totalAmountDue.toString(),
         dueDate,
         issueDate,
         paymentToken: {
           address: paymentToken.address,
           symbol: paymentToken.symbol,
-          decimals: paymentToken.decimals,
+          decimals: Number(paymentToken.decimals),
         },
         user: {
           address: account?.address.toString(),
@@ -1042,7 +1041,7 @@ function CreateInvoice() {
                 <span className="font-medium text-gray-700">Total:</span>
                 <span className="font-bold text-lg text-black">
                   {totalAmountDue}{" "}
-                  {useCustomToken ? "TOKENS" : selectedToken.symbol}
+                  {useCustomToken ? verifiedToken?.symbol : selectedToken.symbol}
                 </span>
               </div>
             </div>

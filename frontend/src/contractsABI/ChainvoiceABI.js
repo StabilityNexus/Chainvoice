@@ -32,6 +32,11 @@ export const ChainvoiceABI = [
         internalType: "uint256",
       },
       {
+        name: "tokenAddress",
+        type: "address",
+        internalType: "address",
+      },
+      {
         name: "encryptedInvoiceData",
         type: "string",
         internalType: "string",
@@ -95,6 +100,11 @@ export const ChainvoiceABI = [
             internalType: "uint256",
           },
           {
+            name: "tokenAddress",
+            type: "address",
+            internalType: "address",
+          },
+          {
             name: "isPaid",
             type: "bool",
             internalType: "bool",
@@ -110,6 +120,40 @@ export const ChainvoiceABI = [
             internalType: "string",
           },
         ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "getPaymentStatus",
+    inputs: [
+      {
+        name: "invoiceId",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "payer",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "canPay",
+        type: "bool",
+        internalType: "bool",
+      },
+      {
+        name: "payerBalance",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "allowanceAmount",
+        type: "uint256",
+        internalType: "uint256",
       },
     ],
     stateMutability: "view",
@@ -149,6 +193,11 @@ export const ChainvoiceABI = [
             name: "amountDue",
             type: "uint256",
             internalType: "uint256",
+          },
+          {
+            name: "tokenAddress",
+            type: "address",
+            internalType: "address",
           },
           {
             name: "isPaid",
@@ -207,6 +256,11 @@ export const ChainvoiceABI = [
             internalType: "uint256",
           },
           {
+            name: "tokenAddress",
+            type: "address",
+            internalType: "address",
+          },
+          {
             name: "isPaid",
             type: "bool",
             internalType: "bool",
@@ -256,6 +310,11 @@ export const ChainvoiceABI = [
         name: "amountDue",
         type: "uint256",
         internalType: "uint256",
+      },
+      {
+        name: "tokenAddress",
+        type: "address",
+        internalType: "address",
       },
       {
         name: "isPaid",
@@ -417,6 +476,12 @@ export const ChainvoiceABI = [
         indexed: true,
         internalType: "address",
       },
+      {
+        name: "tokenAddress",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
     ],
     anonymous: false,
   },
@@ -447,6 +512,12 @@ export const ChainvoiceABI = [
         type: "uint256",
         indexed: false,
         internalType: "uint256",
+      },
+      {
+        name: "tokenAddress",
+        type: "address",
+        indexed: false,
+        internalType: "address",
       },
     ],
     anonymous: false,
