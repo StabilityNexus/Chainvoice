@@ -39,8 +39,8 @@ export default function Home() {
 
   return (
     <div className="px-10">
-      <header className="mb-6">
-        <h1 className="text-2xl text-white">
+      <header className="mb-2">
+        <h1 className="text-2xl mt-4 text-white">
           Welcome <span className="font-medium text-green-400">Back!</span>
         </h1>
       </header>
@@ -129,7 +129,7 @@ export default function Home() {
           component="main"
           sx={{
             flexGrow: 1,
-            p: 3,
+            px: 1,
             maxHeight: "calc(100vh - 180px)",
             overflowY: "auto",
             scrollbarWidth: "none",
@@ -137,7 +137,7 @@ export default function Home() {
               display: "none",
             },
             transition: "all 0.3s ease",
-            borderLeft: { lg: "2px solid #1f2937" }, // Only show border on desktop
+            borderLeft: { lg: "2px solid #1f2937" }, 
           }}
           className="text-white"
         >

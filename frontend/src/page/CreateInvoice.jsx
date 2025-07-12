@@ -374,7 +374,7 @@ function CreateInvoice() {
   };
 
   return (
-    <div className="font-Inter ">
+    <div className="font-Inter mx-6 ">
       <h2 className="text-2xl font-bold mb-6 text-white">
         Create New Invoice Request
       </h2>
