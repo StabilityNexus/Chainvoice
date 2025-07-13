@@ -464,7 +464,7 @@ function SentInvoice() {
                                 <img
                                   src={invoice.paymentToken.logo}
                                   alt={invoice.paymentToken.symbol}
-                                  className="w-5 h-5 mr-2"
+                                  className="w-5 h-5 mr-2 rounded-full"
                                 />
                               ) : (
                                 <CurrencyExchangeIcon
@@ -569,10 +569,14 @@ function SentInvoice() {
           >
             <div className="flex justify-between items-start mb-8">
               <div>
-                <img src="/logo.png" alt="Company Logo" className="h-12" />
-                <p className="text-gray-500 text-sm mt-2">
-                  Powered by Chainvoice
-                </p>
+                Powered by
+                <div className="flex items-center space-x-3 mb-6">
+                  <img src="/logo.png" alt="Chainvoice" className="h-8" />
+                  <p className="text-3xl font-bold text-green-500">
+                    Cha<span className="text-3xl font-bold text-gray-600">in</span>
+                    voice
+                  </p>
+                </div>
               </div>
 
               <div className="text-right">

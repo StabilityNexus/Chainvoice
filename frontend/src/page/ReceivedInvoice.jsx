@@ -408,9 +408,7 @@ function ReceivedInvoice() {
       <div className="max-w-8xl mx-auto">
         <div className="flex justify-between items-center mb-2">
           <div>
-            <h2 className="text-2xl font-bold text-white">
-              Received Invoices
-            </h2>
+            <h2 className="text-2xl font-bold text-white">Received Invoices</h2>
             <p className=" text-gray-50">
               Manage and pay your incoming invoices
             </p>
@@ -697,7 +695,14 @@ function ReceivedInvoice() {
           >
             <div className="flex justify-between items-start mb-8">
               <div>
-                <img src="/logo.png" alt="Company Logo" className="h-12" />
+                <div className="flex items-center space-x-3 mb-6">
+                  <img src="/logo.png" alt="Chainvoice" className="h-8" />
+                  <p className="text-3xl font-bold text-green-500">
+                    Cha<span className="text-3xl font-bold text-white">in</span>
+                    voice
+                  </p>
+                </div>
+
                 <p className="text-gray-500 text-sm mt-2">
                   Powered by Chainvoice
                 </p>
