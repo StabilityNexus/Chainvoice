@@ -22,6 +22,7 @@ contract Chainvoice {
         uint256 amountDue;
         address tokenAddress;
         bool isPaid;
+        bool isCancelled;
         string encryptedInvoiceData; //  Base64-encoded ciphertext
         string encryptedHash;
     }
@@ -51,6 +52,13 @@ contract Chainvoice {
         address tokenAddress
     );
 
+    event InvoiceCancelled(
+        uint256 indexed id,
+        address indexed from,
+        address indexed to,
+        address tokenAddress
+    );
+
     constructor() {
         owner = msg.sender;
         fee = 0.0005 ether;
@@ -71,9 +79,9 @@ contract Chainvoice {
         require(to != address(0), "Recipient address is zero");
         require(to != msg.sender, "Self-invoicing not allowed");
 
-        if (tokenAddress != address(0)) { 
+        if (tokenAddress != address(0)) {
             require(tokenAddress.code.length > 0, "Not a contract address");
-            (bool success,) = tokenAddress.staticcall(
+            (bool success, ) = tokenAddress.staticcall(
                 abi.encodeWithSignature("balanceOf(address)", address(this))
             );
             require(success, "Not an ERC20 token");
@@ -88,6 +96,7 @@ contract Chainvoice {
                 amountDue: amountDue,
                 tokenAddress: tokenAddress,
                 isPaid: false,
+                isCancelled: false,
                 encryptedInvoiceData: encryptedInvoiceData,
                 encryptedHash: encryptedHash
             })
@@ -99,25 +108,50 @@ contract Chainvoice {
         emit InvoiceCreated(invoiceId, msg.sender, to, tokenAddress);
     }
 
+    function cancelInvoice(uint256 invoiceId) external {
+        require(invoiceId < invoices.length, "Invalid invoice ID");
+        InvoiceDetails storage invoice = invoices[invoiceId];
+
+        require(msg.sender == invoice.from, "Only invoice creator can cancel");
+        require(
+            !invoice.isPaid && !invoice.isCancelled,
+            "Invoice not cancellable"
+        );
+        invoice.isCancelled = true;
+        emit InvoiceCancelled(invoiceId, invoice.from, invoice.to, invoice.tokenAddress);
+    }
+
     function payInvoice(uint256 invoiceId) external payable {
         require(invoiceId < invoices.length, "Invalid invoice ID");
 
         InvoiceDetails storage invoice = invoices[invoiceId];
         require(msg.sender == invoice.to, "Not authorized");
         require(!invoice.isPaid, "Already paid");
+        require(!invoice.isCancelled, "Invoice is cancelled");
 
         if (invoice.tokenAddress == address(0)) {
             // Native token (ETH) payment
-            require(msg.value == invoice.amountDue + fee,"Incorrect payment amount");
+            require(
+                msg.value == invoice.amountDue + fee,
+                "Incorrect payment amount"
+            );
             accumulatedFees += fee;
 
             uint256 amountToSender = msg.value - fee;
-            (bool sent, ) = payable(invoice.from).call{value: amountToSender}("");
+            (bool sent, ) = payable(invoice.from).call{value: amountToSender}(
+                ""
+            );
             require(sent, "Transfer failed");
         } else {
             // ERC20 token payment
             require(msg.value == fee, "Must pay fee in native token");
-            require(IERC20(invoice.tokenAddress).allowance(msg.sender,address(this)) >= invoice.amountDue,"Insufficient allowance");
+            require(
+                IERC20(invoice.tokenAddress).allowance(
+                    msg.sender,
+                    address(this)
+                ) >= invoice.amountDue,
+                "Insufficient allowance"
+            );
 
             accumulatedFees += fee;
             bool transferSuccess = IERC20(invoice.tokenAddress).transferFrom(
@@ -138,14 +172,20 @@ contract Chainvoice {
         );
     }
 
-    function getPaymentStatus(uint256 invoiceId, address payer) external view returns (
-        bool canPay,
-        uint256 payerBalance,
-        uint256 allowanceAmount
-    ) {
+    function getPaymentStatus(
+        uint256 invoiceId,
+        address payer
+    )
+        external
+        view
+        returns (bool canPay, uint256 payerBalance, uint256 allowanceAmount)
+    {
         require(invoiceId < invoices.length, "Invalid invoice ID");
         InvoiceDetails memory invoice = invoices[invoiceId];
-        
+        if (invoice.isCancelled) {
+            return (false, (payer).balance, 0);
+        }
+
         if (invoice.tokenAddress == address(0)) {
             return (
                 payer.balance >= invoice.amountDue + fee,
@@ -154,8 +194,13 @@ contract Chainvoice {
             );
         } else {
             return (
-                IERC20(invoice.tokenAddress).balanceOf(payer) >= invoice.amountDue &&
-                IERC20(invoice.tokenAddress).allowance(payer, address(this)) >= invoice.amountDue,
+                IERC20(invoice.tokenAddress).balanceOf(payer) >=
+                    invoice.amountDue &&
+                    IERC20(invoice.tokenAddress).allowance(
+                        payer,
+                        address(this)
+                    ) >=
+                    invoice.amountDue,
                 IERC20(invoice.tokenAddress).balanceOf(payer),
                 IERC20(invoice.tokenAddress).allowance(payer, address(this))
             );
