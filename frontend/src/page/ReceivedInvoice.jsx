@@ -609,11 +609,10 @@ function ReceivedInvoice() {
                               />
                             ) : (
                               <Chip
-                                icon={<CancelIcon />}
-                                label="Cancelled"
-                                color="error"
+                                label="UNPAID"
+                                color="warning"
                                 size="small"
-                                variant="outlined"
+                                icon={<UnpaidIcon />}
                               />
                             )}
                           </TableCell>
@@ -655,7 +654,8 @@ function ReceivedInvoice() {
                                     payInvoice(
                                       invoice.id,
                                       invoice.amountDue,
-                                      invoice.paymentToken.address
+                                      invoice.paymentToken?.address ??
+                                        ethers.ZeroAddress
                                     )
                                   }
                                   disabled={paymentLoading[invoice.id]}
@@ -741,7 +741,6 @@ function ReceivedInvoice() {
                     <span className="text-3xl font-bold text-gray-600">in</span>
                     voice
                   </p>
-                
                 </div>
 
                 <p className="text-gray-500 text-sm mt-2">
