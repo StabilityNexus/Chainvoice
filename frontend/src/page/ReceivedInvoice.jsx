@@ -23,6 +23,10 @@ import {
   LitAccessControlConditionResource,
 } from "@lit-protocol/auth-helpers";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import CancelIcon from "@mui/icons-material/Cancel";
+
 import {
   CircularProgress,
   Skeleton,
@@ -30,6 +34,7 @@ import {
   Avatar,
   Tooltip,
   IconButton,
+  Typography,
 } from "@mui/material";
 import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
@@ -127,7 +132,7 @@ function ReceivedInvoice() {
 
         if (!res || !Array.isArray(res) || res.length === 0) {
           console.warn("No invoices found.");
-          setSentInvoices([]);
+          setReceivedInvoice([]);
           setLoading(false);
           return;
         }
@@ -140,8 +145,9 @@ function ReceivedInvoice() {
             const from = invoice[1].toLowerCase();
             const to = invoice[2].toLowerCase();
             const isPaid = invoice[5];
-            const encryptedStringBase64 = invoice[6];
-            const dataToEncryptHash = invoice[7];
+            const isCancelled = invoice[6];
+            const encryptedStringBase64 = invoice[7];
+            const dataToEncryptHash = invoice[8];
 
             if (!encryptedStringBase64 || !dataToEncryptHash) continue;
 
@@ -150,7 +156,6 @@ function ReceivedInvoice() {
               console.warn(`Unauthorized access attempt for invoice ${id}`);
               continue;
             }
-
             const ciphertext = atob(encryptedStringBase64);
             const accessControlConditions = [
               {
@@ -177,7 +182,6 @@ function ReceivedInvoice() {
                 },
               },
             ];
-
             const sessionSigs = await litNodeClient.getSessionSigs({
               chain: "ethereum",
               resourceAbilityRequests: [
@@ -203,7 +207,6 @@ function ReceivedInvoice() {
                 return await generateAuthSig({ signer, toSign });
               },
             });
-
             const decryptedString = await decryptToString(
               {
                 accessControlConditions,
@@ -214,12 +217,11 @@ function ReceivedInvoice() {
               },
               litNodeClient
             );
-
             const parsed = JSON.parse(decryptedString);
             parsed["id"] = id;
             parsed["isPaid"] = isPaid;
-            console.log("parse ; ", parsed);
-            
+            parsed["isCancelled"] = isCancelled;
+
             // Enhance with token details
             if (parsed.paymentToken?.address) {
               const tokenInfo = TOKEN_PRESETS.find(
@@ -271,7 +273,10 @@ function ReceivedInvoice() {
         ChainvoiceABI,
         signer
       );
-
+      const invoice = receivedInvoices.find((inv) => inv.id === invoiceId);
+      if (invoice?.isCancelled) {
+        throw new Error("Cannot pay a cancelled invoice");
+      }
       const fee = await contract.fee();
       const isNativeToken = tokenAddress === ethers.ZeroAddress;
 
@@ -333,11 +338,13 @@ function ReceivedInvoice() {
     } catch (error) {
       console.error("Payment failed:", error);
       if (error.code === "ACTION_REJECTED") {
-        alert("Transaction was rejected by user");
+        toast.error("Transaction was rejected by user");
       } else if (error.message.includes("insufficient balance")) {
-        alert("Insufficient balance for this transaction");
+        toast.error("Insufficient balance for this transaction");
+      } else if (error.message.includes("cancelled")) {
+        toast.error("Cannot pay a cancelled invoice");
       } else {
-        alert(`Payment failed: ${error.message}`);
+        toast.error(`Payment failed: ${error.reason || error.message}`);
       }
     } finally {
       setPaymentLoading((prev) => ({ ...prev, [invoiceId]: false }));
@@ -576,18 +583,34 @@ function ReceivedInvoice() {
 
                           {/* Status Column */}
                           <TableCell>
-                            <Chip
-                              icon={
-                                invoice.isPaid ? <PaidIcon /> : <UnpaidIcon />
-                              }
-                              label={invoice.isPaid ? "Paid" : "Pending"}
-                              color={invoice.isPaid ? "success" : "warning"}
-                              size="small"
-                              variant="outlined"
-                            />
+                            {invoice.isCancelled ? (
+                              <Chip
+                                icon={<CancelIcon />}
+                                label="Cancelled"
+                                color="error"
+                                size="small"
+                                variant="outlined"
+                              />
+                            ) : invoice.isPaid ? (
+                              <Chip
+                                icon={<PaidIcon />}
+                                label="Paid"
+                                color="success"
+                                size="small"
+                                variant="outlined"
+                              />
+                            ) : (
+                              <Chip
+                                icon={<CancelIcon />}
+                                label="Cancelled"
+                                color="error"
+                                size="small"
+                                variant="outlined"
+                              />
+                            )}
                           </TableCell>
-
                           {/* Date Column */}
+
                           <TableCell>
                             <Tooltip
                               title={new Date(
@@ -618,7 +641,7 @@ function ReceivedInvoice() {
                                 </IconButton>
                               </Tooltip>
 
-                              {!invoice.isPaid && (
+                              {!invoice.isPaid && !invoice.isCancelled && (
                                 <button
                                   onClick={() =>
                                     payInvoice(
@@ -646,6 +669,14 @@ function ReceivedInvoice() {
                                   ) : (
                                     "Pay Now"
                                   )}
+                                </button>
+                              )}
+                              {invoice.isCancelled && (
+                                <button
+                                  disabled={true}
+                                  className="px-3 py-1 rounded-md text-sm font-medium flex items-center bg-gray-300 text-gray-600"
+                                >
+                                  Cancelled
                                 </button>
                               )}
                             </div>
@@ -698,9 +729,11 @@ function ReceivedInvoice() {
                 <div className="flex items-center space-x-3 mb-6">
                   <img src="/logo.png" alt="Chainvoice" className="h-8" />
                   <p className="text-3xl font-bold text-green-500">
-                    Cha<span className="text-3xl font-bold text-white">in</span>
+                    Cha
+                    <span className="text-3xl font-bold text-gray-600">in</span>
                     voice
                   </p>
+                
                 </div>
 
                 <p className="text-gray-500 text-sm mt-2">
@@ -714,19 +747,59 @@ function ReceivedInvoice() {
                   #{drawerState.selectedInvoice.id.toString().padStart(6, "0")}
                 </p>
                 <div className="mt-2">
-                  <Chip
-                    label={
-                      drawerState.selectedInvoice.isPaid ? "PAID" : "UNPAID"
-                    }
-                    color={
-                      drawerState.selectedInvoice.isPaid ? "success" : "warning"
-                    }
-                    size="small"
-                  />
+                  {drawerState.selectedInvoice.isCancelled ? (
+                    <Chip
+                      label="CANCELLED"
+                      color="error"
+                      size="small"
+                      icon={<CancelIcon />}
+                    />
+                  ) : drawerState.selectedInvoice.isPaid ? (
+                    <Chip
+                      label="PAID"
+                      color="success"
+                      size="small"
+                      icon={<PaidIcon />}
+                    />
+                  ) : (
+                    <Chip
+                      label="UNPAID"
+                      color="warning"
+                      size="small"
+                      icon={<UnpaidIcon />}
+                    />
+                  )}
                 </div>
               </div>
             </div>
+            {drawerState.selectedInvoice.isCancelled && (
+              <div className="mt-6 p-4 bg-red-50 rounded-lg border border-red-100">
+                <div className="flex items-start">
+                  <div>
+                    <Typography
+                      variant="subtitle1"
+                      className="font-medium text-red-800"
+                    >
+                      Invoice Cancelled by{" "}
+                      {drawerState.selectedInvoice.user?.fname || "The sender"}{" "}
+                      {drawerState.selectedInvoice.user?.lname || ""}{" "}
+                    </Typography>
+                    <Typography variant="body2" className="text-red-600 mt-2">
+                      You no longer need to make payment for this invoice.
+                    </Typography>
+                  </div>
+                </div>
 
+                {!drawerState.selectedInvoice.isPaid && (
+                  <div className="mt-2 pt-2 border-t border-red-100">
+                    <Typography variant="caption" className="text-red-500">
+                      Note: This invoice was cancelled before payment was
+                      completed
+                    </Typography>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-8">
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">

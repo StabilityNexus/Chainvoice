@@ -30,6 +30,14 @@ import {
   Avatar,
   Tooltip,
   IconButton,
+  Typography,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
+  Button,
+  Alert,
 } from "@mui/material";
 import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
@@ -37,6 +45,7 @@ import DownloadIcon from "@mui/icons-material/Download";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import { TOKEN_PRESETS } from "@/utils/erc20_token";
+
 const columns = [
   { id: "fname", label: "Client", minWidth: 120 },
   { id: "to", label: "Receiver", minWidth: 150 },
@@ -48,19 +57,19 @@ const columns = [
 
 function SentInvoice() {
   const [page, setPage] = useState(0);
-   const [rowsPerPage, setRowsPerPage] = useState(10);
-   const { data: walletClient } = useWalletClient();
-   const { address } = useAccount();
-   const [loading, setLoading] = useState(true);
-   const [sentInvoices, setSentInvoices] = useState([]);
-   const [fee, setFee] = useState(0);
-   const [error, setError] = useState(null);
-   const [litReady, setLitReady] = useState(false);
-   const litClientRef = useRef(null);
-   const [paymentLoading, setPaymentLoading] = useState({});
-   const [networkLoading, setNetworkLoading] = useState(false);
-  
-  
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const { data: walletClient } = useWalletClient();
+  const { address } = useAccount();
+  const [loading, setLoading] = useState(true);
+  const [sentInvoices, setSentInvoices] = useState([]);
+  const [fee, setFee] = useState(0);
+  const [error, setError] = useState(null);
+  const [litReady, setLitReady] = useState(false);
+  const litClientRef = useRef(null);
+  const [paymentLoading, setPaymentLoading] = useState({});
+  const [networkLoading, setNetworkLoading] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  const [invoiceToCancel, setInvoiceToCancel] = useState(null);
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
@@ -68,27 +77,27 @@ function SentInvoice() {
     setRowsPerPage(+event.target.value);
     setPage(0);
   };
- useEffect(() => {
-     const initLit = async () => {
-       try {
-         setLoading(true);
-         if (!litClientRef.current) {
-           const client = new LitNodeClient({
-             litNetwork: LIT_NETWORK.DatilDev,
-             debug: false,
-           });
-           await client.connect();
-           litClientRef.current = client;
-           setLitReady(true);
-         }
-       } catch (error) {
-         console.error("Error initializing Lit client:", error);
-       } finally {
-         setLoading(false);
-       }
-     };
-     initLit();
-   }, []);
+  useEffect(() => {
+    const initLit = async () => {
+      try {
+        setLoading(true);
+        if (!litClientRef.current) {
+          const client = new LitNodeClient({
+            litNetwork: LIT_NETWORK.DatilDev,
+            debug: false,
+          });
+          await client.connect();
+          litClientRef.current = client;
+          setLitReady(true);
+        }
+      } catch (error) {
+        console.error("Error initializing Lit client:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    initLit();
+  }, []);
 
   useEffect(() => {
     if (!walletClient || !address || !litReady) return;
@@ -141,8 +150,9 @@ function SentInvoice() {
             const from = invoice[1].toLowerCase();
             const to = invoice[2].toLowerCase();
             const isPaid = invoice[5];
-            const encryptedStringBase64 = invoice[6];
-            const dataToEncryptHash = invoice[7];
+            const isCancelled = invoice[6];
+            const encryptedStringBase64 = invoice[7];
+            const dataToEncryptHash = invoice[8];
 
             if (!encryptedStringBase64 || !dataToEncryptHash) continue;
 
@@ -218,6 +228,7 @@ function SentInvoice() {
             const parsed = JSON.parse(decryptedString);
             parsed["id"] = id;
             parsed["isPaid"] = isPaid;
+            parsed["isCancelled"] = isCancelled;
             if (parsed.paymentToken?.address) {
               const tokenInfo = TOKEN_PRESETS.find(
                 (t) =>
@@ -244,6 +255,7 @@ function SentInvoice() {
       } catch (error) {
         console.error("Decryption error:", error);
       } finally {
+        console.log(sentInvoices);
         setLoading(false);
       }
     };
@@ -553,9 +565,10 @@ function SentInvoice() {
                                 <Tooltip title="Cancel Invoice">
                                   <IconButton
                                     size="small"
-                                    onClick={() =>
-                                      handleCancelInvoice(invoice.id)
-                                    }
+                                    onClick={() => {
+                                      setInvoiceToCancel(invoice);
+                                      setCancelConfirmOpen(true);
+                                    }}
                                     sx={{
                                       backgroundColor: "#fee2e2",
                                       "&:hover": { backgroundColor: "#fecaca" },
@@ -647,19 +660,60 @@ function SentInvoice() {
                   #{drawerState.selectedInvoice.id.toString().padStart(6, "0")}
                 </p>
                 <div className="mt-2">
-                  <Chip
-                    label={
-                      drawerState.selectedInvoice.isPaid ? "PAID" : "UNPAID"
-                    }
-                    color={
-                      drawerState.selectedInvoice.isPaid ? "success" : "warning"
-                    }
-                    size="small"
-                  />
+                  {drawerState.selectedInvoice.isCancelled ? (
+                    <Chip
+                      label="CANCELLED"
+                      color="error"
+                      size="small"
+                      icon={<CancelIcon />}
+                    />
+                  ) : drawerState.selectedInvoice.isPaid ? (
+                    <Chip
+                      label="PAID"
+                      color="success"
+                      size="small"
+                      icon={<PaidIcon />}
+                    />
+                  ) : (
+                    <Chip
+                      label="UNPAID"
+                      color="warning"
+                      size="small"
+                      icon={<UnpaidIcon />}
+                    />
+                  )}
                 </div>
               </div>
             </div>
 
+            {drawerState.selectedInvoice.isCancelled && (
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                <div className="flex items-start">
+                  <div>
+                    <Typography
+                      variant="subtitle1"
+                      className="font-medium text-blue-800"
+                    >
+                      You Cancelled This Invoice
+                    </Typography>
+                    <Typography variant="body2" className="text-blue-600 mt-2">
+                      {drawerState.selectedInvoice.client?.fname ||
+                        "The recipient"}{" "}
+                      {drawerState.selectedInvoice.client?.lname || ""}{" "}
+                      has been notified and cannot pay this invoice.
+                    </Typography>
+                  </div>
+                </div>
+
+                {drawerState.selectedInvoice.isPaid && (
+                  <div className="mt-3 pt-3 border-t border-blue-100">
+                    <Typography variant="caption" className="text-blue-500">
+                      Note: Payment was already completed before cancellation
+                    </Typography>
+                  </div>
+                )}
+              </div>
+            )}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-8">
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="text-sm font-semibold text-gray-700 mb-2">
@@ -848,6 +902,53 @@ function SentInvoice() {
           </div>
         )}
       </SwipeableDrawer>
+      <Dialog
+        open={cancelConfirmOpen}
+        onClose={() => setCancelConfirmOpen(false)}
+        aria-labelledby="alert-dialog-title"
+        aria-describedby="alert-dialog-description"
+      >
+        <DialogTitle id="alert-dialog-title">
+          Confirm Invoice Cancellation
+        </DialogTitle>
+        <DialogContent>
+          <DialogContentText id="alert-dialog-description">
+            <Typography variant="body1" className="mb-3">
+              You're about to cancel this invoice sent to{" "}
+              <span className="font-medium">
+                {invoiceToCancel?.client.fname} {invoiceToCancel?.client.lname}
+              </span>
+              .
+            </Typography>
+            {invoiceToCancel?.isPaid ? (
+              <Alert severity="error" className="mt-3">
+                Payment was already received - cancelling will not reverse the
+                transaction
+              </Alert>
+            ) : (
+              <Alert severity="warning" className="mt-3">
+                This action cannot be undone
+              </Alert>
+            )}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCancelConfirmOpen(false)}>
+            {" "}
+            No,Keep Invoice Active
+          </Button>
+          <Button
+            onClick={() => {
+              handleCancelInvoice(invoiceToCancel.id);
+              setCancelConfirmOpen(false);
+            }}
+            color="error"
+            autoFocus
+          >
+            Yes, Cancel It
+          </Button>
+        </DialogActions>
+      </Dialog>
     </div>
   );
 }
