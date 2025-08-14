@@ -619,15 +619,9 @@ function ReceivedInvoice() {
                           {/* Date Column */}
 
                           <TableCell>
-                            <Tooltip
-                              title={new Date(
-                                invoice.timestamp * 1000
-                              ).toLocaleString()}
-                            >
                               <span className="text-sm text-gray-600">
                                 {formatDate(invoice.issueDate)}
                               </span>
-                            </Tooltip>
                           </TableCell>
 
                           <TableCell>
