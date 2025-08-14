@@ -34,14 +34,14 @@ import {
 import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
 import DownloadIcon from "@mui/icons-material/Download";
+import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import { TOKEN_PRESETS } from "@/utils/erc20_token";
-
 const columns = [
   { id: "fname", label: "Client", minWidth: 120 },
   { id: "to", label: "Receiver", minWidth: 150 },
   { id: "amountDue", label: "Amount", minWidth: 100, align: "right" },
-  { id: "status", label: "Status", minWidth: 100 },
+  { id: "status", label: "Status", minWidth: 120 },
   { id: "date", label: "Date", minWidth: 100 },
   { id: "actions", label: "Actions", minWidth: 150 },
 ];
@@ -282,7 +282,33 @@ function SentInvoice() {
     link.href = data;
     link.click();
   };
+  const handleCancelInvoice = async (invoiceId) => {
+    try {
+      setPaymentLoading((prev) => ({ ...prev, [invoiceId]: true }));
+      const provider = new BrowserProvider(walletClient);
+      const signer = await provider.getSigner();
+      const contract = new Contract(
+        import.meta.env.VITE_CONTRACT_ADDRESS,
+        ChainvoiceABI,
+        signer
+      );
 
+      const tx = await contract.cancelInvoice(invoiceId);
+      await tx.wait();
+      setSentInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === invoiceId ? { ...inv, isCancelled: true } : inv
+        )
+      );
+
+      toast.success("Invoice cancelled successfully");
+    } catch (error) {
+      console.error("Cancellation failed:", error);
+      toast.error("Failed to cancel invoice");
+    } finally {
+      setPaymentLoading((prev) => ({ ...prev, [invoiceId]: false }));
+    }
+  };
   const switchNetwork = async () => {
     try {
       setNetworkLoading(true);
@@ -481,15 +507,31 @@ function SentInvoice() {
 
                           {/* Status Column */}
                           <TableCell>
-                            <Chip
-                              icon={
-                                invoice.isPaid ? <PaidIcon /> : <UnpaidIcon />
-                              }
-                              label={invoice.isPaid ? "Paid" : "Pending"}
-                              color={invoice.isPaid ? "success" : "warning"}
-                              size="small"
-                              variant="outlined"
-                            />
+                            {invoice.isCancelled ? (
+                              <Chip
+                                icon={<CancelIcon />}
+                                label="Cancelled"
+                                color="error"
+                                size="small"
+                                variant="outlined"
+                              />
+                            ) : invoice.isPaid ? (
+                              <Chip
+                                icon={<PaidIcon />}
+                                label="Paid"
+                                color="success"
+                                size="small"
+                                variant="outlined"
+                              />
+                            ) : (
+                              <Chip
+                                icon={<UnpaidIcon />}
+                                label="Pending"
+                                color="warning"
+                                size="small"
+                                variant="outlined"
+                              />
+                            )}
                           </TableCell>
 
                           {/* Date Column */}
@@ -506,7 +548,26 @@ function SentInvoice() {
                           </TableCell>
 
                           <TableCell>
-                            <div className="flex space-x-2">
+                            <div className="flex space-x-5">
+                              {!invoice.isPaid && !invoice.isCancelled && (
+                                <Tooltip title="Cancel Invoice">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() =>
+                                      handleCancelInvoice(invoice.id)
+                                    }
+                                    sx={{
+                                      backgroundColor: "#fee2e2",
+                                      "&:hover": { backgroundColor: "#fecaca" },
+                                    }}
+                                  >
+                                    <CancelIcon
+                                      fontSize="small"
+                                      sx={{ color: "#dc2626" }}
+                                    />
+                                  </IconButton>
+                                </Tooltip>
+                              )}
                               <Tooltip title="View Details">
                                 <IconButton
                                   size="small"
@@ -573,7 +634,8 @@ function SentInvoice() {
                 <div className="flex items-center space-x-3 mb-6">
                   <img src="/logo.png" alt="Chainvoice" className="h-8" />
                   <p className="text-3xl font-bold text-green-500">
-                    Cha<span className="text-3xl font-bold text-gray-600">in</span>
+                    Cha
+                    <span className="text-3xl font-bold text-gray-600">in</span>
                     voice
                   </p>
                 </div>

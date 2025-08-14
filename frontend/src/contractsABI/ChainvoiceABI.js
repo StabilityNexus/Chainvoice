@@ -19,6 +19,19 @@ export const ChainvoiceABI = [
   },
   {
     type: "function",
+    name: "cancelInvoice",
+    inputs: [
+      {
+        name: "invoiceId",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
     name: "createInvoice",
     inputs: [
       {
@@ -106,6 +119,11 @@ export const ChainvoiceABI = [
           },
           {
             name: "isPaid",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
+            name: "isCancelled",
             type: "bool",
             internalType: "bool",
           },
@@ -205,6 +223,11 @@ export const ChainvoiceABI = [
             internalType: "bool",
           },
           {
+            name: "isCancelled",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
             name: "encryptedInvoiceData",
             type: "string",
             internalType: "string",
@@ -266,6 +289,11 @@ export const ChainvoiceABI = [
             internalType: "bool",
           },
           {
+            name: "isCancelled",
+            type: "bool",
+            internalType: "bool",
+          },
+          {
             name: "encryptedInvoiceData",
             type: "string",
             internalType: "string",
@@ -318,6 +346,11 @@ export const ChainvoiceABI = [
       },
       {
         name: "isPaid",
+        type: "bool",
+        internalType: "bool",
+      },
+      {
+        name: "isCancelled",
         type: "bool",
         internalType: "bool",
       },
@@ -453,6 +486,37 @@ export const ChainvoiceABI = [
     inputs: [],
     outputs: [],
     stateMutability: "nonpayable",
+  },
+  {
+    type: "event",
+    name: "InvoiceCancelled",
+    inputs: [
+      {
+        name: "id",
+        type: "uint256",
+        indexed: true,
+        internalType: "uint256",
+      },
+      {
+        name: "from",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "to",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "tokenAddress",
+        type: "address",
+        indexed: false,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
   },
   {
     type: "event",
