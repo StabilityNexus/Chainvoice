@@ -245,7 +245,6 @@ const Treasure = () => {
                 )}
               </p>
             </div>
-
             <div className="space-y-3">
               <Input
                 placeholder="New treasury address (0x...)"

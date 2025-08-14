@@ -625,7 +625,6 @@ function SentInvoice() {
           )}
         </Paper>
       </div>
-
       {/* Invoice Detail Drawer */}
       <SwipeableDrawer
         anchor="right"

@@ -114,7 +114,6 @@ function ReceivedInvoice() {
           setLoading(false);
           return;
         }
-
         const litNodeClient = litClientRef.current;
         if (!litNodeClient) {
           alert("Lit client not initialized");
@@ -136,6 +135,15 @@ function ReceivedInvoice() {
           setLoading(false);
           return;
         }
+
+        // First check if user has any invoices
+//         if (!res || !Array.isArray(res) || res.length === 0) {
+//           setReceivedInvoice([]);
+//           const fee = await contract.fee();
+//           setFee(fee);
+//           return;
+//         }
+
 
         const decryptedInvoices = [];
 
@@ -907,7 +915,6 @@ function ReceivedInvoice() {
                 </span>
               </div>
             </div>
-
             <div className="border rounded-lg overflow-hidden mb-6">
               <table className="w-full">
                 <thead className="bg-gray-50">

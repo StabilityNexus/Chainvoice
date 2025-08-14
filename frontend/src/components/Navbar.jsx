@@ -174,7 +174,6 @@ function Navbar() {
                 {item.name}
               </motion.button>
             ))} */}
-
             {isConnected &&
               appItems.map((item) => (
                 <motion.div
@@ -285,7 +284,6 @@ function Navbar() {
                     {item.name}
                   </motion.button>
                 ))} */}
-
                 {isConnected &&
                   appItems.map((item) => (
                     <Link
