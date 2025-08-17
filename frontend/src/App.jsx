@@ -18,7 +18,7 @@ import Feature from "./page/Feature";
 import About from "./page/About";
 import Working from "./page/Working";
 import Treasure from "./page/Treasure";
-import CreateInvoice from "./components/CreateInvoice";
+import CreateInvoice from "./page/CreateInvoice";
 import SentInvoice from "./page/SentInvoice";
 import ReceivedInvoice from "./page/ReceivedInvoice";
 
@@ -41,7 +41,7 @@ function App() {
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider
             coolMode
-            initialChain={citreaTestnet}
+            // initialChain={citreaTestnet}
             theme={darkTheme({
               accentColor: "#22c55e",
               accentColorForeground: "white",

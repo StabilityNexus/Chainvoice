@@ -1,13 +1,28 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.13;
 
+interface IERC20 {
+    function transferFrom(
+        address sender,
+        address recipient,
+        uint256 amount
+    ) external returns (bool);
+    function balanceOf(address account) external view returns (uint256);
+    function allowance(
+        address owner,
+        address spender
+    ) external view returns (uint256);
+}
+
 contract Chainvoice {
     struct InvoiceDetails {
         uint256 id;
         address from;
         address to;
         uint256 amountDue;
+        address tokenAddress;
         bool isPaid;
+        bool isCancelled;
         string encryptedInvoiceData; //  Base64-encoded ciphertext
         string encryptedHash;
     }
@@ -25,14 +40,23 @@ contract Chainvoice {
     event InvoiceCreated(
         uint256 indexed id,
         address indexed from,
-        address indexed to
+        address indexed to,
+        address tokenAddress
     );
 
     event InvoicePaid(
         uint256 indexed id,
         address indexed from,
         address indexed to,
-        uint256 amount
+        uint256 amount,
+        address tokenAddress
+    );
+
+    event InvoiceCancelled(
+        uint256 indexed id,
+        address indexed from,
+        address indexed to,
+        address tokenAddress
     );
 
     constructor() {
@@ -48,12 +72,20 @@ contract Chainvoice {
     function createInvoice(
         address to,
         uint256 amountDue,
+        address tokenAddress,
         string memory encryptedInvoiceData,
         string memory encryptedHash
     ) external {
         require(to != address(0), "Recipient address is zero");
         require(to != msg.sender, "Self-invoicing not allowed");
 
+        if (tokenAddress != address(0)) {
+            require(tokenAddress.code.length > 0, "Not a contract address");
+            (bool success, ) = tokenAddress.staticcall(
+                abi.encodeWithSignature("balanceOf(address)", address(this))
+            );
+            require(success, "Not an ERC20 token");
+        }
         uint256 invoiceId = invoices.length;
 
         invoices.push(
@@ -62,7 +94,9 @@ contract Chainvoice {
                 from: msg.sender,
                 to: to,
                 amountDue: amountDue,
+                tokenAddress: tokenAddress,
                 isPaid: false,
+                isCancelled: false,
                 encryptedInvoiceData: encryptedInvoiceData,
                 encryptedHash: encryptedHash
             })
@@ -71,7 +105,20 @@ contract Chainvoice {
         sentInvoices[msg.sender].push(invoiceId);
         receivedInvoices[to].push(invoiceId);
 
-        emit InvoiceCreated(invoiceId, msg.sender, to);
+        emit InvoiceCreated(invoiceId, msg.sender, to, tokenAddress);
+    }
+
+    function cancelInvoice(uint256 invoiceId) external {
+        require(invoiceId < invoices.length, "Invalid invoice ID");
+        InvoiceDetails storage invoice = invoices[invoiceId];
+
+        require(msg.sender == invoice.from, "Only invoice creator can cancel");
+        require(
+            !invoice.isPaid && !invoice.isCancelled,
+            "Invoice not cancellable"
+        );
+        invoice.isCancelled = true;
+        emit InvoiceCancelled(invoiceId, invoice.from, invoice.to, invoice.tokenAddress);
     }
 
     function payInvoice(uint256 invoiceId) external payable {
@@ -80,16 +127,84 @@ contract Chainvoice {
         InvoiceDetails storage invoice = invoices[invoiceId];
         require(msg.sender == invoice.to, "Not authorized");
         require(!invoice.isPaid, "Already paid");
-        require(msg.value == invoice.amountDue + fee, "Incorrect payment amount");
+        require(!invoice.isCancelled, "Invoice is cancelled");
 
-        accumulatedFees += fee;
+        if (invoice.tokenAddress == address(0)) {
+            // Native token (ETH) payment
+            require(
+                msg.value == invoice.amountDue + fee,
+                "Incorrect payment amount"
+            );
+            accumulatedFees += fee;
+
+            uint256 amountToSender = msg.value - fee;
+            (bool sent, ) = payable(invoice.from).call{value: amountToSender}(
+                ""
+            );
+            require(sent, "Transfer failed");
+        } else {
+            // ERC20 token payment
+            require(msg.value == fee, "Must pay fee in native token");
+            require(
+                IERC20(invoice.tokenAddress).allowance(
+                    msg.sender,
+                    address(this)
+                ) >= invoice.amountDue,
+                "Insufficient allowance"
+            );
+
+            accumulatedFees += fee;
+            bool transferSuccess = IERC20(invoice.tokenAddress).transferFrom(
+                msg.sender,
+                invoice.from,
+                invoice.amountDue
+            );
+            require(transferSuccess, "Token transfer failed");
+        }
+
         invoice.isPaid = true;
+        emit InvoicePaid(
+            invoiceId,
+            invoice.from,
+            invoice.to,
+            invoice.amountDue,
+            invoice.tokenAddress
+        );
+    }
 
-        uint256 amountToSender = msg.value - fee;
-        (bool sent, ) = payable(invoice.from).call{value: amountToSender}("");
-        require(sent, "Transfer failed");
+    function getPaymentStatus(
+        uint256 invoiceId,
+        address payer
+    )
+        external
+        view
+        returns (bool canPay, uint256 payerBalance, uint256 allowanceAmount)
+    {
+        require(invoiceId < invoices.length, "Invalid invoice ID");
+        InvoiceDetails memory invoice = invoices[invoiceId];
+        if (invoice.isCancelled) {
+            return (false, (payer).balance, 0);
+        }
 
-        emit InvoicePaid(invoiceId, invoice.from, invoice.to, msg.value);
+        if (invoice.tokenAddress == address(0)) {
+            return (
+                payer.balance >= invoice.amountDue + fee,
+                payer.balance,
+                type(uint256).max // Native token has no allowance
+            );
+        } else {
+            return (
+                IERC20(invoice.tokenAddress).balanceOf(payer) >=
+                    invoice.amountDue &&
+                    IERC20(invoice.tokenAddress).allowance(
+                        payer,
+                        address(this)
+                    ) >=
+                    invoice.amountDue,
+                IERC20(invoice.tokenAddress).balanceOf(payer),
+                IERC20(invoice.tokenAddress).allowance(payer, address(this))
+            );
+        }
     }
 
     function getSentInvoices(

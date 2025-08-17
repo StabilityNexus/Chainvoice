@@ -75,28 +75,34 @@ function Navbar() {
     }
   };
 
-  const navItems = [
+  // const navItems = [
+    // {
+    //   name: "Home",
+    //   icon: <HomeIcon className="text-current" />,
+    //   action: () => handleScroll("home-section"),
+    //   path: "/",
+    // },
+    // {
+    //   name: "Features",
+    //   icon: <FeaturedPlayListIcon className="text-current" />,
+    //   action: () => handleScroll("feature-section"),
+    //   path: "/#feature-section",
+    // },
+    // {
+    //   name: "Services",
+    //   icon: <DesignServicesIcon className="text-current" />,
+    //   action: () => handleScroll("service-section"),
+    //   path: "/#service-section",
+    // },
+  // ];
+
+  const appItems = [
     {
       name: "Home",
       icon: <HomeIcon className="text-current" />,
       action: () => handleScroll("home-section"),
       path: "/",
     },
-    {
-      name: "Features",
-      icon: <FeaturedPlayListIcon className="text-current" />,
-      action: () => handleScroll("feature-section"),
-      path: "/#feature-section",
-    },
-    {
-      name: "Services",
-      icon: <DesignServicesIcon className="text-current" />,
-      action: () => handleScroll("service-section"),
-      path: "/#service-section",
-    },
-  ];
-
-  const appItems = [
     {
       name: "Dashboard",
       icon: <DashboardIcon className="text-current" />,
@@ -152,7 +158,7 @@ function Navbar() {
 
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-2">
-            {navItems.map((item) => (
+            {/* {navItems.map((item) => (
               <motion.button
                 key={item.name}
                 whileHover={{ y: -2 }}
@@ -167,8 +173,7 @@ function Navbar() {
                 <span className="mr-2">{item.icon}</span>
                 {item.name}
               </motion.button>
-            ))}
-
+            ))} */}
             {isConnected &&
               appItems.map((item) => (
                 <motion.div
@@ -261,7 +266,7 @@ function Navbar() {
             >
               <div className="pt-2 pb-4 space-y-2">
                 {/* Navigation Links */}
-                {navItems.map((item) => (
+                {/* {navItems.map((item) => (
                   <motion.button
                     key={`mobile-${item.name}`}
                     whileTap={{ scale: 0.95 }}
@@ -278,8 +283,7 @@ function Navbar() {
                     <span className="mr-3">{item.icon}</span>
                     {item.name}
                   </motion.button>
-                ))}
-
+                ))} */}
                 {isConnected &&
                   appItems.map((item) => (
                     <Link

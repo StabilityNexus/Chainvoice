@@ -1,221 +1,406 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import React, { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { useAccount } from "wagmi";
-import ShieldIcon from "@mui/icons-material/Shield";
-import EmailIcon from "@mui/icons-material/Email";
-import GavelIcon from "@mui/icons-material/Gavel";
-import LeaderboardIcon from "@mui/icons-material/Leaderboard";
-function Landing() {
-  const Account = useAccount();
-  const navigate = useNavigate();
+import { motion } from "framer-motion";
+import {
+  FiShield,
+  FiMail,
+  FiCode,
+  FiTrendingUp,
+  FiLock,
+  FiZap,
+} from "react-icons/fi";
+import { SiEthereum } from "react-icons/si";
+import { LockIcon } from "lucide-react";
+import TokenCarousel from "@/components/TokenCrousel";
 
-  //   useEffect(() => {
-  //     if (Account.address) navigate("/home/sent");
-  //   }, [Account, Account.address]);
+function Landing() {
+  useEffect(() => {
+    // Smooth scroll for anchor links
+    document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
+      anchor.addEventListener("click", function (e) {
+        e.preventDefault();
+        document.querySelector(this.getAttribute("href")).scrollIntoView({
+          behavior: "smooth",
+        });
+      });
+    });
+  }, []);
 
   return (
-    <>
-      <div className=" grid md:grid-cols-2 justify-center text-center mt-32 font bg-[#161920]  md:px-44 ">
-        <div id="home-section">
-          <p className=" font-bold md:text-7xl text-3xl text-white md:mx-4">
-            Decentralized Payment Requests<span className="text-3xl"> &</span>
-            <br />
-            <span className="text-green-500">Invoice</span> Automation
-          </p>
-          <p className="  my-5 md:text-xl text-gray-400">
-            One click to effortless invoicing — process payments in any ERC20
-            token with transparency and trustless efficiency!
-          </p>
-          {/* <p className=" font-bold text-xl text-gray-500">Only with</p>
-                <div className=' text-5xl font-bold my-9'>Cha<span className=' border-slate-500 border-[2px] rounded-sm border-dashed text-green-500'>in</span>voice</div> */}
+    <div className="bg-[#0F1015] text-white min-h-screen">
+      {/* Hero Section */}
+      <section className="relative overflow-hidden pt-24 pb-32">
+        <div className="absolute inset-0 z-0 opacity-20">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 via-purple-500/10 to-blue-500/10"></div>
+        </div>
 
-          <p className=" text-yellow-50 pt-10">
-            Connect with your wallet and Get Started!
-          </p>
-          <div className=" flex justify-center my-5">
-            <ConnectButton />
-          </div>
+        <div className="container mx-auto px-6 relative z-10">
+          <div className="flex flex-col md:flex-row items-center gap-12">
+            <div className="md:w-1/2 space-y-8">
+              <motion.h1
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.8 }}
+                className="text-5xl md:text-6xl font-bold leading-tight"
+              >
+                <span className="bg-gradient-to-r from-green-400 to-emerald-600 bg-clip-text text-transparent">
+                  Web3 Invoicing
+                </span>{" "}
+                <br />
+                Made Simple
+              </motion.h1>
 
-          <div className=" md:flex justify-center item-center gap-5 text-yellow-50 ">
-            <p className=" flex justify-center item-center gap-2 py-2">
-              <img src="star.svg" alt="" width={20} />
-              Trusted by 1000+ users
-            </p>
-            <p className=" flex justify-center item-center gap-2 py-2">
-              <img src="correct.svg" alt="" width={20} />
-              Smart Contract Driven 100% Secure
-            </p>
+              <p className="text-xl text-gray-300 leading-relaxed">
+                End-to-end encrypted, multi-chain invoicing with Lit Protocol
+                and support for 1000+ ERC20 tokens.
+              </p>
+
+              <div className="flex flex-col space-y-6">
+                <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm">
+                  <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-full">
+                    <img
+                      src="/lit-protocol-logo.png"
+                      alt="Lit Protocol"
+                      className="h-4 w-4"
+                    />
+                    <span>Lit Protocol Encrypted</span>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-full">
+                    <SiEthereum className="text-green-400" />
+                    <span>Multi-chain Support</span>
+                  </div>
+                  <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-full">
+                    <FiLock className="text-green-400" />
+                    <span>End-to-End Security</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="md:w-1/2 relative">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.8, delay: 0.2 }}
+                className="relative"
+              >
+                <img
+                  src="/dashboard.png"
+                  alt="Secure Invoice Dashboard"
+                  className="rounded-xl shadow-2xl border border-gray-700/50"
+                />
+                <div className="absolute -bottom-6 -right-6 bg-gradient-to-r from-green-500 to-emerald-600 p-2 rounded-lg shadow-lg">
+                  <div className="bg-black/80 p-3 rounded flex items-center">
+                    <img
+                      src="/lit-protocol-logo.png"
+                      alt="Lit Protocol"
+                      className="h-4 mr-2"
+                    />
+                    <p className="text-xs font-mono">
+                      Encrypted with Lit Protocol
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            </div>
           </div>
         </div>
-        <div className="hidden md:block">
-          <img
-            src="sideImage.png"
-            sizes="(max-width: 480px) 480px, (max-width: 700px) 700px, 1080px"
-            alt=""
-            loading="lazy"
-            className="ml-24 transition-transform duration-500 hover:translate-x-[-10px] hover:scale-105"
-          />
-        </div>
-      </div>
-      <section
-        className="flex flex-wrap items-center justify-between px-12 mt-96 mb-24  md:px-44 "
-        id="feature-section"
-      >
-        <div className="w-[50%] space-y-6">
-          <p className="text-4xl font-bold text-gray-800">
-            A powerful and secure{" "}
-            <span className="text-green-500 bg-gradient-to-r from-green-400 to-green-600 bg-clip-text text-transparent">
-              invoicing solution
-            </span>{" "}
-            designed for growing businesses.
-          </p>
-          <div className="grid grid-cols-2 gap-6">
+      </section>
+
+      {/* Security Section */}
+      <section className="py-20 bg-gradient-to-b from-[#0F1015] to-[#161920]">
+        <div className="container mx-auto px-6">
+          <div className="text-center mb-16">
+            <motion.h2
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="text-4xl font-bold mb-6"
+            >
+              <span className="text-green-400">Military-Grade Security</span>{" "}
+              Powered by Lit Protocol
+            </motion.h2>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-8 mt-12">
             {[
               {
-                title: "Secure and Transparent Transactions",
+                icon: <FiShield className="w-8 h-8" />,
+                title: "Decentralized Encryption",
                 description:
-                  "Leverage blockchain technology to ensure encrypted, tamper-proof, and immutable transactions. Provide complete transparency for invoice verification.",
-                icon: <ShieldIcon />,
+                  "Invoice data is encrypted using Lit Protocol's distributed key management system, ensuring no single party can access sensitive information without proper authorization.",
               },
               {
-                title: "Send and Receive Invoices",
+                icon: <FiLock className="w-8 h-8" />,
+                title: "Conditional Access",
                 description:
-                  "Effortlessly create and manage invoices with a few clicks. Track real-time status and maintain a comprehensive invoice dashboard.",
-                icon: <EmailIcon />,
+                  "Define precise access conditions using blockchain parameters. Payments automatically decrypt invoice details when conditions are met.",
               },
               {
-                title: "Smart Contract Integration",
+                icon: <FiZap className="w-8 h-8" />,
+                title: "Cross-Chain Compatibility",
                 description:
-                  "Automate payment processes with secure smart contracts. Ensure funds are released only when invoice conditions are met, reducing intermediary dependencies.",
-                icon: <GavelIcon />,
-              },
-              {
-                title: "Comprehensive Invoice Tracking",
-                description:
-                  "Gain complete visibility into your invoice lifecycle. Monitor payment statuses, track financial performance, and manage all transactions seamlessly.",
-                icon: <LeaderboardIcon />,
+                  "Our Lit Protocol integration works seamlessly across all supported chains, maintaining security consistency throughout the ecosystem.",
               },
             ].map((feature, index) => (
-              <div
+              <motion.div
                 key={index}
-                className="bg-white border border-gray-200 p-6 rounded-xl shadow-md hover:shadow-lg transition-all duration-300"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: index * 0.1 }}
+                className="bg-[#1E2029] p-8 rounded-xl border border-gray-800 hover:border-green-400/30 transition-all"
               >
-                <div className="bg-green-500 w-12 h-12 flex items-center justify-center rounded-lg mb-4 text-white">
-                  <span className="text-2xl">{feature.icon}</span>
+                <div className="bg-green-500/10 w-14 h-14 rounded-lg flex items-center justify-center text-green-400 mb-6">
+                  {feature.icon}
                 </div>
-                <h3 className="text-xl font-semibold text-gray-800">
-                  {feature.title}
-                </h3>
-                <p className="mt-2 text-gray-600">{feature.description}</p>
-              </div>
+                <h3 className="text-xl font-semibold mb-3">{feature.title}</h3>
+                <p className="text-gray-400 leading-relaxed">
+                  {feature.description}
+                </p>
+              </motion.div>
             ))}
           </div>
         </div>
-        <div className="w-[50%] flex items-center justify-center ">
-          <img
-            src="invoice.png"
-            alt="Invoice Illustration"
-            className="max-w-full"
-          />
-        </div>
       </section>
-      <section className="bg-[#161920] pt-10 pb-16" id="service-section">
-        <div className="flex justify-center">
-          <img
-            src="/aeroplane2.png"
-            alt="Aeroplane 2"
-            className="w-32 h-auto"
-          />
-          <div>
-            <p className="text-center text-white font-bold text-4xl">
-              {" "}
-              Start Sending Your
-            </p>
-            <p className="text-center text-green-500 font-bold text-4xl">
-              Invoice Today!
+
+      {/* Token Support Section */}
+      <section className="py-20 bg-[#161920]">
+        <div className="container mx-auto px-6">
+          <div className="text-center mb-16">
+            <motion.h2
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="text-4xl font-bold mb-4"
+            >
+              Universal <span className="text-green-400">Token Support</span>
+            </motion.h2>
+            <p className="text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
+              Accept payments in any ERC20 token while maintaining full
+              encryption and security through Lit Protocol
             </p>
           </div>
-          <img
-            src="/aeroplane1.png"
-            alt="Aeroplane 1"
-            className="w-32 h-auto"
-          />
+
+          <TokenCarousel />
+
+          <div className="mt-16 grid md:grid-cols-2 gap-12 items-center">
+            <div>
+              <motion.h3
+                initial={{ opacity: 0, x: -20 }}
+                whileInView={{ opacity: 1, x: 0 }}
+                viewport={{ once: true }}
+                className="text-3xl font-bold mb-6"
+              >
+                Seamless Multi-Token{" "}
+                <span className="text-green-400">Payments</span>
+              </motion.h3>
+
+              <p className="text-gray-400 mb-6 leading-relaxed">
+                Chainvoice's smart contract architecture automatically handles
+                token conversions and verifications, while Lit Protocol ensures
+                all payment details remain encrypted until settlement. Our
+                system supports:
+              </p>
+
+              <ul className="space-y-3 text-gray-300">
+                <li className="flex items-start">
+                  <span className="text-green-400 mr-2">✓</span>
+                  <span>All standard ERC20 tokens across EVM chains</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-green-400 mr-2">✓</span>
+                  <span>Native chain currencies (ETH, MATIC, etc.)</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-green-400 mr-2">✓</span>
+                  <span>Stablecoins with automatic price feeds</span>
+                </li>
+                <li className="flex items-start">
+                  <span className="text-green-400 mr-2">✓</span>
+                  <span>Custom token whitelisting for enterprise clients</span>
+                </li>
+              </ul>
+            </div>
+
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              whileInView={{ opacity: 1, scale: 1 }}
+              viewport={{ once: true }}
+              className="relative"
+            >
+              <img
+                src="/token-select.png"
+                alt="Token Payment Flow"
+                className="rounded-xl border border-gray-700/50 shadow-xl"
+              />
+              <div className="absolute -bottom-4 -left-4 bg-[#1E2029] px-3 py-1.5 rounded-lg border border-gray-700/50 shadow-sm flex gap-3 items-center">
+                <span className="text-xs font-bold"> 1000+ ERC20 Token</span>
+              </div>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-32 bg-[#0F1015] relative overflow-hidden border-t border-gray-800/50">
+        <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0 bg-[url('/images/grid-pattern.svg')] bg-center"></div>
         </div>
 
-        <footer className=" text-white py-8">
-          <div className="container mx-auto flex flex-col md:flex-row justify-around items-center px-6">
+        <div className="container mx-auto px-6 text-center relative">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            className="max-w-4xl mx-auto"
+          >
+            <h2 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
+              Ready to Experience{" "}
+              <span className="text-green-400">Next-Gen</span> Invoicing?
+            </h2>
+
+            <p className="text-xl text-gray-400 mb-10 max-w-3xl mx-auto leading-relaxed">
+              Join thousands of Web3-native businesses already using Chainvoice
+              for secure, encrypted invoicing with support for all major ERC20
+              tokens across multiple chains.
+            </p>
+
+            <div className="flex flex-col items-center space-y-6">
+              <div className="flex justify-center">
+                <ConnectButton
+                  showBalance={false}
+                  accountStatus="full"
+                  chainStatus="full"
+                />
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="bg-[#0F1015] border-t border-gray-800/50 py-16">
+        <div className="container mx-auto px-6">
+          <div className="grid md:grid-cols-4 gap-12">
             <div>
-              <div className="flex items-center">
-                <img src="/logo.png" alt="logo" width={50} />
+              <div className="flex items-center space-x-3 mb-6">
+                <img src="/logo.png" alt="Chainvoice" className="h-8" />
                 <p className="text-3xl font-bold text-green-500">
                   Cha<span className="text-3xl font-bold text-white">in</span>
                   voice
                 </p>
               </div>
-              <p className="text-gray-400 mt-1 text-center">
-                Secure & Smart Invoicing
+              <p className="text-gray-400 text-sm leading-relaxed">
+                The most secure Web3 invoicing platform powered by Lit
+                Protocol's decentralized encryption technology.
               </p>
             </div>
-            <div className="flex gap-10">
-              <div>
-                <h3 className="text-lg font-semibold">Quick Links</h3>
-                <ul className="mt-2 space-y-1">
-                  {["Home", "Feature", "Treasure", "Service", "Invoice"].map(
-                    (link) => (
-                      <li key={link}>
-                        <a
-                          href={`#${link.toLowerCase()}`}
-                          className="text-gray-300 hover:text-green-400"
-                        >
-                          {link}
-                        </a>
-                      </li>
-                    )
-                  )}
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">Services</h3>
-                <ul className="mt-2 space-y-1">
-                  {[
-                    "Blog & Article",
-                    "Terms and Conditions",
-                    "Privacy Policy",
-                    "Contact Us",
-                    "Invoice",
-                  ].map((link) => (
-                    <li key={link}>
-                      <a
-                        href={`#${link.toLowerCase()}`}
-                        className="text-gray-300 hover:text-green-400"
-                      >
-                        {link}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div>
-                <h3 className="text-lg font-semibold">Contact</h3>
-                <ul className="mt-2 space-y-1">
-                  {["chainvoice@gmail.com"].map((link) => (
-                    <li key={link}>
-                      <a
-                        href={`#${link.toLowerCase()}`}
-                        className="text-gray-300 hover:text-green-400"
-                      >
-                        {link}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+
+            <div>
+              <h4 className="text-sm font-semibold uppercase text-gray-400 mb-4">
+                Product
+              </h4>
+              <ul className="space-y-3">
+                {[
+                  "Features",
+                  "Security",
+                  "Token Support",
+                  "Pricing",
+                  "API",
+                ].map((item) => (
+                  <li key={item}>
+                    <a
+                      href="#"
+                      className="text-gray-300 hover:text-green-400 transition text-sm"
+                    >
+                      {item}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-sm font-semibold uppercase text-gray-400 mb-4">
+                Resources
+              </h4>
+              <ul className="space-y-3">
+                {[
+                  "Documentation",
+                  "Developers",
+                  "GitHub",
+                  "Blog",
+                  "Status",
+                ].map((item) => (
+                  <li key={item}>
+                    <a
+                      href="#"
+                      className="text-gray-300 hover:text-green-400 transition text-sm"
+                    >
+                      {item}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <div>
+              <h4 className="text-sm font-semibold uppercase text-gray-400 mb-4">
+                Technology
+              </h4>
+              <ul className="space-y-3">
+                {[
+                  "Lit Protocol",
+                  "Smart Contracts",
+                  "ERC20 Standards",
+                  "Multi-chain",
+                  "Roadmap",
+                ].map((item) => (
+                  <li key={item}>
+                    <a
+                      href="#"
+                      className="text-gray-300 hover:text-green-400 transition text-sm flex items-center"
+                    >
+                      {item === "Lit Protocol" && (
+                        <img
+                          src="/lit-protocol-logo.png"
+                          alt="Lit Protocol"
+                          className="h-3 mr-2"
+                        />
+                      )}
+                      {item}
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </div>
           </div>
-        </footer>
-      </section>
-    </>
+
+          <div className="border-t border-gray-800/50 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center">
+            <p className="text-gray-500 text-sm mb-4 md:mb-0">
+              © {new Date().getFullYear()} Chainvoice. All rights reserved.
+            </p>
+            <div className="flex space-x-6">
+              <a
+                href="#"
+                className="text-gray-400 hover:text-green-400 transition"
+              >
+                <span className="sr-only">Twitter</span>
+                <svg
+                  className="h-5 w-5"
+                  fill="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path d="M8.29 20.251c7.547 0 11.675-6.253 11.675-11.675 0-.178 0-.355-.012-.53A8.348 8.348 0 0022 5.92a8.19 8.19 0 01-2.357.646 4.118 4.118 0 001.804-2.27 8.224 8.224 0 01-2.605.996 4.107 4.107 0 00-6.993 3.743 11.65 11.65 0 01-8.457-4.287 4.106 4.106 0 001.27 5.477A4.072 4.072 0 012.8 9.713v.052a4.105 4.105 0 003.292 4.022 4.095 4.095 0 01-1.853.07 4.108 4.108 0 003.834 2.85A8.233 8.233 0 012 18.407a11.616 11.616 0 006.29 1.84"></path>
+                </svg>
+              </a>
+            </div>
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }
+
 export default Landing;
