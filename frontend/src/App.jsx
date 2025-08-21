@@ -32,11 +32,35 @@ export const config = getDefaultConfig({
 });
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
+import GenerateLink from "./page/GenerateLink";
 
 function App() {
   return (
     <div className="bg-[#161920]">
-      <Toaster position="top-center" reverseOrder={false} />
+      <Toaster
+        position="top-center"
+        reverseOrder={false}
+        toastOptions={{
+          duration: 4000,
+          style: {
+            background: "#1f2937",
+            color: "#fff",
+            border: "1px solid #374151",
+          },
+          success: {
+            iconTheme: {
+              primary: "#22c55e",
+              secondary: "#fff",
+            },
+          },
+          error: {
+            iconTheme: {
+              primary: "#ef4444",
+              secondary: "#fff",
+            },
+          },
+        }}
+      />
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider
@@ -59,6 +83,7 @@ function App() {
                       <Route path="create" element={<CreateInvoice />} />
                       <Route path="sent" element={<SentInvoice />} />
                       <Route path="pending" element={<ReceivedInvoice />} />
+                      <Route path="generate-link" element={<GenerateLink />}/>
                     </Route>
                     <Route path="feature" element={<Feature />} />
                     <Route path="about" element={<About />} />
