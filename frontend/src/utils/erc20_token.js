@@ -7,6 +7,13 @@
 
 export const TOKEN_PRESETS = [
   {
+    name: "Chainvoice Testnet Token",
+    symbol: "CIN",
+    address: "0xB5E9C6e57C9d312937A059089B547d0036c155C7",
+    decimals: 18,
+    logo: "/tokenImages/cin.png",
+  },
+  {
     name: "Ethereum Mainnet",
     symbol: "ETH",
     address: "0x0000000000000000000000000000000000000000",

@@ -26,7 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Label } from "../components/ui/label";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom"; 
 
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { encryptString } from "@lit-protocol/encryption/src/lib/encryption.js";
@@ -37,7 +37,6 @@ import {
   LitAccessControlConditionResource,
 } from "@lit-protocol/auth-helpers";
 
-// Add this near the top with other imports
 import {
   Select,
   SelectContent,
@@ -61,7 +60,11 @@ function CreateInvoice() {
   const navigate = useNavigate();
   const litClientRef = useRef(null);
 
-  // Add these state variables
+  const [searchParams] = useSearchParams();
+
+  const [clientAddress, setClientAddress] = useState("");
+
+  // Token selection state
   const [selectedToken, setSelectedToken] = useState(TOKEN_PRESETS[0]);
   const [customTokenAddress, setCustomTokenAddress] = useState("");
   const [useCustomToken, setUseCustomToken] = useState(false);
@@ -70,6 +73,7 @@ function CreateInvoice() {
   const [tokenVerificationState, setTokenVerificationState] = useState("idle");
   const [verifiedToken, setVerifiedToken] = useState(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
+
   const filteredTokens = TOKEN_PRESETS.filter(
     (token) =>
       token.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -82,6 +86,8 @@ function CreateInvoice() {
     "0xdac17f958d2ee523a2206206994597c13d831ec7", // USDT
     "0x6b175474e89094c44da98b954eedeac495271d0f", // DAI
   ];
+
+  const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"]; //sepolia based chainvoice test token (CIN)
   const [itemData, setItemData] = useState([
     {
       description: "",
@@ -96,15 +102,45 @@ function CreateInvoice() {
   const [totalAmountDue, setTotalAmountDue] = useState(0);
 
   useEffect(() => {
+    console.log("account address : ", account.address);
+    const urlClientAddress = searchParams.get("clientAddress");
+    const urlTokenAddress = searchParams.get("tokenAddress");
+    const isCustomFromURL = searchParams.get("customToken") === "true";
+
+    if (urlClientAddress) {
+      setClientAddress(urlClientAddress);
+    }
+
+    if (urlTokenAddress) {
+      if (isCustomFromURL) {
+        setUseCustomToken(true);
+        setCustomTokenAddress(urlTokenAddress);
+        verifyToken(urlTokenAddress);
+      } else {
+        const preselectedToken = TOKEN_PRESETS.find(
+          (token) =>
+            token.address.toLowerCase() === urlTokenAddress.toLowerCase()
+        );
+        if (preselectedToken) {
+          setSelectedToken(preselectedToken);
+          setUseCustomToken(false);
+        } else {
+          setUseCustomToken(true);
+          setCustomTokenAddress(urlTokenAddress);
+          verifyToken(urlTokenAddress);
+        }
+      }
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     const total = itemData.reduce((sum, item) => {
       const qty = parseUnits(item.qty || "0", 18);
       const unitPrice = parseUnits(item.unitPrice || "0", 18);
       const discount = parseUnits(item.discount || "0", 18);
       const tax = parseUnits(item.tax || "0", 18);
-      // qty * price (then divide by 1e18 to cancel double scaling)
       const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
       const adjusted = lineTotal - discount + tax;
-
       return sum + adjusted;
     }, 0n);
 
@@ -120,7 +156,6 @@ function CreateInvoice() {
         });
         await client.connect();
         litClientRef.current = client;
-        console.log(litClientRef.current);
       }
     };
     initLit();
@@ -176,18 +211,23 @@ function CreateInvoice() {
 
   const verifyToken = async (address) => {
     setTokenVerificationState("verifying");
-
     try {
-      const provider = new BrowserProvider(walletClient);
-      const contract = new ethers.Contract(address, ERC20_ABI, provider);
+      if (typeof window !== "undefined" && window.ethereum) {
+        const provider = new BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(address, ERC20_ABI, provider);
 
-      const [symbol, name, decimals] = await Promise.all([
-        contract.symbol().catch(() => "UNKNOWN"),
-        contract.name().catch(() => "Unknown Token"),
-        contract.decimals().catch(() => 18),
-      ]);
-      setVerifiedToken({ address, symbol, name, decimals });
-      setTokenVerificationState("success");
+        const [symbol, name, decimals] = await Promise.all([
+          contract.symbol().catch(() => "UNKNOWN"),
+          contract.name().catch(() => "Unknown Token"),
+          contract.decimals().catch(() => 18),
+        ]);
+
+        setVerifiedToken({ address, symbol, name, decimals });
+        setTokenVerificationState("success");
+      } else {
+        console.error("No Ethereum provider found");
+        setTokenVerificationState("error");
+      }
     } catch (error) {
       console.error("Verification failed:", error);
       setTokenVerificationState("error");
@@ -205,10 +245,8 @@ function CreateInvoice() {
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
 
-      // Determine the token to use
       const paymentToken = useCustomToken ? verifiedToken : selectedToken;
 
-      // 1. Prepare invoice data
       const invoicePayload = {
         amountDue: totalAmountDue.toString(),
         dueDate,
@@ -241,12 +279,12 @@ function CreateInvoice() {
 
       const invoiceString = JSON.stringify(invoicePayload);
 
-      // 2. Setup Lit
       const litNodeClient = litClientRef.current;
       if (!litNodeClient) {
         alert("Lit client not initialized");
         return;
       }
+
       const accessControlConditions = [
         {
           contractAddress: "",
@@ -273,7 +311,6 @@ function CreateInvoice() {
         },
       ];
 
-      // 3. Encrypt
       const { ciphertext, dataToEncryptHash } = await encryptString(
         {
           accessControlConditions,
@@ -314,12 +351,12 @@ function CreateInvoice() {
 
       const encryptedStringBase64 = btoa(ciphertext);
 
-      // 4. Send to contract
       const contract = new Contract(
         import.meta.env.VITE_CONTRACT_ADDRESS,
         ChainvoiceABI,
         signer
       );
+
       const tx = await contract.createInvoice(
         data.clientAddress,
         ethers.parseUnits(totalAmountDue.toString(), paymentToken.decimals),
@@ -342,42 +379,24 @@ function CreateInvoice() {
     e.preventDefault();
     const formData = new FormData(e.target);
 
-    // User detail
-    const userAddress = formData.get("userAddress");
-    const userFname = formData.get("userFname");
-    const userLname = formData.get("userLname");
-    const userEmail = formData.get("userEmail");
-    const userCountry = formData.get("userCountry");
-    const userCity = formData.get("userCity");
-    const userPostalcode = formData.get("userPostalcode");
-
-    // Client detail
-    const clientAddress = formData.get("clientAddress");
-    const clientFname = formData.get("clientFname");
-    const clientLname = formData.get("clientLname");
-    const clientEmail = formData.get("clientEmail");
-    const clientCountry = formData.get("clientCountry");
-    const clientCity = formData.get("clientCity");
-    const clientPostalcode = formData.get("clientPostalcode");
-
     const data = {
-      userAddress,
-      userFname,
-      userLname,
-      userEmail,
-      userCountry,
-      userCity,
-      userPostalcode,
-      clientAddress,
-      clientFname,
-      clientLname,
-      clientEmail,
-      clientCountry,
-      clientCity,
-      clientPostalcode,
+      userAddress: formData.get("userAddress"),
+      userFname: formData.get("userFname"),
+      userLname: formData.get("userLname"),
+      userEmail: formData.get("userEmail"),
+      userCountry: formData.get("userCountry"),
+      userCity: formData.get("userCity"),
+      userPostalcode: formData.get("userPostalcode"),
+      clientAddress: formData.get("clientAddress"),
+      clientFname: formData.get("clientFname"),
+      clientLname: formData.get("clientLname"),
+      clientEmail: formData.get("clientEmail"),
+      clientCountry: formData.get("clientCountry"),
+      clientCity: formData.get("clientCity"),
+      clientPostalcode: formData.get("clientPostalcode"),
       itemData,
     };
-    console.log(data);
+
     await createInvoiceRequest(data);
   };
 
@@ -390,7 +409,27 @@ function CreateInvoice() {
           onDismiss={() => setShowWalletAlert(false)}
         />
       </div>
-      <div className="font-Inter mx-6 ">
+
+      <div className="mx-6">
+        {(searchParams.get("clientAddress") ||
+          searchParams.get("amount") ||
+          searchParams.get("description")) && (
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+            <div className="flex items-center gap-3">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              <div>
+                <p className="text-sm font-medium text-green-800">
+                  Form Pre-filled from Link
+                </p>
+                <p className="text-xs text-green-600">
+                  Some fields have been automatically filled based on the shared
+                  link. You can modify them if needed.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <h2 className="text-2xl font-bold mb-6 text-white">
           Create New Invoice Request
         </h2>
@@ -465,14 +504,13 @@ function CreateInvoice() {
 
         <form onSubmit={handleSubmit}>
           <div className="flex flex-col lg:flex-row gap-6 mb-8">
-            {/* Your Information */}
             <div className="border border-gray-200 flex-1 p-6 rounded-lg shadow-sm bg-white">
               <h3 className="text-lg font-semibold mb-4 text-gray-800">
                 From (Your Information)
               </h3>
               <Input
                 value={account?.address}
-                className="w-full mb-4 bg-gray-50 border-gray-300 text-gray-500 "
+                className="w-full mb-4 bg-gray-50 border-gray-300 text-gray-500"
                 readOnly
                 name="userAddress"
               />
@@ -563,6 +601,8 @@ function CreateInvoice() {
                 placeholder="Client Wallet Address"
                 className="w-full mb-4 border-gray-300 text-black"
                 name="clientAddress"
+                value={clientAddress} 
+                onChange={(e) => setClientAddress(e.target.value)}
               />
 
               <div className="space-y-4">
@@ -708,44 +748,84 @@ function CreateInvoice() {
                         />
                       </div>
                       {!searchTerm && (
-                        <div className="p-1">
-                          <div className="px-3 py-1 text-xs font-medium text-gray-500">
-                            Popular
+                        <>
+                          <div className="p-1">
+                            <div className="px-3 py-1 text-xs font-medium text-gray-500">
+                              Popular
+                            </div>
+                            {TOKEN_PRESETS.filter((token) =>
+                              POPULAR_TOKENS.includes(token.address)
+                            ).map((token) => (
+                              <SelectItem
+                                key={token.address}
+                                value={token.address}
+                                className="hover:bg-gray-50 focus:bg-gray-50"
+                              >
+                                <div className="flex items-center gap-3 py-1">
+                                  <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
+                                    <img
+                                      src={token.logo}
+                                      alt={token.name}
+                                      width={28}
+                                      height={28}
+                                      className="object-contain"
+                                      onError={(e) => {
+                                        e.currentTarget.src =
+                                          "/tokenImages/generic.png";
+                                      }}
+                                    />
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-900">
+                                      {token.name}
+                                    </span>
+                                    <span className="text-gray-500 text-sm ml-2">
+                                      {token.symbol}
+                                    </span>
+                                  </div>
+                                </div>
+                              </SelectItem>
+                            ))}
                           </div>
-                          {TOKEN_PRESETS.filter((token) =>
-                            POPULAR_TOKENS.includes(token.address)
-                          ).map((token) => (
-                            <SelectItem
-                              key={token.address}
-                              value={token.address}
-                              className="hover:bg-gray-50 focus:bg-gray-50"
-                            >
-                              <div className="flex items-center gap-3 py-1">
-                                <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
-                                  <img
-                                    src={token.logo}
-                                    alt={token.name}
-                                    width={28}
-                                    height={28}
-                                    className="object-contain"
-                                    onError={(e) => {
-                                      e.currentTarget.src =
-                                        "/tokenImages/generic.png";
-                                    }}
-                                  />
+                          <div className="p-1">
+                            <div className="px-3 py-1 text-xs font-medium text-gray-500">
+                              Testnet Token
+                            </div>
+                            {TOKEN_PRESETS.filter((token) =>
+                              TESTNET_TOKEN.includes(token.address)
+                            ).map((token) => (
+                              <SelectItem
+                                key={token.address}
+                                value={token.address}
+                                className="hover:bg-gray-50 focus:bg-gray-50"
+                              >
+                                <div className="flex items-center gap-3 py-1">
+                                  <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
+                                    <img
+                                      src={token.logo}
+                                      alt={token.name}
+                                      width={28}
+                                      height={28}
+                                      className="object-contain"
+                                      onError={(e) => {
+                                        e.currentTarget.src =
+                                          "/tokenImages/generic.png";
+                                      }}
+                                    />
+                                  </div>
+                                  <div>
+                                    <span className="font-medium text-gray-900">
+                                      {token.name}
+                                    </span>
+                                    <span className="text-gray-500 text-sm ml-2">
+                                      {token.symbol}
+                                    </span>
+                                  </div>
                                 </div>
-                                <div>
-                                  <span className="font-medium text-gray-900">
-                                    {token.name}
-                                  </span>
-                                  <span className="text-gray-500 text-sm ml-2">
-                                    {token.symbol}
-                                  </span>
-                                </div>
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </div>
+                              </SelectItem>
+                            ))}
+                          </div>
+                        </>
                       )}
                       <div className="p-1">
                         <div className="px-3 py-1 text-xs font-medium text-gray-500">
@@ -754,7 +834,9 @@ function CreateInvoice() {
                         <div className="max-h-60 overflow-y-auto">
                           {filteredTokens
                             .filter(
-                              (token) => !POPULAR_TOKENS.includes(token.address)
+                              (token) =>
+                                !POPULAR_TOKENS.includes(token.address) &&
+                                !TESTNET_TOKEN.includes(token.address)
                             )
                             .map((token) => (
                               <SelectItem
@@ -1075,7 +1157,7 @@ function CreateInvoice() {
             <Button
               className="bg-green-600 hover:bg-green-700 px-8 py-2 text-white"
               type="submit"
-              disabled={loading}
+              disabled={loading || !isConnected}
             >
               {loading ? (
                 <div className="flex items-center gap-2">
