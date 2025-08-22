@@ -66,7 +66,6 @@ function ReceivedInvoice() {
   const [paymentLoading, setPaymentLoading] = useState({});
   const [networkLoading, setNetworkLoading] = useState(false);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
-
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
@@ -737,248 +736,288 @@ function ReceivedInvoice() {
           }}
         >
           {drawerState.selectedInvoice && (
-            <div
-              id="invoice-print"
-              className="bg-white p-6 rounded-lg shadow-none"
-            >
-              <div className="flex justify-between items-start mb-8">
-                <div>
-                  <div className="flex items-center space-x-3 mb-6">
-                    <img src="/logo.png" alt="Chainvoice" className="h-8" />
-                    <p className="text-3xl font-bold text-green-500">
-                      Cha
-                      <span className="text-3xl font-bold text-gray-600">
-                        in
-                      </span>
-                      voice
+            <>
+              <div
+                id="invoice-print"
+                className="bg-white p-6 rounded-lg shadow-none"
+              >
+                <div className="flex justify-between items-start mb-8">
+                  <div>
+                    <div className="flex items-center space-x-3 mb-6">
+                      <img src="/logo.png" alt="Chainvoice" className="h-8" />
+                      <p className="text-3xl font-bold text-green-500">
+                        Cha
+                        <span className="text-3xl font-bold text-gray-600">
+                          in
+                        </span>
+                        voice
+                      </p>
+                    </div>
+
+                    <p className="text-gray-500 text-sm mt-2">
+                      Powered by Chainvoice
                     </p>
                   </div>
 
-                  <p className="text-gray-500 text-sm mt-2">
-                    Powered by Chainvoice
-                  </p>
+                  <div className="text-right">
+                    <h1 className="text-2xl font-bold text-gray-800">
+                      INVOICE
+                    </h1>
+                    <p className="text-gray-600 text-sm">
+                      #
+                      {drawerState.selectedInvoice.id
+                        .toString()
+                        .padStart(6, "0")}
+                    </p>
+                    <div className="mt-2">
+                      {drawerState.selectedInvoice.isCancelled ? (
+                        <Chip
+                          label="CANCELLED"
+                          color="error"
+                          size="small"
+                          icon={<CancelIcon />}
+                        />
+                      ) : drawerState.selectedInvoice.isPaid ? (
+                        <Chip
+                          label="PAID"
+                          color="success"
+                          size="small"
+                          icon={<PaidIcon />}
+                        />
+                      ) : (
+                        <Chip
+                          label="UNPAID"
+                          color="warning"
+                          size="small"
+                          icon={<UnpaidIcon />}
+                        />
+                      )}
+                    </div>
+                  </div>
                 </div>
+                {drawerState.selectedInvoice.isCancelled && (
+                  <div className="mt-6 p-4 bg-red-50 rounded-lg border border-red-100">
+                    <div className="flex items-start">
+                      <div>
+                        <Typography
+                          variant="subtitle1"
+                          className="font-medium text-red-800"
+                        >
+                          Invoice Cancelled by{" "}
+                          {drawerState.selectedInvoice.user?.fname ||
+                            "The sender"}{" "}
+                          {drawerState.selectedInvoice.user?.lname || ""}{" "}
+                        </Typography>
+                        <Typography
+                          variant="body2"
+                          className="text-red-600 mt-2"
+                        >
+                          You no longer need to make payment for this invoice.
+                        </Typography>
+                      </div>
+                    </div>
 
-                <div className="text-right">
-                  <h1 className="text-2xl font-bold text-gray-800">INVOICE</h1>
-                  <p className="text-gray-600 text-sm">
-                    #
-                    {drawerState.selectedInvoice.id.toString().padStart(6, "0")}
-                  </p>
-                  <div className="mt-2">
-                    {drawerState.selectedInvoice.isCancelled ? (
-                      <Chip
-                        label="CANCELLED"
-                        color="error"
-                        size="small"
-                        icon={<CancelIcon />}
-                      />
-                    ) : drawerState.selectedInvoice.isPaid ? (
-                      <Chip
-                        label="PAID"
-                        color="success"
-                        size="small"
-                        icon={<PaidIcon />}
-                      />
-                    ) : (
-                      <Chip
-                        label="UNPAID"
-                        color="warning"
-                        size="small"
-                        icon={<UnpaidIcon />}
-                      />
+                    {!drawerState.selectedInvoice.isPaid && (
+                      <div className="mt-2 pt-2 border-t border-red-100">
+                        <Typography variant="caption" className="text-red-500">
+                          Note: This invoice was cancelled before payment was
+                          completed
+                        </Typography>
+                      </div>
                     )}
                   </div>
-                </div>
-              </div>
-              {drawerState.selectedInvoice.isCancelled && (
-                <div className="mt-6 p-4 bg-red-50 rounded-lg border border-red-100">
-                  <div className="flex items-start">
-                    <div>
-                      <Typography
-                        variant="subtitle1"
-                        className="font-medium text-red-800"
-                      >
-                        Invoice Cancelled by{" "}
-                        {drawerState.selectedInvoice.user?.fname ||
-                          "The sender"}{" "}
-                        {drawerState.selectedInvoice.user?.lname || ""}{" "}
-                      </Typography>
-                      <Typography variant="body2" className="text-red-600 mt-2">
-                        You no longer need to make payment for this invoice.
-                      </Typography>
-                    </div>
-                  </div>
-
-                  {!drawerState.selectedInvoice.isPaid && (
-                    <div className="mt-2 pt-2 border-t border-red-100">
-                      <Typography variant="caption" className="text-red-500">
-                        Note: This invoice was cancelled before payment was
-                        completed
-                      </Typography>
-                    </div>
-                  )}
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-8">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                    From
-                  </h3>
-                  <p className="font-medium">
-                    {drawerState.selectedInvoice.user.fname}{" "}
-                    {drawerState.selectedInvoice.user.lname}
-                  </p>
-                  <p className="text-gray-600 text-xs">
-                    {drawerState.selectedInvoice.user.address}
-                  </p>
-                  <p className="text-gray-600 text-sm">
-                    {drawerState.selectedInvoice.user.city},{" "}
-                    {drawerState.selectedInvoice.user.country},{" "}
-                    {drawerState.selectedInvoice.user.postalcode}
-                  </p>
-                  <p className="text-blue-500 text-sm mt-1">
-                    {drawerState.selectedInvoice.user.email}
-                  </p>
-                </div>
-
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="text-sm font-semibold text-gray-700 mb-2">
-                    Bill To
-                  </h3>
-                  <p className="font-medium">
-                    {drawerState.selectedInvoice.client.fname}{" "}
-                    {drawerState.selectedInvoice.client.lname}
-                  </p>
-                  <p className="text-gray-600 text-xs">
-                    {drawerState.selectedInvoice.client.address}
-                  </p>
-                  <p className="text-gray-600 text-sm">
-                    {drawerState.selectedInvoice.client.city},{" "}
-                    {drawerState.selectedInvoice.client.country},{" "}
-                    {drawerState.selectedInvoice.client.postalcode}
-                  </p>
-                  <p className="text-blue-500 text-sm mt-1">
-                    {drawerState.selectedInvoice.client.email}
-                  </p>
-                </div>
-              </div>
-              <div className=" p-4 rounded-lg mb-6 border border-gray-200">
-                <h3 className="text-base font-bold text-gray-700  ">
-                  Payment Currency
-                </h3>
-                <div className="mt-2 flex items-center">
-                  {drawerState.selectedInvoice.paymentToken?.logo ? (
-                    <img
-                      src={drawerState.selectedInvoice.paymentToken.logo}
-                      alt={drawerState.selectedInvoice.paymentToken.symbol}
-                      className="w-6 h-6 mr-2"
-                    />
-                  ) : (
-                    <div className="w-6 h-6 rounded-full bg-gray-200 mr-2 flex items-center justify-center">
-                      <CurrencyExchangeIcon
-                        className="text-gray-500"
-                        fontSize="small"
-                      />
-                    </div>
-                  )}
-                  <div>
-                    <p className="font-medium">
-                      {drawerState.selectedInvoice.paymentToken?.name ||
-                        "Ether "}
-                      {"("}
-                      {drawerState.selectedInvoice.paymentToken?.symbol ||
-                        "ETH"}
-                      {")"}
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      {drawerState.selectedInvoice.paymentToken?.address
-                        ? `${drawerState.selectedInvoice.paymentToken.address.substring(
-                            0,
-                            10
-                          )}......${drawerState.selectedInvoice.paymentToken.address.substring(
-                            33
-                          )}`
-                        : "Native Currency"}
-                    </p>
-                  </div>
-                </div>
-                {drawerState.selectedInvoice.paymentToken?.address && (
-                  <div className="mt-2 text-xs text-gray-600">
-                    <p>
-                      Decimals:{" "}
-                      {drawerState.selectedInvoice.paymentToken.decimals || 18}
-                    </p>
-                    <p>Chain: Sepolia Testnet</p>
-                  </div>
                 )}
-              </div>
-              <div className="mb-6">
-                <div className="flex justify-between text-sm text-gray-500 mb-2">
-                  <span>
-                    Issued:{" "}
-                    {new Date(
-                      drawerState.selectedInvoice.issueDate
-                    ).toLocaleDateString()}
-                  </span>
-                  <span>
-                    Due:{" "}
-                    {new Date(
-                      drawerState.selectedInvoice.dueDate
-                    ).toLocaleDateString()}
-                  </span>
-                </div>
-              </div>
-              <div className="border rounded-lg overflow-hidden mb-6">
-                <table className="w-full">
-                  <thead className="bg-gray-50">
-                    <tr className="text-left text-sm font-medium text-gray-700">
-                      <th className="p-3">Description</th>
-                      <th className="p-3 text-right">Qty</th>
-                      <th className="p-3 text-right">Price</th>
-                      <th className="p-3 text-right">Discount</th>
-                      <th className="p-3 text-right">Tax</th>
-                      <th className="p-3 text-right">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200">
-                    {drawerState.selectedInvoice.items?.map((item, index) => (
-                      <tr key={index}>
-                        <td className="p-3 text-sm">{item.description}</td>
-                        <td className="p-3 text-sm text-right">{item.qty}</td>
-                        <td className="p-3 text-sm text-right">
-                          {item.unitPrice}{" "}
-                          {drawerState.selectedInvoice.paymentToken?.symbol}
-                        </td>
-                        <td className="p-3 text-sm text-right">
-                          {item.discount || "0"}
-                        </td>
-                        <td className="p-3 text-sm text-right">
-                          {item.tax || "0%"}
-                        </td>
-                        <td className="p-3 text-sm font-medium text-right">
-                          {item.amount}{" "}
-                          {drawerState.selectedInvoice.paymentToken?.symbol}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-8">
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                      From
+                    </h3>
+                    <p className="font-medium">
+                      {drawerState.selectedInvoice.user.fname}{" "}
+                      {drawerState.selectedInvoice.user.lname}
+                    </p>
+                    <p className="text-gray-600 text-xs">
+                      {drawerState.selectedInvoice.user.address}
+                    </p>
+                    <p className="text-gray-600 text-sm">
+                      {drawerState.selectedInvoice.user.city},{" "}
+                      {drawerState.selectedInvoice.user.country},{" "}
+                      {drawerState.selectedInvoice.user.postalcode}
+                    </p>
+                    <p className="text-blue-500 text-sm mt-1">
+                      {drawerState.selectedInvoice.user.email}
+                    </p>
+                  </div>
 
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-gray-600">Subtotal:</span>
-                  <span className="font-medium">
-                    {drawerState.selectedInvoice.amountDue}{" "}
-                    {drawerState.selectedInvoice.paymentToken?.symbol}
-                  </span>
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="text-sm font-semibold text-gray-700 mb-2">
+                      Bill To
+                    </h3>
+                    <p className="font-medium">
+                      {drawerState.selectedInvoice.client.fname}{" "}
+                      {drawerState.selectedInvoice.client.lname}
+                    </p>
+                    <p className="text-gray-600 text-xs">
+                      {drawerState.selectedInvoice.client.address}
+                    </p>
+                    <p className="text-gray-600 text-sm">
+                      {drawerState.selectedInvoice.client.city},{" "}
+                      {drawerState.selectedInvoice.client.country},{" "}
+                      {drawerState.selectedInvoice.client.postalcode}
+                    </p>
+                    <p className="text-blue-500 text-sm mt-1">
+                      {drawerState.selectedInvoice.client.email}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex justify-between mb-2">
-                  <span className="text-sm text-gray-600">Network Fee:</span>
-                  <span className="font-medium">
-                    {ethers.formatUnits(fee)} ETH
-                  </span>
+                <div className=" p-4 rounded-lg mb-6 border border-gray-200">
+                  <h3 className="text-base font-bold text-gray-700  ">
+                    Payment Currency
+                  </h3>
+                  <div className="mt-2 flex items-center">
+                    {drawerState.selectedInvoice.paymentToken?.logo ? (
+                      <img
+                        src={drawerState.selectedInvoice.paymentToken.logo}
+                        alt={drawerState.selectedInvoice.paymentToken.symbol}
+                        className="w-6 h-6 mr-2"
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-gray-200 mr-2 flex items-center justify-center">
+                        <CurrencyExchangeIcon
+                          className="text-gray-500"
+                          fontSize="small"
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <p className="font-medium">
+                        {drawerState.selectedInvoice.paymentToken?.name ||
+                          "Ether "}
+                        {"("}
+                        {drawerState.selectedInvoice.paymentToken?.symbol ||
+                          "ETH"}
+                        {")"}
+                      </p>
+                      <p className="text-xs text-gray-600">
+                        {drawerState.selectedInvoice.paymentToken?.address
+                          ? `${drawerState.selectedInvoice.paymentToken.address.substring(
+                              0,
+                              10
+                            )}......${drawerState.selectedInvoice.paymentToken.address.substring(
+                              33
+                            )}`
+                          : "Native Currency"}
+                      </p>
+                    </div>
+                  </div>
+                  {drawerState.selectedInvoice.paymentToken?.address && (
+                    <div className="mt-2 text-xs text-gray-600">
+                      <p>
+                        Decimals:{" "}
+                        {drawerState.selectedInvoice.paymentToken.decimals ||
+                          18}
+                      </p>
+                      <p>Chain: Sepolia Testnet</p>
+                    </div>
+                  )}
+                </div>
+                <div className="mb-6">
+                  <div className="flex justify-between text-sm text-gray-500 mb-2">
+                    <span>
+                      Issued:{" "}
+                      {new Date(
+                        drawerState.selectedInvoice.issueDate
+                      ).toLocaleDateString()}
+                    </span>
+                    <span>
+                      Due:{" "}
+                      {new Date(
+                        drawerState.selectedInvoice.dueDate
+                      ).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+                <div className="border rounded-lg overflow-hidden mb-6">
+                  <table className="w-full">
+                    <thead className="bg-gray-50">
+                      <tr className="text-left text-sm font-medium text-gray-700">
+                        <th className="p-3">Description</th>
+                        <th className="p-3 text-right">Qty</th>
+                        <th className="p-3 text-right">Price</th>
+                        <th className="p-3 text-right">Discount</th>
+                        <th className="p-3 text-right">Tax</th>
+                        <th className="p-3 text-right">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200">
+                      {drawerState.selectedInvoice.items?.map((item, index) => (
+                        <tr key={index}>
+                          <td className="p-3 text-sm">{item.description}</td>
+                          <td className="p-3 text-sm text-right">{item.qty}</td>
+                          <td className="p-3 text-sm text-right">
+                            {item.unitPrice}{" "}
+                            {drawerState.selectedInvoice.paymentToken?.symbol}
+                          </td>
+                          <td className="p-3 text-sm text-right">
+                            {item.discount || "0"}
+                          </td>
+                          <td className="p-3 text-sm text-right">
+                            {item.tax || "0%"}
+                          </td>
+                          <td className="p-3 text-sm font-medium text-right">
+                            {item.amount}{" "}
+                            {drawerState.selectedInvoice.paymentToken?.symbol}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm text-gray-600">Subtotal:</span>
+                    <span className="font-medium">
+                      {drawerState.selectedInvoice.amountDue}{" "}
+                      {drawerState.selectedInvoice.paymentToken?.symbol}
+                    </span>
+                  </div>
+                  <div className="flex justify-between mb-2">
+                    <span className="text-sm text-gray-600">Network Fee:</span>
+                    <span className="font-medium">
+                      {ethers.formatUnits(fee)} ETH
+                    </span>
+                  </div>
+                  <div className="flex justify-between pt-2 border-t border-gray-200">
+                    <span className="font-medium">Total Amount:</span>
+                    <span className="font-bold text-lg">
+                      {drawerState.selectedInvoice.paymentToken?.symbol ===
+                      "ETH"
+                        ? `${(
+                            parseFloat(drawerState.selectedInvoice.amountDue) +
+                            parseFloat(ethers.formatUnits(fee))
+                          ).toFixed(6)} ETH`
+                        : `${drawerState.selectedInvoice.amountDue} ${
+                            drawerState.selectedInvoice.paymentToken?.symbol
+                          } + ${ethers.formatUnits(fee)} ETH`}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-8 flex justify-between items-center">
+                  <button
+                    onClick={toggleDrawer(null)}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Close
+                  </button>
+                  <button
+                    onClick={handlePrint}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
+                  >
+                    <DownloadIcon className="mr-2" fontSize="small" />
+                    Download Invoice
+                  </button>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-gray-200">
                   <span className="font-medium">Total Amount:</span>
@@ -1010,7 +1049,7 @@ function ReceivedInvoice() {
                   Download Invoice
                 </button>
               </div>
-            </div>
+            </>
           )}
         </SwipeableDrawer>
       </div>

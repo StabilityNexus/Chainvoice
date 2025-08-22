@@ -61,6 +61,7 @@ function SentInvoice() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const { data: walletClient } = useWalletClient();
   const { address, isConnected } = useAccount();
+
   const [loading, setLoading] = useState(true);
   const [sentInvoices, setSentInvoices] = useState([]);
   const [fee, setFee] = useState(0);
@@ -499,7 +500,6 @@ function SentInvoice() {
                                 </div>
                               </div>
                             </TableCell>
-
                             {/* Sender Column */}
                             <TableCell>
                               <Tooltip title={invoice.client?.address}>
@@ -650,6 +650,7 @@ function SentInvoice() {
               id="invoice-print"
               className="bg-white p-6 rounded-lg shadow-none"
             >
+              {/* Header Section */}
               <div className="flex justify-between items-start mb-8">
                 <div>
                   Powered by
@@ -729,6 +730,8 @@ function SentInvoice() {
                   )}
                 </div>
               )}
+
+              {/* From/Bill To Section */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10 mb-8">
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <h3 className="text-sm font-semibold text-gray-700 mb-2">
@@ -772,8 +775,10 @@ function SentInvoice() {
                   </p>
                 </div>
               </div>
-              <div className=" p-4 rounded-lg mb-6 border border-gray-200">
-                <h3 className="text-base font-bold text-gray-700  ">
+
+              {/* Payment Currency Section */}
+              <div className="p-4 rounded-lg mb-6 border border-gray-200">
+                <h3 className="text-base font-bold text-gray-700">
                   Payment Currency
                 </h3>
                 <div className="mt-2 flex items-center">
@@ -818,6 +823,8 @@ function SentInvoice() {
                   </div>
                 )}
               </div>
+
+              {/* Date Information */}
               <div className="mb-6">
                 <div className="flex justify-between text-sm text-gray-500 mb-2">
                   <span>
@@ -919,6 +926,7 @@ function SentInvoice() {
             </div>
           )}
         </SwipeableDrawer>
+
         <Dialog
           open={cancelConfirmOpen}
           onClose={() => setCancelConfirmOpen(false)}

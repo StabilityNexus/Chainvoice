@@ -61,7 +61,6 @@ function CreateInvoice() {
   const litClientRef = useRef(null);
 
   const [searchParams] = useSearchParams();
-
   const [clientAddress, setClientAddress] = useState("");
 
   // Token selection state
@@ -72,8 +71,8 @@ function CreateInvoice() {
   const inputRef = useRef(null);
   const [tokenVerificationState, setTokenVerificationState] = useState("idle");
   const [verifiedToken, setVerifiedToken] = useState(null);
-  const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
 
+  const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const filteredTokens = TOKEN_PRESETS.filter(
     (token) =>
       token.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -86,8 +85,8 @@ function CreateInvoice() {
     "0xdac17f958d2ee523a2206206994597c13d831ec7", // USDT
     "0x6b175474e89094c44da98b954eedeac495271d0f", // DAI
   ];
-
   const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"]; //sepolia based chainvoice test token (CIN)
+
   const [itemData, setItemData] = useState([
     {
       description: "",
@@ -141,6 +140,7 @@ function CreateInvoice() {
       const tax = parseUnits(item.tax || "0", 18);
       const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
       const adjusted = lineTotal - discount + tax;
+
       return sum + adjusted;
     }, 0n);
 
@@ -211,6 +211,7 @@ function CreateInvoice() {
 
   const verifyToken = async (address) => {
     setTokenVerificationState("verifying");
+
     try {
       if (typeof window !== "undefined" && window.ethereum) {
         const provider = new BrowserProvider(window.ethereum);
@@ -279,12 +280,12 @@ function CreateInvoice() {
 
       const invoiceString = JSON.stringify(invoicePayload);
 
+      // 2. Setup Lit
       const litNodeClient = litClientRef.current;
       if (!litNodeClient) {
         alert("Lit client not initialized");
         return;
       }
-
       const accessControlConditions = [
         {
           contractAddress: "",
@@ -379,6 +380,7 @@ function CreateInvoice() {
     e.preventDefault();
     const formData = new FormData(e.target);
 
+
     const data = {
       userAddress: formData.get("userAddress"),
       userFname: formData.get("userFname"),
@@ -396,7 +398,6 @@ function CreateInvoice() {
       clientPostalcode: formData.get("clientPostalcode"),
       itemData,
     };
-
     await createInvoiceRequest(data);
   };
 
