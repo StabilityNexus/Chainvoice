@@ -32,17 +32,9 @@ function Navbar() {
   };
 
   useEffect(() => {
-    if (
-      address &&
-      !hasConnected &&
-      !location.pathname.startsWith("/dashboard")
-    ) {
+    if (address && !hasConnected && location.pathname === "/") {
       navigate("/dashboard/create");
       setHasConnected(true);
-    }
-    if (!address) {
-      navigate("/");
-      setHasConnected(false);
     }
 
     const handleScroll = () => {

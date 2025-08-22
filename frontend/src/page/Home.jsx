@@ -1,4 +1,4 @@
-// Home.js
+// Home.js - Complete Updated Version with Generate Prefilled Link
 import * as React from "react";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
@@ -10,6 +10,7 @@ import ListItemText from "@mui/material/ListItemText";
 import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import DraftsIcon from "@mui/icons-material/Drafts";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import LinkIcon from "@mui/icons-material/Link";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 
 export default function Home() {
@@ -35,115 +36,122 @@ export default function Home() {
       route: "create",
       color: "#f472b6",
     },
+    {
+      text: "Generate Link",
+      icon: <LinkIcon />,
+      route: "generate-link",
+      color: "#a78bfa",
+    },
   ];
 
   return (
-    <div className="px-10">
-      <header className="mb-2">
-        <h1 className="text-2xl mt-4 text-white">
-          Welcome <span className="font-medium text-green-400">Back!</span>
-        </h1>
-      </header>
+    <>
+      <div className="px-10">
+        <header className="mb-2">
+          <h1 className="text-2xl mt-4 text-white">
+            Welcome <span className="font-medium text-green-400">Back!</span>
+          </h1>
+        </header>
 
-      <Box
-        sx={{
-          display: "flex",
-          flexDirection: { xs: "column", lg: "row" }, // Stack on mobile, row on desktop
-          minHeight: "calc(100vh - 180px)",
-          gap: "24px", // Add gap between sidebar and main content
-        }}
-      >
-        {/* Sidebar Navigation */}
         <Box
           sx={{
-            width: { lg: "264px" }, // Fixed width on desktop
-            flexShrink: 0,
+            display: "flex",
+            flexDirection: { xs: "column", lg: "row" },
+            minHeight: "calc(100vh - 180px)",
+            gap: "24px",
           }}
         >
-          <Drawer
-            variant="permanent"
+          <Box
             sx={{
-              "& .MuiDrawer-paper": {
-                width: "100%",
-                border: "none",
-                backgroundColor: "transparent",
-                position: "relative",
-                height: "auto",
-                top: 0,
-              },
+              width: { lg: "264px" },
+              flexShrink: 0,
             }}
           >
-            <List className="space-y-2">
-              {menuItems.map((item) => (
-                <ListItem
-                  key={item.route}
-                  disablePadding
-                  className="text-white"
-                >
-                  <ListItemButton
-                    onClick={() => navigate(item.route)}
-                    selected={location.pathname.includes(item.route)}
-                    sx={{
-                      borderRadius: "8px",
-                      transition: "all 0.2s ease",
-                      backgroundColor: location.pathname.includes(item.route)
-                        ? "rgba(255, 255, 255, 0.08)"
-                        : "transparent",
-                      "&:hover": {
-                        backgroundColor: "rgba(255, 255, 255, 0.05)",
-                        transform: "translateX(4px)",
-                      },
-                      "&.Mui-selected": {
-                        borderLeft: `4px solid ${item.color}`,
-                      },
-                      padding: "12px 16px",
-                    }}
+            <Drawer
+              variant="permanent"
+              sx={{
+                "& .MuiDrawer-paper": {
+                  width: "100%",
+                  border: "none",
+                  backgroundColor: "transparent",
+                  position: "relative",
+                  height: "auto",
+                  top: 0,
+                },
+              }}
+            >
+              <List className="space-y-2">
+                {menuItems.map((item) => (
+                  <ListItem
+                    key={item.route}
+                    disablePadding
+                    className="text-white"
                   >
-                    <ListItemIcon
+                    <ListItemButton
+                      onClick={() => navigate(item.route)}
+                      selected={location.pathname.includes(item.route)}
                       sx={{
-                        minWidth: "36px",
-                        color: item.color,
-                        fontSize: "1.25rem",
+                        borderRadius: "8px",
+                        transition: "all 0.2s ease",
+                        backgroundColor: location.pathname.includes(item.route)
+                          ? "rgba(255, 255, 255, 0.08)"
+                          : "transparent",
+                        "&:hover": {
+                          backgroundColor: "rgba(255, 255, 255, 0.05)",
+                          transform: "translateX(4px)",
+                        },
+                        "&.Mui-selected": {
+                          borderLeft: `4px solid ${item.color}`,
+                        },
+                        padding: "12px 16px",
                       }}
                     >
-                      {item.icon}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={item.text}
-                      primaryTypographyProps={{
-                        fontSize: "1rem",
-                        fontWeight: location.pathname.includes(item.route)
-                          ? 600
-                          : 500,
-                      }}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              ))}
-            </List>
-          </Drawer>
-        </Box>
+                      <ListItemIcon
+                        sx={{
+                          minWidth: "36px",
+                          color: item.color,
+                          fontSize: "1.25rem",
+                        }}
+                      >
+                        {item.icon}
+                      </ListItemIcon>
+                      <ListItemText
+                        primary={item.text}
+                        primaryTypographyProps={{
+                          fontSize: "1rem",
+                          fontWeight: location.pathname.includes(item.route)
+                            ? 600
+                            : 500,
+                        }}
+                      />
+                    </ListItemButton>
+                  </ListItem>
+                ))}
+              </List>
+            </Drawer>
+          </Box>
 
-        {/* Main Content */}
-        <Box
-          component="main"
-          sx={{
-            flexGrow: 1,
-            px: 1,
-            maxHeight: "calc(100vh - 180px)",
-            overflowY: "auto",
-            scrollbarWidth: "none",
-            "&::-webkit-scrollbar": {
-              display: "none",
-            },
-            transition: "all 0.3s ease",
-            borderLeft: { lg: "2px solid #1f2937" }, 
-          }}
-          className="text-white"
-        >
-          <Outlet />
+          {/* Main Content */}
+          <Box
+            component="main"
+            sx={{
+              flexGrow: 1,
+              px: 1,
+              maxHeight: "calc(100vh - 180px)",
+              overflowY: "auto",
+              scrollbarWidth: "none",
+              "&::-webkit-scrollbar": {
+                display: "none",
+              },
+              transition: "all 0.3s ease",
+              borderLeft: { lg: "2px solid #1f2937" },
+            }}
+            className="text-white"
+          >
+            <Outlet />
+          </Box>
         </Box>
-      </Box>
-    </div>
+      </div>
+    </>
   );
 }
