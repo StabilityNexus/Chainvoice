@@ -132,9 +132,7 @@ const GenerateLink = () => {
       </div>
 
       <div
-        className={`space-y-6 mx-6 transition-all duration-300 ${
-          !isConnected ? "opacity-40 pointer-events-none" : ""
-        }`}
+        className='space-y-6 mx-6 transition-all duration-300'
       >
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">

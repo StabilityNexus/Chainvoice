@@ -1019,36 +1019,10 @@ function ReceivedInvoice() {
                     Download Invoice
                   </button>
                 </div>
-                <div className="flex justify-between pt-2 border-t border-gray-200">
-                  <span className="font-medium">Total Amount:</span>
-                  <span className="font-bold text-lg">
-                    {drawerState.selectedInvoice.paymentToken?.symbol === "ETH"
-                      ? `${(
-                          parseFloat(drawerState.selectedInvoice.amountDue) +
-                          parseFloat(ethers.formatUnits(fee))
-                        ).toFixed(6)} ETH`
-                      : `${drawerState.selectedInvoice.amountDue} ${
-                          drawerState.selectedInvoice.paymentToken?.symbol
-                        } + ${ethers.formatUnits(fee)} ETH`}
-                  </span>
-                </div>
+               
               </div>
 
-              <div className="mt-8 flex justify-between items-center">
-                <button
-                  onClick={toggleDrawer(null)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={handlePrint}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
-                >
-                  <DownloadIcon className="mr-2" fontSize="small" />
-                  Download Invoice
-                </button>
-              </div>
+              
             </>
           )}
         </SwipeableDrawer>
