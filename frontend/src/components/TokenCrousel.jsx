@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { SiEthereum } from "react-icons/si";
-import { TOKEN_PRESETS } from "@/utils/erc20_token";
+// import { TOKEN_PRESETS } from "@/utils/erc20_token";
 
 const TokenCarousel = () => {
   const carouselRef = useRef();

@@ -40,7 +40,7 @@ import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
 import DownloadIcon from "@mui/icons-material/Download";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
-import { TOKEN_PRESETS } from "@/utils/erc20_token";
+import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
 
 const columns = [
@@ -56,7 +56,7 @@ function ReceivedInvoice() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const { data: walletClient } = useWalletClient();
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
   const [loading, setLoading] = useState(true);
   const [receivedInvoices, setReceivedInvoice] = useState([]);
   const [fee, setFee] = useState(0);
@@ -66,6 +66,10 @@ function ReceivedInvoice() {
   const [paymentLoading, setPaymentLoading] = useState({});
   const [networkLoading, setNetworkLoading] = useState(false);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
+
+  // Get tokens from the hook
+  const { tokens } = useTokenList(chainId || 1);
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
@@ -73,6 +77,40 @@ function ReceivedInvoice() {
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(+event.target.value);
     setPage(0);
+  };
+
+  // Helper function to get token info
+  const getTokenInfo = (tokenAddress) => {
+    if (!tokens || tokens.length === 0) return null;
+
+    return tokens.find(
+      (token) =>
+        token.contract_address?.toLowerCase() === tokenAddress?.toLowerCase() ||
+        token.address?.toLowerCase() === tokenAddress?.toLowerCase()
+    );
+  };
+
+  // Helper function to get token logo
+  const getTokenLogo = (tokenAddress, fallbackLogo) => {
+    const tokenInfo = getTokenInfo(tokenAddress);
+    return (
+      tokenInfo?.image ||
+      tokenInfo?.logo ||
+      fallbackLogo ||
+      "/tokenImages/generic.png"
+    );
+  };
+
+  // Helper function to get token decimals
+  const getTokenDecimals = (tokenAddress, fallbackDecimals = 18) => {
+    const tokenInfo = getTokenInfo(tokenAddress);
+    return tokenInfo?.decimals || fallbackDecimals;
+  };
+
+  // Helper function to get token symbol
+  const getTokenSymbol = (tokenAddress, fallbackSymbol = "TOKEN") => {
+    const tokenInfo = getTokenInfo(tokenAddress);
+    return tokenInfo?.symbol || fallbackSymbol;
   };
 
   useEffect(() => {
@@ -96,6 +134,7 @@ function ReceivedInvoice() {
     };
     initLit();
   }, []);
+
   useEffect(() => {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
@@ -118,6 +157,7 @@ function ReceivedInvoice() {
           setLoading(false);
           return;
         }
+
         const litNodeClient = litClientRef.current;
         if (!litNodeClient) {
           alert("Lit client not initialized");
@@ -140,15 +180,6 @@ function ReceivedInvoice() {
           return;
         }
 
-        // First check if user has any invoices
-//         if (!res || !Array.isArray(res) || res.length === 0) {
-//           setReceivedInvoice([]);
-//           const fee = await contract.fee();
-//           setFee(fee);
-//           return;
-//         }
-
-
         const decryptedInvoices = [];
 
         for (const invoice of res) {
@@ -168,6 +199,7 @@ function ReceivedInvoice() {
               console.warn(`Unauthorized access attempt for invoice ${id}`);
               continue;
             }
+
             const ciphertext = atob(encryptedStringBase64);
             const accessControlConditions = [
               {
@@ -194,6 +226,7 @@ function ReceivedInvoice() {
                 },
               },
             ];
+
             const sessionSigs = await litNodeClient.getSessionSigs({
               chain: "ethereum",
               resourceAbilityRequests: [
@@ -219,6 +252,7 @@ function ReceivedInvoice() {
                 return await generateAuthSig({ signer, toSign });
               },
             });
+
             const decryptedString = await decryptToString(
               {
                 accessControlConditions,
@@ -229,24 +263,60 @@ function ReceivedInvoice() {
               },
               litNodeClient
             );
+
             const parsed = JSON.parse(decryptedString);
             parsed["id"] = id;
             parsed["isPaid"] = isPaid;
             parsed["isCancelled"] = isCancelled;
 
-            // Enhance with token details
+            // Enhance with token details using the new token fetching system
             if (parsed.paymentToken?.address) {
-              const tokenInfo = TOKEN_PRESETS.find(
-                (t) =>
-                  t.address.toLowerCase() ===
-                  parsed.paymentToken.address.toLowerCase()
-              );
+              const tokenInfo = getTokenInfo(parsed.paymentToken.address);
               if (tokenInfo) {
                 parsed.paymentToken = {
                   ...parsed.paymentToken,
-                  logo: tokenInfo.logo,
-                  decimals: tokenInfo.decimals,
+                  logo: tokenInfo.image || tokenInfo.logo,
+                  decimals: tokenInfo.decimals || parsed.paymentToken.decimals,
+                  name: tokenInfo.name || parsed.paymentToken.name,
+                  symbol: tokenInfo.symbol || parsed.paymentToken.symbol,
                 };
+              } else {
+                // Fallback: try to fetch token info from blockchain if not in our list
+                try {
+                  const tokenContract = new ethers.Contract(
+                    parsed.paymentToken.address,
+                    ERC20_ABI,
+                    provider
+                  );
+
+                  const [symbol, name, decimals] = await Promise.all([
+                    tokenContract
+                      .symbol()
+                      .catch(() => parsed.paymentToken.symbol || "UNKNOWN"),
+                    tokenContract
+                      .name()
+                      .catch(() => parsed.paymentToken.name || "Unknown Token"),
+                    tokenContract
+                      .decimals()
+                      .catch(() => parsed.paymentToken.decimals || 18),
+                  ]);
+
+                  parsed.paymentToken = {
+                    ...parsed.paymentToken,
+                    symbol,
+                    name,
+                    decimals: Number(decimals),
+                    logo: "/tokenImages/generic.png", // Generic fallback
+                  };
+                } catch (error) {
+                  console.error(
+                    "Failed to fetch token info from blockchain:",
+                    error
+                  );
+                  // Keep existing data or set defaults
+                  parsed.paymentToken.logo =
+                    parsed.paymentToken.logo || "/tokenImages/generic.png";
+                }
               }
             }
 
@@ -261,13 +331,14 @@ function ReceivedInvoice() {
         setFee(fee);
       } catch (error) {
         console.error("Fetch error:", error);
+        setError("Failed to fetch invoices. Please try again.");
       } finally {
         setLoading(false);
       }
     };
 
     fetchReceivedInvoices();
-  }, [walletClient, litReady, address]);
+  }, [walletClient, litReady, address, tokens]);
 
   const payInvoice = async (invoiceId, amountDue, tokenAddress) => {
     if (!walletClient) {
@@ -296,10 +367,8 @@ function ReceivedInvoice() {
         throw new Error(`Invalid token address: ${tokenAddress}`);
       }
 
-      const tokenInfo = TOKEN_PRESETS.find(
-        (t) => t.address.toLowerCase() === tokenAddress.toLowerCase()
-      );
-      const tokenSymbol = tokenInfo?.symbol || "Token";
+      // Use the helper function instead of TOKEN_PRESETS
+      const tokenSymbol = getTokenSymbol(tokenAddress, "Token");
 
       if (!isNativeToken) {
         const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
@@ -589,6 +658,9 @@ function ReceivedInvoice() {
                                     src={invoice.paymentToken.logo}
                                     alt={invoice.paymentToken.symbol}
                                     className="w-5 h-5 mr-2"
+                                    onError={(e) => {
+                                      e.target.src = "/tokenImages/generic.png";
+                                    }}
                                   />
                                 ) : (
                                   <CurrencyExchangeIcon
@@ -631,7 +703,6 @@ function ReceivedInvoice() {
                               )}
                             </TableCell>
                             {/* Date Column */}
-
                             <TableCell>
                               <span className="text-sm text-gray-600">
                                 {formatDate(invoice.issueDate)}
@@ -758,7 +829,6 @@ function ReceivedInvoice() {
                       Powered by Chainvoice
                     </p>
                   </div>
-
                   <div className="text-right">
                     <h1 className="text-2xl font-bold text-gray-800">
                       INVOICE
@@ -880,6 +950,9 @@ function ReceivedInvoice() {
                         src={drawerState.selectedInvoice.paymentToken.logo}
                         alt={drawerState.selectedInvoice.paymentToken.symbol}
                         className="w-6 h-6 mr-2"
+                        onError={(e) => {
+                          e.target.src = "/tokenImages/generic.png";
+                        }}
                       />
                     ) : (
                       <div className="w-6 h-6 rounded-full bg-gray-200 mr-2 flex items-center justify-center">
@@ -973,7 +1046,6 @@ function ReceivedInvoice() {
                     </tbody>
                   </table>
                 </div>
-
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex justify-between mb-2">
                     <span className="text-sm text-gray-600">Subtotal:</span>
@@ -1003,7 +1075,6 @@ function ReceivedInvoice() {
                     </span>
                   </div>
                 </div>
-
                 <div className="mt-8 flex justify-between items-center">
                   <button
                     onClick={toggleDrawer(null)}
@@ -1019,10 +1090,7 @@ function ReceivedInvoice() {
                     Download Invoice
                   </button>
                 </div>
-               
               </div>
-
-              
             </>
           )}
         </SwipeableDrawer>
