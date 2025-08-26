@@ -367,7 +367,6 @@ function ReceivedInvoice() {
         throw new Error(`Invalid token address: ${tokenAddress}`);
       }
 
-      // Use the helper function instead of TOKEN_PRESETS
       const tokenSymbol = getTokenSymbol(tokenAddress, "Token");
 
       if (!isNativeToken) {

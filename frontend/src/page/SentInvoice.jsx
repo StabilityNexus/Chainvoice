@@ -45,7 +45,7 @@ import UnpaidIcon from "@mui/icons-material/Pending";
 import DownloadIcon from "@mui/icons-material/Download";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
-import { useTokenList } from "@/hooks/useTokenList"; // Import the hook instead of TOKEN_PRESETS
+import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
 
 const columns = [

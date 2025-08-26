@@ -23,7 +23,7 @@ import { CopyButton } from "@/components/ui/copyButton";
 import { Badge } from "@/components/ui/badge";
 import { BrowserProvider, ethers } from "ethers";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
-import { useTokenList } from "../hooks/useTokenList"; // Import the hook instead of TOKEN_PRESETS
+import { useTokenList } from "../hooks/useTokenList"; 
 
 
 const GenerateLink = () => {
@@ -158,32 +158,6 @@ const GenerateLink = () => {
                 readOnly
                 className="bg-gray-50 text-gray-500 border-gray-300 font-mono text-sm"
               />
-            </div>
-
-            {/* Optional Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Amount (Optional)
-                </Label>
-                <Input
-                  placeholder="e.g., 100"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="border-gray-300"
-                />
-              </div>
-              <div>
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Description (Optional)
-                </Label>
-                <Input
-                  placeholder="e.g., Web design services"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  className="border-gray-300"
-                />
-              </div>
             </div>
 
             {/* Token Selection */}
@@ -388,9 +362,9 @@ const GenerateLink = () => {
                           <span className="font-medium text-gray-700">
                             Note:
                           </span>{" "}
-                          Your client will need to have sufficient balance of{" "}
+                          You need to have sufficient balance of{" "}
                           <strong>{verifiedToken.symbol}</strong> to be able to
-                          pay your invoice.
+                          pay invoice.
                         </>
                       ) : customTokenAddress ? (
                         <>
@@ -412,9 +386,9 @@ const GenerateLink = () => {
                     ) : selectedToken ? (
                       <>
                         <span className="font-medium text-gray-700">Note:</span>{" "}
-                        Your client will need to have sufficient balance of{" "}
+                        You need to have sufficient balance of{" "}
                         <strong>{selectedToken.symbol}</strong> to be able to
-                        pay your invoice.
+                        pay invoice.
                       </>
                     ) : (
                       <>
