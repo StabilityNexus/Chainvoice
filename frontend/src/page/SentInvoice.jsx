@@ -23,6 +23,7 @@ import {
   LitAccessControlConditionResource,
 } from "@lit-protocol/auth-helpers";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
+import { toast } from "react-toastify";
 import {
   CircularProgress,
   Skeleton,
@@ -44,7 +45,7 @@ import UnpaidIcon from "@mui/icons-material/Pending";
 import DownloadIcon from "@mui/icons-material/Download";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
-import { TOKEN_PRESETS } from "@/utils/erc20_token";
+import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
 
 const columns = [
@@ -60,7 +61,7 @@ function SentInvoice() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const { data: walletClient } = useWalletClient();
-  const { address, isConnected } = useAccount();
+  const { address, isConnected, chainId } = useAccount();
 
   const [loading, setLoading] = useState(true);
   const [sentInvoices, setSentInvoices] = useState([]);
@@ -73,14 +74,47 @@ function SentInvoice() {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [invoiceToCancel, setInvoiceToCancel] = useState(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
-  
+
+  // Get tokens from the hook
+  const { tokens } = useTokenList(chainId || 1);
+
+  // Helper function to get token info
+  const getTokenInfo = (tokenAddress) => {
+    if (!tokens || tokens.length === 0) return null;
+
+    return tokens.find(
+      (token) =>
+        token.contract_address?.toLowerCase() === tokenAddress?.toLowerCase() ||
+        token.address?.toLowerCase() === tokenAddress?.toLowerCase()
+    );
+  };
+
+  // Helper function to get token logo
+  const getTokenLogo = (tokenAddress, fallbackLogo) => {
+    const tokenInfo = getTokenInfo(tokenAddress);
+    return (
+      tokenInfo?.image ||
+      tokenInfo?.logo ||
+      fallbackLogo ||
+      "/tokenImages/generic.png"
+    );
+  };
+
+  // Helper function to get token decimals
+  const getTokenDecimals = (tokenAddress, fallbackDecimals = 18) => {
+    const tokenInfo = getTokenInfo(tokenAddress);
+    return tokenInfo?.decimals || fallbackDecimals;
+  };
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
+
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(+event.target.value);
     setPage(0);
   };
+
   useEffect(() => {
     const initLit = async () => {
       try {
@@ -102,6 +136,7 @@ function SentInvoice() {
     };
     initLit();
   }, []);
+
   useEffect(() => {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
@@ -124,7 +159,6 @@ function SentInvoice() {
           setLoading(false);
           return;
         }
-        // 2. Connect to Lit Node
 
         const litNodeClient = litClientRef.current;
         if (!litNodeClient) {
@@ -132,7 +166,6 @@ function SentInvoice() {
           return;
         }
 
-        // 3. Contract call to get encrypted invoice
         const contract = new Contract(
           import.meta.env.VITE_CONTRACT_ADDRESS,
           ChainvoiceABI,
@@ -168,6 +201,7 @@ function SentInvoice() {
               console.warn(`Unauthorized access attempt for invoice ${id}`);
               continue;
             }
+
             const ciphertext = atob(encryptedStringBase64);
             const accessControlConditions = [
               {
@@ -236,20 +270,58 @@ function SentInvoice() {
             parsed["id"] = id;
             parsed["isPaid"] = isPaid;
             parsed["isCancelled"] = isCancelled;
+
+            // Enhance with token details using the new token fetching system
             if (parsed.paymentToken?.address) {
-              const tokenInfo = TOKEN_PRESETS.find(
-                (t) =>
-                  t.address.toLowerCase() ===
-                  parsed.paymentToken.address.toLowerCase()
-              );
+              const tokenInfo = getTokenInfo(parsed.paymentToken.address);
               if (tokenInfo) {
                 parsed.paymentToken = {
                   ...parsed.paymentToken,
-                  logo: tokenInfo.logo,
-                  decimals: tokenInfo.decimals,
+                  logo: tokenInfo.image || tokenInfo.logo,
+                  decimals: tokenInfo.decimals || parsed.paymentToken.decimals,
+                  name: tokenInfo.name || parsed.paymentToken.name,
+                  symbol: tokenInfo.symbol || parsed.paymentToken.symbol,
                 };
+              } else {
+                // Fallback: try to fetch token info from blockchain if not in our list
+                try {
+                  const tokenContract = new ethers.Contract(
+                    parsed.paymentToken.address,
+                    ERC20_ABI,
+                    provider
+                  );
+
+                  const [symbol, name, decimals] = await Promise.all([
+                    tokenContract
+                      .symbol()
+                      .catch(() => parsed.paymentToken.symbol || "UNKNOWN"),
+                    tokenContract
+                      .name()
+                      .catch(() => parsed.paymentToken.name || "Unknown Token"),
+                    tokenContract
+                      .decimals()
+                      .catch(() => parsed.paymentToken.decimals || 18),
+                  ]);
+
+                  parsed.paymentToken = {
+                    ...parsed.paymentToken,
+                    symbol,
+                    name,
+                    decimals: Number(decimals),
+                    logo: "/tokenImages/generic.png", // Generic fallback
+                  };
+                } catch (error) {
+                  console.error(
+                    "Failed to fetch token info from blockchain:",
+                    error
+                  );
+                  // Keep existing data or set defaults
+                  parsed.paymentToken.logo =
+                    parsed.paymentToken.logo || "/tokenImages/generic.png";
+                }
               }
             }
+
             decryptedInvoices.push(parsed);
           } catch (err) {
             console.error(`Error processing invoice ${invoice[0]}:`, err);
@@ -261,6 +333,7 @@ function SentInvoice() {
         setFee(fee);
       } catch (error) {
         console.error("Decryption error:", error);
+        setError("Failed to fetch invoices. Please try again.");
       } finally {
         console.log(sentInvoices);
         setLoading(false);
@@ -268,7 +341,7 @@ function SentInvoice() {
     };
 
     fetchSentInvoices();
-  }, [walletClient, litReady, address]);
+  }, [walletClient, litReady, address, tokens]); // Added tokens to dependency array
 
   const [drawerState, setDrawerState] = useState({
     open: false,
@@ -301,6 +374,7 @@ function SentInvoice() {
     link.href = data;
     link.click();
   };
+
   const handleCancelInvoice = async (invoiceId) => {
     try {
       setPaymentLoading((prev) => ({ ...prev, [invoiceId]: true }));
@@ -328,6 +402,7 @@ function SentInvoice() {
       setPaymentLoading((prev) => ({ ...prev, [invoiceId]: false }));
     }
   };
+
   const switchNetwork = async () => {
     try {
       setNetworkLoading(true);
@@ -517,6 +592,9 @@ function SentInvoice() {
                                     src={invoice.paymentToken.logo}
                                     alt={invoice.paymentToken.symbol}
                                     className="w-5 h-5 mr-2 rounded-full"
+                                    onError={(e) => {
+                                      e.target.src = "/tokenImages/generic.png";
+                                    }}
                                   />
                                 ) : (
                                   <CurrencyExchangeIcon
@@ -787,6 +865,9 @@ function SentInvoice() {
                       src={drawerState.selectedInvoice.paymentToken.logo}
                       alt={drawerState.selectedInvoice.paymentToken.symbol}
                       className="w-6 h-6 mr-2"
+                      onError={(e) => {
+                        e.target.src = "/tokenImages/generic.png";
+                      }}
                     />
                   ) : (
                     <div className="w-6 h-6 rounded-full bg-gray-200 mr-2 flex items-center justify-center">

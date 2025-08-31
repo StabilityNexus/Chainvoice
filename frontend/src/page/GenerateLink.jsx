@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useAccount, useWalletClient } from "wagmi"; 
+import { useAccount, useWalletClient } from "wagmi";
 import {
   Copy,
   Link,
@@ -9,54 +9,55 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
-} from "lucide-react"; 
+  Coins,
+} from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
-import { TOKEN_PRESETS } from "@/utils/erc20_token";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
 import TokenIntegrationRequest from "@/components/TokenIntegrationRequest";
-import { BrowserProvider, ethers } from "ethers"; 
+import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
+import { CopyButton } from "@/components/ui/copyButton";
+import { Badge } from "@/components/ui/badge";
+import { BrowserProvider, ethers } from "ethers";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
+import { useTokenList } from "../hooks/useTokenList"; 
+
 
 const GenerateLink = () => {
-  const { address, isConnected } = useAccount();
-  const { data: walletClient } = useWalletClient(); 
+  const { address, isConnected, chainId } = useAccount();
+  const { data: walletClient } = useWalletClient();
   const [copied, setCopied] = useState(false);
   const [amount, setAmount] = useState("");
   const [description, setDescription] = useState("");
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
 
+  // Get tokens from the new hook
+  const { tokens } = useTokenList(chainId || 1);
+
   // Token selection state
-  const [selectedToken, setSelectedToken] = useState(TOKEN_PRESETS[0]);
+  const [selectedToken, setSelectedToken] = useState(null); 
   const [customTokenAddress, setCustomTokenAddress] = useState("");
   const [useCustomToken, setUseCustomToken] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const inputRef = useRef(null);
   const [tokenVerificationState, setTokenVerificationState] = useState("idle");
   const [verifiedToken, setVerifiedToken] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const filteredTokens = TOKEN_PRESETS.filter(
-    (token) =>
-      token.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      token.symbol.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const POPULAR_TOKENS = [
-    "0x0000000000000000000000000000000000000000", // ETH
-    "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48", // USDC
-    "0xdac17f958d2ee523a2206206994597c13d831ec7", // USDT
-    "0x6b175474e89094c44da98b954eedeac495271d0f", // DAI
-  ];
+  // Set default token when tokens are loaded
+  useEffect(() => {
+    if (tokens.length > 0 && !selectedToken && !useCustomToken) {
+      // Find ETH or use first token as default
+      const ethToken = tokens.find(
+        (token) =>
+          token.symbol.toLowerCase() === "eth" ||
+          token.contract_address ===
+            "0x0000000000000000000000000000000000000000"
+      );
+      setSelectedToken(ethToken || tokens[0]);
+    }
+  }, [tokens, selectedToken, useCustomToken]);
 
   const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"];
 
@@ -75,9 +76,9 @@ const GenerateLink = () => {
 
     const params = new URLSearchParams({
       clientAddress: address || "",
-      tokenAddress: tokenToUse.address,
-      customToken: useCustomToken ? true : false,
-      chain: "1",
+      tokenAddress: tokenToUse.address || tokenToUse.contract_address,
+      customToken: useCustomToken ? "true" : "false",
+      chain: chainId?.toString() || "1",
     });
 
     if (amount) {
@@ -101,7 +102,7 @@ const GenerateLink = () => {
   };
 
   const verifyToken = async (address) => {
-    if (!walletClient) return; 
+    if (!walletClient) return;
 
     setTokenVerificationState("verifying");
 
@@ -121,6 +122,7 @@ const GenerateLink = () => {
       setTokenVerificationState("error");
     }
   };
+
   return (
     <>
       <div className="flex justify-center">
@@ -131,11 +133,7 @@ const GenerateLink = () => {
         />
       </div>
 
-      <div
-        className={`space-y-6 mx-6 transition-all duration-300 ${
-          !isConnected ? "opacity-40 pointer-events-none" : ""
-        }`}
-      >
+      <div className="space-y-6 mx-6 transition-all duration-300">
         <div className="mb-8">
           <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
             <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
@@ -148,6 +146,7 @@ const GenerateLink = () => {
             details.
           </p>
         </div>
+
         <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
           <div className="space-y-6">
             <div>
@@ -162,300 +161,244 @@ const GenerateLink = () => {
             </div>
 
             {/* Token Selection */}
-            <div>
+            <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-gray-600"
+                >
+                  <circle cx="8" cy="8" r="6"></circle>
+                  <path d="M18.09 10.37A6 6 0 1 1 10.34 18"></path>
+                  <path d="M7 6h1v4"></path>
+                  <path d="m16.71 13.88.7.71-2.82 2.82"></path>
+                </svg>
+                Payment Currency
+              </h3>
+
               <div className="space-y-4">
+                {/* Toggle Switch */}
+                <ToggleSwitch
+                  enabled={useCustomToken}
+                  onChange={(enabled) => {
+                    setUseCustomToken(enabled);
+                    if (enabled) {
+                      setSelectedToken(null);
+                    } else {
+                      // Reset to first token when switching back
+                      if (tokens.length > 0) {
+                        const ethToken = tokens.find(
+                          (token) =>
+                            token.symbol.toLowerCase() === "eth" ||
+                            token.contract_address ===
+                              "0x0000000000000000000000000000000000000000"
+                        );
+                        setSelectedToken(ethToken || tokens[0]);
+                      }
+                    }
+                  }}
+                  leftLabel="Select Token"
+                  rightLabel="Input Custom Token"
+                />
+
                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                   <div className="w-full sm:w-auto flex-1">
-                    <Label className="block text-sm font-medium text-gray-700 mb-2">
-                      Preferred Payment Token
-                    </Label>
-                    <Select
-                      value={
-                        useCustomToken ? "custom" : selectedToken?.address || ""
-                      }
-                      onValueChange={(value) => {
-                        if (value === "custom") {
-                          setUseCustomToken(true);
-                          setSelectedToken(null);
-                        } else {
-                          setUseCustomToken(false);
-                          const token = TOKEN_PRESETS.find(
-                            (t) => t.address === value
-                          );
-                          if (token) {
-                            setSelectedToken(token);
-                            setCustomTokenAddress("");
-                            setTokenVerificationState("idle");
-                            setVerifiedToken(null);
-                          }
-                        }
-                      }}
-                      disabled={loading}
-                    >
-                      <SelectTrigger className="w-full h-12 bg-gray-50 hover:bg-gray-100 border-gray-200">
-                        <SelectValue placeholder="Choose a token" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white border border-gray-200 rounded-lg shadow-lg">
-                        {/* Search input for filtering */}
-                        <div className="p-2 border-b">
-                          <Input
-                            ref={inputRef}
-                            placeholder="Search tokens..."
-                            className="focus-visible:ring-0 focus-visible:ring-offset-0"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                          />
+                    {!useCustomToken ? (
+                      <>
+                        <Label className="block text-sm font-medium text-gray-700 mb-2">
+                          Choose from Available Tokens
+                        </Label>
+                        <TokenPicker
+                          selected={selectedToken}
+                          onSelect={(token) => {
+                            setSelectedToken({
+                              address: token.contract_address,
+                              symbol: token.symbol,
+                              name: token.name,
+                              logo: token.image,
+                              decimals: 18,
+                            });
+                          }}
+                          chainId={chainId || 1}
+                          disabled={loading}
+                          className="w-full"
+                          allowCustom={false}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Label className="block text-sm font-medium text-gray-700 mb-2">
+                          Custom Token Contract Address
+                        </Label>
+
+                        {/* Custom Token Instructions */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <Coins className="w-4 h-4 text-blue-600" />
+                            </div>
+                            <div>
+                              <h4 className="font-medium text-blue-900 mb-1">
+                                Custom Token Setup
+                              </h4>
+                              <p className="text-sm text-blue-700 mb-2">
+                                Enter the contract address of the ERC-20 token
+                                you want to use for payments.
+                              </p>
+                              <ul className="text-xs text-blue-600 space-y-1">
+                                <li>
+                                  • Make sure the token contract is deployed and
+                                  verified
+                                </li>
+                                <li>
+                                  • Address should start with "0x" followed by
+                                  40 characters
+                                </li>
+                                <li>
+                                  • Token will be verified automatically after
+                                  entering
+                                </li>
+                              </ul>
+                            </div>
+                          </div>
                         </div>
-                        {!searchTerm && (
-                          <>
-                            <div className="p-1">
-                              <div className="px-3 py-1 text-xs font-medium text-gray-500">
-                                Popular
-                              </div>
-                              {TOKEN_PRESETS.filter((token) =>
-                                POPULAR_TOKENS.includes(token.address)
-                              ).map((token) => (
-                                <SelectItem
-                                  key={token.address}
-                                  value={token.address}
-                                  className="hover:bg-gray-50 focus:bg-gray-50"
-                                >
-                                  <div className="flex items-center gap-3 py-1">
-                                    <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
-                                      <img
-                                        src={token.logo}
-                                        alt={token.name}
-                                        width={28}
-                                        height={28}
-                                        className="object-contain"
-                                        onError={(e) => {
-                                          e.currentTarget.src =
-                                            "/tokenImages/generic.png";
-                                        }}
-                                      />
-                                    </div>
-                                    <div>
-                                      <span className="font-medium text-gray-900">
-                                        {token.name}
-                                      </span>
-                                      <span className="text-gray-500 text-sm ml-2">
-                                        {token.symbol}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </div>
-                            <div className="p-1">
-                              <div className="px-3 py-1 text-xs font-medium text-gray-500">
-                                Testnet Token
-                              </div>
-                              {TOKEN_PRESETS.filter((token) =>
-                                TESTNET_TOKEN.includes(token.address)
-                              ).map((token) => (
-                                <SelectItem
-                                  key={token.address}
-                                  value={token.address}
-                                  className="hover:bg-gray-50 focus:bg-gray-50"
-                                >
-                                  <div className="flex items-center gap-3 py-1">
-                                    <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
-                                      <img
-                                        src={token.logo}
-                                        alt={token.name}
-                                        width={28}
-                                        height={28}
-                                        className="object-contain"
-                                        onError={(e) => {
-                                          e.currentTarget.src =
-                                            "/tokenImages/generic.png";
-                                        }}
-                                      />
-                                    </div>
-                                    <div>
-                                      <span className="font-medium text-gray-900">
-                                        {token.name}
-                                      </span>
-                                      <span className="text-gray-500 text-sm ml-2">
-                                        {token.symbol}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </SelectItem>
-                              ))}
-                            </div>
-                          </>
+
+                        <Input
+                          placeholder="0x... (Enter token contract address)"
+                          value={customTokenAddress}
+                          onChange={(e) => {
+                            const address = e.target.value;
+                            setCustomTokenAddress(address);
+                            if (!address || !ethers.isAddress(address)) {
+                              setTokenVerificationState("idle");
+                              setVerifiedToken(null);
+                            } else if (ethers.isAddress(address)) {
+                              verifyToken(address);
+                            }
+                          }}
+                          className="h-12 bg-gray-50 text-gray-700 border-gray-200"
+                          disabled={loading}
+                        />
+
+                        {tokenVerificationState === "verifying" && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600 p-3 bg-yellow-50 rounded-lg border border-yellow-200 mt-3">
+                            <Loader2 className="h-4 w-4 animate-spin text-yellow-600" />
+                            <span className="text-yellow-700">
+                              Verifying token contract...
+                            </span>
+                          </div>
                         )}
-                        <div className="p-1">
-                          <div className="px-3 py-1 text-xs font-medium text-gray-500">
-                            {searchTerm ? "Search Results" : "All Tokens"}
-                          </div>
-                          <div className="max-h-60 overflow-y-auto">
-                            {filteredTokens
-                              .filter(
-                                (token) =>
-                                  !POPULAR_TOKENS.includes(token.address) &&
-                                  !TESTNET_TOKEN.includes(token.address)
-                              )
-                              .map((token) => (
-                                <SelectItem
-                                  key={token.address}
-                                  value={token.address}
-                                  className="hover:bg-gray-50 focus:bg-gray-50"
-                                >
-                                  <div className="flex items-center gap-3 py-1">
-                                    <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
-                                      <img
-                                        src={token.logo}
-                                        alt={token.name}
-                                        width={28}
-                                        height={28}
-                                        className="object-contain"
-                                        onError={(e) => {
-                                          e.currentTarget.src =
-                                            "/tokenImages/generic.png";
-                                        }}
+
+                        {tokenVerificationState === "success" &&
+                          verifiedToken && (
+                            <div className="mt-3">
+                              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                                <div className="flex items-start gap-3">
+                                  <CheckCircle2 className="h-6 w-6 text-green-500 flex-shrink-0 mt-0.5" />
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <p className="font-medium text-green-800">
+                                        {verifiedToken.name} (
+                                        {verifiedToken.symbol})
+                                      </p>
+                                      <Badge className="bg-green-100 text-green-700 text-xs">
+                                        Verified ✓
+                                      </Badge>
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-sm text-green-600 font-mono">
+                                        {verifiedToken.address}
+                                      </span>
+                                      <CopyButton
+                                        textToCopy={verifiedToken.address}
                                       />
                                     </div>
-                                    <div>
-                                      <span className="font-medium text-gray-900">
-                                        {token.name}
-                                      </span>
-                                      <span className="text-gray-500 text-sm ml-2">
-                                        {token.symbol}
-                                      </span>
-                                    </div>
+                                    <p className="text-xs text-green-600">
+                                      Decimals: {String(verifiedToken.decimals)}{" "}
+                                      • Contract verified and ready to use
+                                    </p>
                                   </div>
-                                </SelectItem>
-                              ))}
-                          </div>
-                          {filteredTokens.length === 0 && (
-                            <div className="p-4 text-center text-sm text-gray-500">
-                              No tokens found
+                                </div>
+                              </div>
+                              <TokenIntegrationRequest
+                                address={customTokenAddress}
+                              />
                             </div>
                           )}
-                        </div>
 
-                        <SelectItem
-                          value="custom"
-                          className="hover:bg-gray-50 focus:bg-gray-50 border-t border-gray-100 mt-1 pt-2"
-                        >
-                          <div className="flex items-center gap-3 py-1.5">
-                            <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
-                              <PlusIcon className="h-4 w-4 text-gray-500" />
+                        {tokenVerificationState === "error" && (
+                          <div className="bg-red-50 p-3 rounded-lg border border-red-100 mt-3">
+                            <div className="flex items-center gap-3">
+                              <XCircle className="h-5 w-5 text-red-500" />
+                              <div>
+                                <p className="text-sm text-red-600 font-medium">
+                                  Token verification failed
+                                </p>
+                                <p className="text-xs text-red-500 mt-1">
+                                  Please check the contract address and try
+                                  again. Make sure it's a valid ERC-20 token.
+                                </p>
+                              </div>
                             </div>
-                            <span className="font-medium text-gray-900">
-                              Custom Token
-                            </span>
                           </div>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                        )}
+                      </>
+                    )}
                   </div>
-
-                  {!useCustomToken && selectedToken && (
-                    <div className="w-full sm:w-auto flex-1">
-                      <Label className="block text-sm font-medium text-gray-700 mb-2">
-                        Token Details
-                      </Label>
-                      <div className="bg-gray-50 p-3 rounded-lg border border-gray-200">
-                        <div className="flex items-center gap-3 mb-2">
-                          <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
-                            <img
-                              src={selectedToken.logo}
-                              alt={selectedToken.name}
-                              width={32}
-                              height={32}
-                              className="object-contain"
-                            />
-                          </div>
-                          <div>
-                            <span className="font-medium text-gray-500">
-                              {selectedToken.name}
-                            </span>
-                            <span className="text-gray-500 text-sm ml-2">
-                              {selectedToken.symbol}
-                            </span>
-                            <div className="text-xs text-gray-500 break-all">
-                              {selectedToken.address}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
 
-                {useCustomToken && (
-                  <div className="space-y-3">
-                    <div>
-                      <Label className="block text-sm font-medium text-gray-700 mb-2">
-                        Custom Token Contract Address
-                      </Label>
-                      <Input
-                        placeholder="0x..."
-                        value={customTokenAddress}
-                        onChange={(e) => {
-                          const address = e.target.value;
-                          setCustomTokenAddress(address);
-                          if (!address || !ethers.isAddress(address)) {
-                            setTokenVerificationState("idle");
-                            setVerifiedToken(null);
-                          } else if (ethers.isAddress(address)) {
-                            verifyToken(address);
-                          }
-                        }}
-                        className="h-10 bg-gray-50 text-gray-700 border-gray-200 focus:ring-2 focus:ring-blue-100"
-                        disabled={loading}
-                      />
-                      <p className="text-xs text-gray-500 my-2">
-                        Enter a valid ERC-20 token contract address
-                      </p>
-                    </div>
-
-                    {tokenVerificationState === "verifying" && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Verifying token...
-                      </div>
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-xs text-gray-500">
+                    {useCustomToken ? (
+                      verifiedToken ? (
+                        <>
+                          <span className="font-medium text-gray-700">
+                            Note:
+                          </span>{" "}
+                          You need to have sufficient balance of{" "}
+                          <strong>{verifiedToken.symbol}</strong> to be able to
+                          pay invoice.
+                        </>
+                      ) : customTokenAddress ? (
+                        <>
+                          <span className="font-medium text-gray-700">
+                            Note:
+                          </span>{" "}
+                          Please wait for token verification to complete before
+                          proceeding.
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-medium text-gray-700">
+                            Note:
+                          </span>{" "}
+                          Enter a valid ERC-20 token contract address above to
+                          proceed.
+                        </>
+                      )
+                    ) : selectedToken ? (
+                      <>
+                        <span className="font-medium text-gray-700">Note:</span>{" "}
+                        You need to have sufficient balance of{" "}
+                        <strong>{selectedToken.symbol}</strong> to be able to
+                        pay invoice.
+                      </>
+                    ) : (
+                      <>
+                        <span className="font-medium text-gray-700">Note:</span>{" "}
+                        Please select a payment token to continue with invoice
+                        creation.
+                      </>
                     )}
-
-                    {tokenVerificationState === "success" && verifiedToken && (
-                      <div>
-                        <div className="bg-green-50 p-3 rounded-lg border border-green-100">
-                          <div className="flex items-center gap-3">
-                            <CheckCircle2 className="h-10 w-10 text-green-500" />
-                            <div>
-                              <p className="font-medium text-gray-800">
-                                {verifiedToken.name} ({verifiedToken.symbol})
-                              </p>
-                              <p className="text-xs text-gray-500 break-all">
-                                {verifiedToken.address}
-                              </p>
-                              <p className="text-xs text-gray-600 mt-1">
-                                <p>
-                                  Decimals: {String(verifiedToken.decimals)}
-                                </p>
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                        <TokenIntegrationRequest address={customTokenAddress} />
-                      </div>
-                    )}
-
-                    {tokenVerificationState === "error" && (
-                      <div className="bg-red-50 p-3 rounded-lg border border-red-100">
-                        <div className="flex items-center gap-3">
-                          <XCircle className="h-5 w-5 text-red-500" />
-                          <p className="text-sm text-red-600">
-                            Failed to verify token. Please check the address.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
