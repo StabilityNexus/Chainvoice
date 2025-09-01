@@ -43,7 +43,6 @@ Chainvoice is a decentralized invoicing platform that enables secure, transparen
 - [Deploy to Ethereum Classic](#deploy-to-ethereum-classic)
 - [Environment Variables](#environment-variables)
 - [Community and Support](#community-and-support)
-- [License](#license)
 
 ## Overview
 
