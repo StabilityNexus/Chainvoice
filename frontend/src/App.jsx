@@ -33,6 +33,8 @@ export const config = getDefaultConfig({
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
 import GenerateLink from "./page/GenerateLink";
+import CreateInvoicesBatch from "./page/CreateInvoicesBatch";
+import BatchPayment from "./page/BatchPayment"; // New import needed
 
 function App() {
   return (
@@ -83,7 +85,11 @@ function App() {
                       <Route path="create" element={<CreateInvoice />} />
                       <Route path="sent" element={<SentInvoice />} />
                       <Route path="pending" element={<ReceivedInvoice />} />
-                      <Route path="generate-link" element={<GenerateLink />}/>
+                      <Route path="generate-link" element={<GenerateLink />} />
+                      <Route
+                        path="batch-invoice"
+                        element={<CreateInvoicesBatch />}
+                      />
                     </Route>
                     <Route path="feature" element={<Feature />} />
                     <Route path="about" element={<About />} />

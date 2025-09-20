@@ -1,4 +1,4 @@
-// Home.js - Complete Updated Version with Generate Prefilled Link
+// Home.js - Updated with Batch Creation AND Batch Payment sections
 import * as React from "react";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
@@ -12,6 +12,7 @@ import DraftsIcon from "@mui/icons-material/Drafts";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import LinkIcon from "@mui/icons-material/Link";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
+import { FileStack, CreditCard, Layers3, PlusCircle, FileStackIcon } from "lucide-react";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -41,6 +42,12 @@ export default function Home() {
       icon: <LinkIcon />,
       route: "generate-link",
       color: "#a78bfa",
+    },
+    {
+      text: "Batch Create",
+      icon: <FileStackIcon/>,
+      route: "batch-invoice",
+      color: "#22c55e",
     },
   ];
 
@@ -101,7 +108,7 @@ export default function Home() {
                           transform: "translateX(4px)",
                         },
                         "&.Mui-selected": {
-                          borderLeft: `4px solid ${item.color}`,
+                          borderLeft: "4px solid " + item.color,
                         },
                         padding: "12px 16px",
                       }}
