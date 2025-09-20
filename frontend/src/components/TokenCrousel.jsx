@@ -1,12 +1,15 @@
 import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { SiEthereum } from "react-icons/si";
-// import { TOKEN_PRESETS } from "@/utils/erc20_token";
+import { useTokenList } from "../hooks/useTokenList";
 
 const TokenCarousel = () => {
   const carouselRef = useRef();
-  const duplicatedTokens = [...TOKEN_PRESETS, ...TOKEN_PRESETS]; // Double the tokens for seamless loop
-
+const {
+    tokens,
+  } = useTokenList('1');
+  const duplicatedTokens = [...tokens]; 
+  console.log(tokens);
   useEffect(() => {
     const carousel = carouselRef.current;
     let animationFrame;
@@ -54,11 +57,15 @@ const TokenCarousel = () => {
               <div className="flex items-center space-x-3 w-[180px]">
                 <div className="relative">
                   <img
-                    src={token.logo}
+                    src={
+                      token.image ||
+                      token.logo ||
+                      "/tokenImages/generic.png"
+                    }
                     alt={token.symbol}
                     className="w-8 h-8 rounded-full object-contain"
                     onError={(e) => {
-                      e.target.src = "/tokenImages/default.png";
+                      e.target.src = "/tokenImages/generic.png";
                     }}
                   />
                   {token.address ===

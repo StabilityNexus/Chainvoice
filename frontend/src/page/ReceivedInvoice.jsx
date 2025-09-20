@@ -35,15 +35,31 @@ import {
   Tooltip,
   IconButton,
   Typography,
+  Checkbox,
+  Button,
+  Box,
+  Divider,
+  Alert,
+  FormControlLabel,
+  Snackbar,
 } from "@mui/material";
 import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
 import DownloadIcon from "@mui/icons-material/Download";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
+import SelectAllIcon from "@mui/icons-material/SelectAll";
+import ClearAllIcon from "@mui/icons-material/ClearAll";
+import PaymentIcon from "@mui/icons-material/Payment";
+import WarningIcon from "@mui/icons-material/Warning";
+import LightbulbIcon from "@mui/icons-material/Lightbulb";
+import LayersIcon from "@mui/icons-material/Layers";
+import CloseIcon from "@mui/icons-material/Close";
+import ErrorIcon from "@mui/icons-material/Error";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
 
 const columns = [
+  { id: "select", label: "", minWidth: 50 },
   { id: "fname", label: "Client", minWidth: 120 },
   { id: "to", label: "Sender", minWidth: 150 },
   { id: "amountDue", label: "Amount", minWidth: 100, align: "right" },
@@ -67,7 +83,21 @@ function ReceivedInvoice() {
   const [networkLoading, setNetworkLoading] = useState(false);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
 
-  // Get tokens from the hook
+  // Error handling states
+  const [paymentError, setPaymentError] = useState("");
+  const [showPaymentError, setShowPaymentError] = useState(false);
+
+  // Batch payment states
+  const [selectedInvoices, setSelectedInvoices] = useState(new Set());
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [batchSuggestions, setBatchSuggestions] = useState([]);
+
+  // Drawer state
+  const [drawerState, setDrawerState] = useState({
+    open: false,
+    selectedInvoice: null,
+  });
+
   const { tokens } = useTokenList(chainId || 1);
 
   const handleChangePage = (event, newPage) => {
@@ -79,10 +109,71 @@ function ReceivedInvoice() {
     setPage(0);
   };
 
-  // Helper function to get token info
+  // UNIFORM ERROR HANDLER
+  const getDetailedErrorMessage = (error) => {
+    if (error.code === "CALL_EXCEPTION") {
+      if (error.reason === "missing revert data" || !error.reason) {
+        return "Transaction failed. This may be due to insufficient balance, contract issues, or network problems. Please check your balance and try again.";
+      }
+      return `Transaction failed: ${error.reason}`;
+    }
+
+    if (error.code === "ACTION_REJECTED" || error.code === 4001) {
+      return "Transaction was cancelled by user";
+    }
+
+    if (
+      error.message?.includes("insufficient balance") ||
+      error.message?.includes("insufficient funds")
+    ) {
+      return "Insufficient balance to complete this transaction";
+    }
+
+    if (
+      error.message?.includes("User rejected") ||
+      error.message?.includes("User denied")
+    ) {
+      return "Transaction was rejected in wallet";
+    }
+
+    if (error.message?.includes("network") || error.code === "NETWORK_ERROR") {
+      return "Network error. Please check your connection and try again";
+    }
+
+    if (error.message?.includes("gas")) {
+      return "Transaction failed due to gas estimation error. Please try again";
+    }
+
+    if (
+      error.message?.includes("cancelled") ||
+      error.message?.includes("cancel")
+    ) {
+      return "Cannot pay a cancelled invoice";
+    }
+
+    if (error.reason && error.reason !== "missing revert data") {
+      return `Transaction failed: ${error.reason}`;
+    }
+
+    if (error.message) {
+      const cleanMessage = error.message
+        .replace(
+          /\(action="[^"]*", data=[^,]*, reason=[^,]*, transaction=\{[^}]*\}, invocation=[^,]*, revert=[^,]*, code=[^,]*, version=[^)]*\)/g,
+          ""
+        )
+        .replace(/missing revert data/g, "transaction execution failed")
+        .trim();
+      return (
+        cleanMessage || "Payment failed. Please try again or contact support"
+      );
+    }
+
+    return "Payment failed. Please try again or contact support";
+  };
+
+  // Helper functions
   const getTokenInfo = (tokenAddress) => {
     if (!tokens || tokens.length === 0) return null;
-
     return tokens.find(
       (token) =>
         token.contract_address?.toLowerCase() === tokenAddress?.toLowerCase() ||
@@ -90,29 +181,415 @@ function ReceivedInvoice() {
     );
   };
 
-  // Helper function to get token logo
-  const getTokenLogo = (tokenAddress, fallbackLogo) => {
-    const tokenInfo = getTokenInfo(tokenAddress);
-    return (
-      tokenInfo?.image ||
-      tokenInfo?.logo ||
-      fallbackLogo ||
-      "/tokenImages/generic.png"
-    );
-  };
-
-  // Helper function to get token decimals
-  const getTokenDecimals = (tokenAddress, fallbackDecimals = 18) => {
-    const tokenInfo = getTokenInfo(tokenAddress);
-    return tokenInfo?.decimals || fallbackDecimals;
-  };
-
-  // Helper function to get token symbol
   const getTokenSymbol = (tokenAddress, fallbackSymbol = "TOKEN") => {
     const tokenInfo = getTokenInfo(tokenAddress);
     return tokenInfo?.symbol || fallbackSymbol;
   };
 
+  const detectBatchFromMetadata = (invoice) => {
+    if (invoice.batchInfo) {
+      return {
+        batchId: invoice.batchInfo.batchId,
+        batchSize: invoice.batchInfo.batchSize,
+        index: invoice.batchInfo.index,
+        batchType: invoice.batchInfo.batchType,
+      };
+    }
+    return null;
+  };
+
+  const findBatchSuggestions = (invoices) => {
+    const suggestions = [];
+    const groups = invoices
+      .filter((inv) => !inv.isPaid && !inv.isCancelled)
+      .reduce((acc, inv) => {
+        const issueDate = new Date(inv.issueDate).toDateString();
+        const key = `${inv.user?.address}_${
+          inv.paymentToken?.address || "ETH"
+        }_${issueDate}`;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(inv);
+        return acc;
+      }, {});
+
+    Object.entries(groups).forEach(([key, invoices]) => {
+      if (invoices.length >= 2) {
+        const totalAmount = invoices.reduce(
+          (sum, inv) => sum + parseFloat(inv.amountDue),
+          0
+        );
+        suggestions.push({
+          id: key,
+          invoices,
+          sender: invoices[0].user,
+          token: invoices[0].paymentToken,
+          totalAmount,
+          reason: `${invoices.length} invoices from same sender on same day`,
+          type: "same_day_sender",
+        });
+      }
+    });
+
+    return suggestions;
+  };
+
+  // UNIFORM BALANCE CHECK
+  const checkBalance = async (tokenAddress, amount, symbol, signer) => {
+    const userAddress = await signer.getAddress();
+
+    if (tokenAddress === ethers.ZeroAddress) {
+      const balance = await signer.provider.getBalance(userAddress);
+      const totalRequired =
+        ethers.parseUnits(amount.toString(), 18) + BigInt(fee);
+
+      if (balance < totalRequired) {
+        const requiredEth = ethers.formatEther(totalRequired);
+        const availableEth = ethers.formatEther(balance);
+        throw new Error(
+          `Insufficient ETH balance. Required: ${requiredEth} ETH, Available: ${availableEth} ETH`
+        );
+      }
+    } else {
+      const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
+      const balance = await tokenContract.balanceOf(userAddress);
+      const decimals = await tokenContract.decimals();
+      const requiredAmount = ethers.parseUnits(amount.toString(), decimals);
+
+      if (balance < requiredAmount) {
+        const availableFormatted = ethers.formatUnits(balance, decimals);
+        throw new Error(
+          `Insufficient ${symbol} balance. Required: ${amount} ${symbol}, Available: ${availableFormatted} ${symbol}`
+        );
+      }
+
+      const ethBalance = await signer.provider.getBalance(userAddress);
+      if (ethBalance < BigInt(fee)) {
+        const requiredEthFee = ethers.formatEther(fee);
+        const availableEth = ethers.formatEther(ethBalance);
+        throw new Error(
+          `Insufficient ETH for fees. Required: ${requiredEthFee} ETH, Available: ${availableEth} ETH`
+        );
+      }
+    }
+  };
+
+  const getGroupedInvoices = () => {
+    const grouped = new Map();
+    receivedInvoices.forEach((invoice) => {
+      if (!selectedInvoices.has(invoice.id)) return;
+
+      const tokenAddress = invoice.paymentToken?.address || ethers.ZeroAddress;
+      const tokenKey = `${tokenAddress}_${
+        invoice.paymentToken?.symbol || "ETH"
+      }`;
+
+      if (!grouped.has(tokenKey)) {
+        grouped.set(tokenKey, {
+          tokenAddress,
+          symbol: invoice.paymentToken?.symbol || "ETH",
+          logo: invoice.paymentToken?.logo,
+          decimals: invoice.paymentToken?.decimals || 18,
+          invoices: [],
+          totalAmount: 0,
+        });
+      }
+
+      const group = grouped.get(tokenKey);
+      group.invoices.push(invoice);
+      group.totalAmount += parseFloat(invoice.amountDue);
+    });
+    return grouped;
+  };
+
+  // Auto-dismiss error
+  useEffect(() => {
+    if (!showPaymentError) return;
+    const timer = setTimeout(() => {
+      setShowPaymentError(false);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [showPaymentError]);
+
+  const handleSelectInvoice = (invoiceId) => {
+    const invoice = receivedInvoices.find((inv) => inv.id === invoiceId);
+    if (invoice?.isPaid || invoice?.isCancelled) return;
+
+    setSelectedInvoices((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(invoiceId)) {
+        newSet.delete(invoiceId);
+      } else {
+        newSet.add(invoiceId);
+      }
+      return newSet;
+    });
+  };
+
+  const handleSelectAll = () => {
+    const unpaidInvoices = receivedInvoices.filter(
+      (inv) => !inv.isPaid && !inv.isCancelled
+    );
+    setSelectedInvoices(new Set(unpaidInvoices.map((inv) => inv.id)));
+  };
+
+  const handleClearAll = () => {
+    setSelectedInvoices(new Set());
+  };
+
+  const selectBatchSuggestion = (suggestion) => {
+    const invoiceIds = suggestion.invoices.map((inv) => inv.id);
+    setSelectedInvoices(new Set(invoiceIds));
+    toast.success(`Selected ${invoiceIds.length} invoices for batch payment`);
+  };
+
+  const payEntireBatch = async (batchId) => {
+    const batchInvoices = receivedInvoices.filter(
+      (inv) =>
+        inv.batchInfo?.batchId === batchId && !inv.isPaid && !inv.isCancelled
+    );
+
+    if (batchInvoices.length === 0) {
+      toast.error("No unpaid invoices found in this batch");
+      return;
+    }
+
+    setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
+    toast.info(
+      `Selected ${batchInvoices.length} invoices from batch #${batchId}`
+    );
+
+    setTimeout(() => {
+      handleBatchPayment();
+    }, 1000);
+  };
+
+  // UNIFORM INDIVIDUAL PAYMENT
+  const payInvoice = async (invoiceId, amountDue, tokenAddress) => {
+    if (!walletClient) {
+      setPaymentError(
+        "Wallet not connected. Please connect your wallet and try again."
+      );
+      setShowPaymentError(true);
+      return;
+    }
+
+    setPaymentLoading((prev) => ({ ...prev, [invoiceId]: true }));
+    setPaymentError("");
+    setShowPaymentError(false);
+
+    try {
+      const provider = new BrowserProvider(walletClient);
+      const signer = await provider.getSigner();
+      const contract = new Contract(
+        import.meta.env.VITE_CONTRACT_ADDRESS,
+        ChainvoiceABI,
+        signer
+      );
+
+      const invoice = receivedInvoices.find((inv) => inv.id === invoiceId);
+      if (invoice?.isCancelled) {
+        throw new Error("Cannot pay a cancelled invoice");
+      }
+
+      const fee = await contract.fee();
+      const isNativeToken = tokenAddress === ethers.ZeroAddress;
+      const tokenSymbol = getTokenSymbol(tokenAddress, "Token");
+
+      // BALANCE CHECK (same as batch)
+      try {
+        await checkBalance(tokenAddress, amountDue, tokenSymbol, signer);
+        toast.success("Balance check passed! Processing payment...");
+      } catch (balanceError) {
+        setPaymentError(balanceError.message);
+        setShowPaymentError(true);
+        return;
+      }
+
+      if (!isNativeToken) {
+        const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
+        const currentAllowance = await tokenContract.allowance(
+          await signer.getAddress(),
+          import.meta.env.VITE_CONTRACT_ADDRESS
+        );
+
+        const decimals = await tokenContract.decimals();
+        const amountDueInWei = ethers.parseUnits(String(amountDue), decimals);
+
+        if (currentAllowance < amountDueInWei) {
+          toast.info(`Requesting approval for ${tokenSymbol}...`);
+          const approveTx = await tokenContract.approve(
+            import.meta.env.VITE_CONTRACT_ADDRESS,
+            amountDueInWei
+          );
+          toast.info("Approval transaction submitted. Please wait...");
+          await approveTx.wait();
+          toast.success(`${tokenSymbol} approval completed successfully!`);
+        }
+
+        toast.info("Submitting payment transaction...");
+        const tx = await contract.payInvoice(BigInt(invoiceId), {
+          value: fee,
+        });
+        toast.info(
+          "Payment transaction submitted. Please wait for confirmation..."
+        );
+        await tx.wait();
+        toast.success(`Payment successful! Paid with ${tokenSymbol}`);
+      } else {
+        const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
+        const total = amountDueInWei + BigInt(fee);
+
+        toast.info("Submitting payment transaction...");
+        const tx = await contract.payInvoice(BigInt(invoiceId), {
+          value: total,
+        });
+        toast.info(
+          "Payment transaction submitted. Please wait for confirmation..."
+        );
+        await tx.wait();
+        toast.success("Payment successful! Paid with ETH");
+      }
+
+      const updatedInvoices = receivedInvoices.map((inv) =>
+        inv.id === invoiceId ? { ...inv, isPaid: true } : inv
+      );
+      setReceivedInvoice(updatedInvoices);
+    } catch (error) {
+      console.error("Payment failed:", error);
+      const errorMsg = getDetailedErrorMessage(error);
+      setPaymentError(errorMsg);
+      setShowPaymentError(true);
+      toast.error("Payment failed. Check error details for more information.");
+    } finally {
+      setPaymentLoading((prev) => ({ ...prev, [invoiceId]: false }));
+    }
+  };
+
+  // UNIFORM BATCH PAYMENT
+  const handleBatchPayment = async () => {
+    if (!walletClient || selectedInvoices.size === 0) return;
+
+    setBatchLoading(true);
+    setPaymentError("");
+    setShowPaymentError(false);
+
+    try {
+      const provider = new BrowserProvider(walletClient);
+      const signer = await provider.getSigner();
+      const contract = new Contract(
+        import.meta.env.VITE_CONTRACT_ADDRESS,
+        ChainvoiceABI,
+        signer
+      );
+
+      const grouped = getGroupedInvoices();
+
+      // BALANCE CHECK (same as individual)
+      toast.info("Checking balances...");
+
+      for (const [tokenKey, group] of grouped.entries()) {
+        try {
+          await checkBalance(
+            group.tokenAddress,
+            group.totalAmount,
+            group.symbol,
+            signer
+          );
+        } catch (error) {
+          setPaymentError(error.message);
+          setShowPaymentError(true);
+          toast.error(
+            "Balance check failed. Check error details for more information."
+          );
+          setBatchLoading(false);
+          return;
+        }
+      }
+
+      toast.success("Balance checks passed! Processing payments...");
+
+      // Process payments
+      for (const [tokenKey, group] of grouped.entries()) {
+        const { tokenAddress, symbol, decimals, invoices } = group;
+        const invoiceIds = invoices.map((inv) => BigInt(inv.id));
+
+        if (invoiceIds.length > 50) {
+          throw new Error(
+            `Batch size limit exceeded for ${symbol}. Max 50 invoices per batch.`
+          );
+        }
+
+        let totalAmount = BigInt(0);
+        for (const invoice of invoices) {
+          const amount = ethers.parseUnits(
+            invoice.amountDue.toString(),
+            decimals
+          );
+          totalAmount += amount;
+        }
+
+        const feePerInvoice = await contract.fee();
+        const totalFee = feePerInvoice * BigInt(invoiceIds.length);
+        const isNativeToken = tokenAddress === ethers.ZeroAddress;
+
+        if (!isNativeToken) {
+          const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
+          const currentAllowance = await tokenContract.allowance(
+            await signer.getAddress(),
+            import.meta.env.VITE_CONTRACT_ADDRESS
+          );
+
+          if (currentAllowance < totalAmount) {
+            toast.info(`Approving ${symbol} for spending...`);
+            const approveTx = await tokenContract.approve(
+              import.meta.env.VITE_CONTRACT_ADDRESS,
+              totalAmount
+            );
+            await approveTx.wait();
+            toast.success(`${symbol} approved successfully!`);
+          }
+
+          const tx = await contract.payInvoicesBatch(invoiceIds, {
+            value: totalFee,
+          });
+          await tx.wait();
+          toast.success(
+            `Successfully paid ${invoices.length} invoices with ${symbol}!`
+          );
+        } else {
+          const tx = await contract.payInvoicesBatch(invoiceIds, {
+            value: totalAmount + totalFee,
+          });
+          await tx.wait();
+          toast.success(
+            `Successfully paid ${invoices.length} invoices with ETH!`
+          );
+        }
+
+        const updatedInvoices = receivedInvoices.map((inv) =>
+          invoiceIds.some((id) => id === BigInt(inv.id))
+            ? { ...inv, isPaid: true }
+            : inv
+        );
+        setReceivedInvoice(updatedInvoices);
+      }
+
+      setSelectedInvoices(new Set());
+      toast.success("All batch payments completed successfully!");
+    } catch (error) {
+      console.error("Batch payment error:", error);
+      const errorMsg = getDetailedErrorMessage(error);
+      setPaymentError(errorMsg);
+      setShowPaymentError(true);
+      toast.error(
+        "Batch payment failed. Check error details for more information."
+      );
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
+  // Initialize Lit Protocol
   useEffect(() => {
     const initLit = async () => {
       try {
@@ -139,6 +616,7 @@ function ReceivedInvoice() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
+  // Fetch invoices
   useEffect(() => {
     if (!walletClient || !address || !litReady) return;
 
@@ -160,7 +638,8 @@ function ReceivedInvoice() {
 
         const litNodeClient = litClientRef.current;
         if (!litNodeClient) {
-          alert("Lit client not initialized");
+          setError("Lit client not initialized. Please refresh the page.");
+          setLoading(false);
           return;
         }
 
@@ -171,10 +650,8 @@ function ReceivedInvoice() {
         );
 
         const res = await contract.getReceivedInvoices(address);
-        console.log("Raw invoices data:", res);
 
         if (!res || !Array.isArray(res) || res.length === 0) {
-          console.warn("No invoices found.");
           setReceivedInvoice([]);
           setLoading(false);
           return;
@@ -196,7 +673,6 @@ function ReceivedInvoice() {
 
             const currentUserAddress = address.toLowerCase();
             if (currentUserAddress !== from && currentUserAddress !== to) {
-              console.warn(`Unauthorized access attempt for invoice ${id}`);
               continue;
             }
 
@@ -269,7 +745,10 @@ function ReceivedInvoice() {
             parsed["isPaid"] = isPaid;
             parsed["isCancelled"] = isCancelled;
 
-            // Enhance with token details using the new token fetching system
+            const batchInfo = detectBatchFromMetadata(parsed);
+            if (batchInfo) {
+              parsed.batchInfo = batchInfo;
+            }
             if (parsed.paymentToken?.address) {
               const tokenInfo = getTokenInfo(parsed.paymentToken.address);
               if (tokenInfo) {
@@ -306,14 +785,9 @@ function ReceivedInvoice() {
                     symbol,
                     name,
                     decimals: Number(decimals),
-                    logo: "/tokenImages/generic.png", // Generic fallback
+                    logo: "/tokenImages/generic.png",
                   };
                 } catch (error) {
-                  console.error(
-                    "Failed to fetch token info from blockchain:",
-                    error
-                  );
-                  // Keep existing data or set defaults
                   parsed.paymentToken.logo =
                     parsed.paymentToken.logo || "/tokenImages/generic.png";
                 }
@@ -327,6 +801,8 @@ function ReceivedInvoice() {
         }
 
         setReceivedInvoice(decryptedInvoices);
+        const suggestions = findBatchSuggestions(decryptedInvoices);
+        setBatchSuggestions(suggestions);
         const fee = await contract.fee();
         setFee(fee);
       } catch (error) {
@@ -339,102 +815,6 @@ function ReceivedInvoice() {
 
     fetchReceivedInvoices();
   }, [walletClient, litReady, address, tokens]);
-
-  const payInvoice = async (invoiceId, amountDue, tokenAddress) => {
-    if (!walletClient) {
-      console.error("Wallet not connected");
-      return;
-    }
-
-    setPaymentLoading((prev) => ({ ...prev, [invoiceId]: true }));
-
-    try {
-      const provider = new BrowserProvider(walletClient);
-      const signer = await provider.getSigner();
-      const contract = new Contract(
-        import.meta.env.VITE_CONTRACT_ADDRESS,
-        ChainvoiceABI,
-        signer
-      );
-      const invoice = receivedInvoices.find((inv) => inv.id === invoiceId);
-      if (invoice?.isCancelled) {
-        throw new Error("Cannot pay a cancelled invoice");
-      }
-      const fee = await contract.fee();
-      const isNativeToken = tokenAddress === ethers.ZeroAddress;
-
-      if (!ethers.isAddress(tokenAddress)) {
-        throw new Error(`Invalid token address: ${tokenAddress}`);
-      }
-
-      const tokenSymbol = getTokenSymbol(tokenAddress, "Token");
-
-      if (!isNativeToken) {
-        const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
-
-        const currentAllowance = await tokenContract.allowance(
-          await signer.getAddress(),
-          import.meta.env.VITE_CONTRACT_ADDRESS
-        );
-
-        const decimals = await tokenContract.decimals();
-        const amountDueInWei = ethers.parseUnits(String(amountDue), decimals);
-
-        if (currentAllowance < amountDueInWei) {
-          const approveTx = await tokenContract.approve(
-            import.meta.env.VITE_CONTRACT_ADDRESS,
-            amountDueInWei
-          );
-
-          await approveTx.wait();
-          alert(
-            `Approval for ${tokenSymbol} completed! Now processing payment...`
-          );
-        }
-
-        const tx = await contract.payInvoice(BigInt(invoiceId), {
-          value: fee,
-        });
-
-        await tx.wait();
-        alert(`Payment successful in ${tokenSymbol}!`);
-      } else {
-        const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
-        const total = amountDueInWei + BigInt(fee);
-
-        const tx = await contract.payInvoice(BigInt(invoiceId), {
-          value: total,
-        });
-
-        await tx.wait();
-        alert("Payment successful in ETH!");
-      }
-
-      // Refresh invoice status
-      const updatedInvoices = receivedInvoices.map((inv) =>
-        inv.id === invoiceId ? { ...inv, isPaid: true } : inv
-      );
-      setReceivedInvoice(updatedInvoices);
-    } catch (error) {
-      console.error("Payment failed:", error);
-      if (error.code === "ACTION_REJECTED") {
-        toast.error("Transaction was rejected by user");
-      } else if (error.message.includes("insufficient balance")) {
-        toast.error("Insufficient balance for this transaction");
-      } else if (error.message.includes("cancelled")) {
-        toast.error("Cannot pay a cancelled invoice");
-      } else {
-        toast.error(`Payment failed: ${error.reason || error.message}`);
-      }
-    } finally {
-      setPaymentLoading((prev) => ({ ...prev, [invoiceId]: false }));
-    }
-  };
-
-  const [drawerState, setDrawerState] = useState({
-    open: false,
-    selectedInvoice: null,
-  });
 
   const toggleDrawer = (invoice) => (event) => {
     if (
@@ -454,13 +834,19 @@ function ReceivedInvoice() {
     const element = document.getElementById("invoice-print");
     if (!element) return;
 
-    const canvas = await html2canvas(element, { scale: 2 });
-    const data = canvas.toDataURL("image/png");
+    try {
+      const canvas = await html2canvas(element, { scale: 2 });
+      const data = canvas.toDataURL("image/png");
 
-    const link = document.createElement("a");
-    link.download = `invoice-${drawerState.selectedInvoice.id}.png`;
-    link.href = data;
-    link.click();
+      const link = document.createElement("a");
+      link.download = `invoice-${drawerState.selectedInvoice.id}.png`;
+      link.href = data;
+      link.click();
+
+      toast.success("Invoice downloaded successfully!");
+    } catch (error) {
+      toast.error("Failed to download invoice. Please try again.");
+    }
   };
 
   const switchNetwork = async () => {
@@ -468,12 +854,15 @@ function ReceivedInvoice() {
       setNetworkLoading(true);
       await window.ethereum.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0xaa36a7" }], // Sepolia chain ID
+        params: [{ chainId: "0xaa36a7" }],
       });
       setError(null);
+      toast.success("Successfully switched to Sepolia network!");
     } catch (error) {
       console.error("Network switch failed:", error);
-      alert("Failed to switch network. Please switch to Sepolia manually.");
+      toast.error(
+        "Failed to switch network. Please switch to Sepolia manually in your wallet."
+      );
     } finally {
       setNetworkLoading(false);
     }
@@ -490,12 +879,18 @@ function ReceivedInvoice() {
     return date.toLocaleString();
   };
 
+  const unpaidInvoices = receivedInvoices.filter(
+    (inv) => !inv.isPaid && !inv.isCancelled
+  );
+  const selectedCount = selectedInvoices.size;
+  const grouped = getGroupedInvoices();
+
   return (
     <>
       <div className="flex justify-center">
         <WalletConnectionAlert
           show={showWalletAlert}
-          message="Connect your wallet to create and manage invoices"
+          message="Connect your wallet to manage and pay invoices"
           onDismiss={() => setShowWalletAlert(false)}
         />
       </div>
@@ -514,7 +909,7 @@ function ReceivedInvoice() {
               <button
                 onClick={switchNetwork}
                 disabled={networkLoading}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors"
               >
                 {networkLoading ? (
                   <>
@@ -531,6 +926,259 @@ function ReceivedInvoice() {
               </button>
             )}
           </div>
+
+          {/* UNIFORM ERROR DISPLAY */}
+          <Snackbar
+            open={showPaymentError}
+            anchorOrigin={{ vertical: "top", horizontal: "right" }}
+            onClose={() => setShowPaymentError(false)}
+            autoHideDuration={8000}
+            sx={{ mt: 8 }}
+          >
+            <Alert
+              severity="error"
+              variant="filled"
+              sx={{
+                bgcolor: "#d32f2f",
+                color: "#fff",
+                minWidth: 400,
+                maxWidth: 500,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+              }}
+              action={
+                <IconButton
+                  aria-label="close"
+                  color="inherit"
+                  size="small"
+                  onClick={() => setShowPaymentError(false)}
+                >
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              }
+            >
+              <Box sx={{ display: "flex", alignItems: "center" }}>
+                <ErrorIcon sx={{ mr: 1 }} />
+                <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                  {paymentError}
+                </Typography>
+              </Box>
+            </Alert>
+          </Snackbar>
+
+          {/* Smart Batch Suggestions */}
+          {batchSuggestions.length > 0 && (
+            <Paper
+              sx={{
+                mb: 3,
+                p: 2,
+                bgcolor: "rgba(25, 118, 210, 0.08)",
+                border: "1px solid rgba(25, 118, 210, 0.23)",
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{
+                  mb: 2,
+                  display: "flex",
+                  alignItems: "center",
+                  color: "#1565c0",
+                }}
+              >
+                <LightbulbIcon sx={{ mr: 1, color: "#ff9800" }} />
+                💡 Smart Batch Suggestions
+              </Typography>
+              {batchSuggestions.map((suggestion) => (
+                <Box
+                  key={suggestion.id}
+                  sx={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    bgcolor: "white",
+                    p: 2,
+                    mb: 1,
+                    borderRadius: 1,
+                    border: "1px solid rgba(25, 118, 210, 0.2)",
+                  }}
+                >
+                  <Box>
+                    <Typography
+                      variant="body1"
+                      sx={{ fontWeight: 600, color: "#1e293b" }}
+                    >
+                      {suggestion.invoices.length} invoices
+                      {suggestion.sender && ` from ${suggestion.sender.fname}`}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: "#64748b" }}>
+                      ({suggestion.reason})
+                    </Typography>
+                  </Box>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+                    <Typography variant="body2" sx={{ color: "#64748b" }}>
+                      {suggestion.totalAmount.toFixed(4)}{" "}
+                      {suggestion.token?.symbol || "ETH"}
+                    </Typography>
+                    <Button
+                      onClick={() => selectBatchSuggestion(suggestion)}
+                      variant="contained"
+                      size="small"
+                      sx={{ minWidth: "auto" }}
+                    >
+                      Select & Pay
+                    </Button>
+                  </Box>
+                </Box>
+              ))}
+            </Paper>
+          )}
+
+          {/* Batch Actions Panel */}
+          {unpaidInvoices.length > 0 && (
+            <Paper
+              sx={{
+                mb: 3,
+                p: 2,
+                bgcolor: "rgba(255,255,255,0.95)",
+                border: "1px solid rgba(0,0,0,0.12)",
+              }}
+            >
+              <Box
+                sx={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  mb: 2,
+                }}
+              >
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                  <PaymentIcon sx={{ color: "success.main" }} />
+                  <Typography variant="h6" sx={{ color: "#1e293b" }}>
+                    Batch Payment
+                  </Typography>
+                  <Chip
+                    label={`${selectedCount} selected`}
+                    color={selectedCount > 0 ? "success" : "default"}
+                    size="small"
+                  />
+                </Box>
+                <Box sx={{ display: "flex", gap: 1 }}>
+                  <Button
+                    startIcon={<SelectAllIcon />}
+                    onClick={handleSelectAll}
+                    variant="outlined"
+                    size="small"
+                    disabled={unpaidInvoices.length === 0}
+                  >
+                    Select All ({unpaidInvoices.length})
+                  </Button>
+                  <Button
+                    startIcon={<ClearAllIcon />}
+                    onClick={handleClearAll}
+                    variant="outlined"
+                    size="small"
+                    disabled={selectedCount === 0}
+                  >
+                    Clear
+                  </Button>
+                </Box>
+              </Box>
+
+              {selectedCount > 0 && (
+                <>
+                  <Divider sx={{ mb: 2 }} />
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ mb: 2, color: "#1e293b" }}
+                  >
+                    Payment Summary:
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 1,
+                      mb: 2,
+                    }}
+                  >
+                    {Array.from(grouped.entries()).map(([tokenKey, group]) => (
+                      <Box
+                        key={tokenKey}
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          bgcolor: "#f8fafc",
+                          p: 1.5,
+                          borderRadius: 1,
+                          border: "1px solid #e2e8f0",
+                        }}
+                      >
+                        <Box
+                          sx={{ display: "flex", alignItems: "center", gap: 1 }}
+                        >
+                          {group.logo ? (
+                            <img
+                              src={group.logo}
+                              alt={group.symbol}
+                              style={{ width: 24, height: 24 }}
+                              onError={(e) => {
+                                e.target.src = "/tokenImages/generic.png";
+                              }}
+                            />
+                          ) : (
+                            <CurrencyExchangeIcon sx={{ color: "#64748b" }} />
+                          )}
+                          <Typography
+                            sx={{ fontWeight: 600, color: "#1e293b" }}
+                          >
+                            {group.symbol}
+                          </Typography>
+                          <Typography
+                            sx={{ color: "#64748b", fontSize: "0.875rem" }}
+                          >
+                            ({group.invoices.length} invoices)
+                          </Typography>
+                        </Box>
+                        <Typography
+                          sx={{ color: "success.main", fontWeight: "bold" }}
+                        >
+                          {group.totalAmount.toFixed(6)} {group.symbol}
+                        </Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                  <Button
+                    onClick={handleBatchPayment}
+                    variant="contained"
+                    color="success"
+                    size="large"
+                    disabled={batchLoading}
+                    startIcon={
+                      batchLoading ? (
+                        <CircularProgress size={20} color="inherit" />
+                      ) : (
+                        <PaymentIcon />
+                      )
+                    }
+                    fullWidth
+                  >
+                    {batchLoading
+                      ? "Processing Batch Payment..."
+                      : `Pay ${selectedCount} Selected Invoices`}
+                  </Button>
+                </>
+              )}
+
+              {selectedCount === 0 && (
+                <Alert
+                  severity="info"
+                  sx={{ bgcolor: "#e3f2fd", color: "#1565c0" }}
+                >
+                  Select one or more unpaid invoices to enable batch payment
+                </Alert>
+              )}
+            </Paper>
+          )}
 
           <Paper
             sx={{
@@ -558,8 +1206,12 @@ function ReceivedInvoice() {
               </div>
             ) : error ? (
               <div className="p-6 text-center">
-                <div className="bg-red-50 p-4 rounded-lg">
-                  <p className="text-red-600 font-medium">{error}</p>
+                <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                  <ErrorIcon
+                    className="text-red-400 mb-2"
+                    style={{ fontSize: 32 }}
+                  />
+                  <p className="text-red-700 font-medium">{error}</p>
                 </div>
               </div>
             ) : receivedInvoices.length === 0 ? (
@@ -594,7 +1246,32 @@ function ReceivedInvoice() {
                               borderBottom: "1px solid #f1f5f9",
                             }}
                           >
-                            {column.label}
+                            {column.id === "select" ? (
+                              <FormControlLabel
+                                control={
+                                  <Checkbox
+                                    indeterminate={
+                                      selectedCount > 0 &&
+                                      selectedCount < unpaidInvoices.length
+                                    }
+                                    checked={
+                                      selectedCount === unpaidInvoices.length &&
+                                      unpaidInvoices.length > 0
+                                    }
+                                    onChange={(e) => {
+                                      if (e.target.checked) {
+                                        handleSelectAll();
+                                      } else {
+                                        handleClearAll();
+                                      }
+                                    }}
+                                  />
+                                }
+                                label=""
+                              />
+                            ) : (
+                              column.label
+                            )}
                           </TableCell>
                         ))}
                       </TableRow>
@@ -612,9 +1289,20 @@ function ReceivedInvoice() {
                             sx={{
                               "&:last-child td": { borderBottom: 0 },
                               "&:hover": { backgroundColor: "#f8fafc" },
+                              backgroundColor: selectedInvoices.has(invoice.id)
+                                ? "rgba(34, 197, 94, 0.05)"
+                                : "transparent",
                             }}
                           >
-                            {/* Client Column */}
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedInvoices.has(invoice.id)}
+                                onChange={() => handleSelectInvoice(invoice.id)}
+                                disabled={invoice.isPaid || invoice.isCancelled}
+                                color="success"
+                              />
+                            </TableCell>
+
                             <TableCell>
                               <div className="flex items-center">
                                 <Avatar
@@ -636,11 +1324,29 @@ function ReceivedInvoice() {
                                   <div className="text-xs text-gray-500">
                                     {invoice.user?.email}
                                   </div>
+                                  {invoice.batchInfo && (
+                                    <div className="mt-1">
+                                      <Chip
+                                        icon={<LayersIcon />}
+                                        label={`Batch #${invoice.batchInfo.batchId.slice(
+                                          -4
+                                        )} (${invoice.batchInfo.index + 1}/${
+                                          invoice.batchInfo.batchSize
+                                        })`}
+                                        size="small"
+                                        variant="outlined"
+                                        color="secondary"
+                                        sx={{
+                                          fontSize: "0.7rem",
+                                          height: "20px",
+                                        }}
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </TableCell>
 
-                            {/* Sender Column */}
                             <TableCell>
                               <Tooltip title={invoice.user?.address}>
                                 <span className="text-sm font-mono bg-gray-100 px-2 py-1 rounded">
@@ -649,7 +1355,6 @@ function ReceivedInvoice() {
                               </Tooltip>
                             </TableCell>
 
-                            {/* Amount Column */}
                             <TableCell align="right">
                               <div className="flex items-center justify-end">
                                 {invoice.paymentToken?.logo ? (
@@ -674,7 +1379,6 @@ function ReceivedInvoice() {
                               </div>
                             </TableCell>
 
-                            {/* Status Column */}
                             <TableCell>
                               {invoice.isCancelled ? (
                                 <Chip
@@ -701,7 +1405,6 @@ function ReceivedInvoice() {
                                 />
                               )}
                             </TableCell>
-                            {/* Date Column */}
                             <TableCell>
                               <span className="text-sm text-gray-600">
                                 {formatDate(invoice.issueDate)}
@@ -726,8 +1429,36 @@ function ReceivedInvoice() {
                                   </IconButton>
                                 </Tooltip>
 
+                                {invoice.batchInfo &&
+                                  !invoice.isPaid &&
+                                  !invoice.isCancelled && (
+                                    <Tooltip title="Pay Entire Batch">
+                                      <IconButton
+                                        size="small"
+                                        onClick={() =>
+                                          payEntireBatch(
+                                            invoice.batchInfo.batchId
+                                          )
+                                        }
+                                        sx={{
+                                          backgroundColor: "#f3e8ff",
+                                          "&:hover": {
+                                            backgroundColor: "#e9d5ff",
+                                          },
+                                        }}
+                                      >
+                                        <LayersIcon
+                                          fontSize="small"
+                                          sx={{ color: "#9333ea" }}
+                                        />
+                                      </IconButton>
+                                    </Tooltip>
+                                  )}
+
                                 {!invoice.isPaid && !invoice.isCancelled && (
-                                  <button
+                                  <Button
+                                    variant="contained"
+                                    size="small"
                                     onClick={() =>
                                       payInvoice(
                                         invoice.id,
@@ -737,33 +1468,51 @@ function ReceivedInvoice() {
                                       )
                                     }
                                     disabled={paymentLoading[invoice.id]}
-                                    className={`px-3 py-1 rounded-md text-sm font-medium flex items-center ${
-                                      paymentLoading[invoice.id]
-                                        ? "bg-gray-300 text-gray-600"
-                                        : "bg-green-600 hover:bg-green-700 text-white"
-                                    }`}
-                                  >
-                                    {paymentLoading[invoice.id] ? (
-                                      <>
+                                    sx={{
+                                      bgcolor: paymentLoading[invoice.id]
+                                        ? "grey.400"
+                                        : "success.main",
+                                      color: "white",
+                                      minWidth: "auto",
+                                      px: 2,
+                                      py: 0.5,
+                                      fontSize: "0.75rem",
+                                      "&:hover": {
+                                        bgcolor: paymentLoading[invoice.id]
+                                          ? "grey.400"
+                                          : "success.dark",
+                                      },
+                                    }}
+                                    startIcon={
+                                      paymentLoading[invoice.id] ? (
                                         <CircularProgress
                                           size={14}
-                                          className="mr-2"
                                           color="inherit"
                                         />
-                                        Processing...
-                                      </>
-                                    ) : (
-                                      "Pay Now"
-                                    )}
-                                  </button>
+                                      ) : null
+                                    }
+                                  >
+                                    {paymentLoading[invoice.id]
+                                      ? "Processing..."
+                                      : "Pay Now"}
+                                  </Button>
                                 )}
                                 {invoice.isCancelled && (
-                                  <button
+                                  <Button
+                                    variant="outlined"
+                                    size="small"
                                     disabled={true}
-                                    className="px-3 py-1 rounded-md text-sm font-medium flex items-center bg-gray-300 text-gray-600"
+                                    sx={{
+                                      color: "grey.600",
+                                      borderColor: "grey.400",
+                                      minWidth: "auto",
+                                      px: 2,
+                                      py: 0.5,
+                                      fontSize: "0.75rem",
+                                    }}
                                   >
                                     Cancelled
-                                  </button>
+                                  </Button>
                                 )}
                               </div>
                             </TableCell>
@@ -823,7 +1572,6 @@ function ReceivedInvoice() {
                         voice
                       </p>
                     </div>
-
                     <p className="text-gray-500 text-sm mt-2">
                       Powered by Chainvoice
                     </p>
@@ -1075,19 +1823,21 @@ function ReceivedInvoice() {
                   </div>
                 </div>
                 <div className="mt-8 flex justify-between items-center">
-                  <button
+                  <Button
                     onClick={toggleDrawer(null)}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    variant="outlined"
+                    sx={{ px: 3, py: 1 }}
                   >
                     Close
-                  </button>
-                  <button
+                  </Button>
+                  <Button
                     onClick={handlePrint}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
+                    variant="contained"
+                    startIcon={<DownloadIcon />}
+                    sx={{ px: 3, py: 1 }}
                   >
-                    <DownloadIcon className="mr-2" fontSize="small" />
                     Download Invoice
-                  </button>
+                  </Button>
                 </div>
               </div>
             </>
