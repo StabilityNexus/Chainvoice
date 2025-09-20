@@ -30,45 +30,45 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         
-      # Detect whether project uses npm or yarn by checking lock files
+      # Detect package manager with robust lockfile handling
       - name: Detect package manager
         id: detect-package-manager
         run: |
+          FRONTEND="${{ github.workspace }}/frontend"
           # Check for yarn.lock first in frontend directory
-          if [ -f "${{ github.workspace }}/frontend/yarn.lock" ]; then
+          if [ -f "$FRONTEND/yarn.lock" ]; then
             echo "manager=yarn" >> $GITHUB_OUTPUT
             echo "command=install" >> $GITHUB_OUTPUT
             echo "runner=yarn" >> $GITHUB_OUTPUT
+            echo "lockfile_path=frontend/yarn.lock" >> $GITHUB_OUTPUT
             exit 0
-          # Check for package.json in frontend directory (npm)
-          elif [ -f "${{ github.workspace }}/frontend/package.json" ]; then
+          # Check for package-lock.json (prefer npm ci when lockfile exists)
+          elif [ -f "$FRONTEND/package-lock.json" ]; then
             echo "manager=npm" >> $GITHUB_OUTPUT
             echo "command=ci" >> $GITHUB_OUTPUT
             echo "runner=npm" >> $GITHUB_OUTPUT
+            echo "lockfile_path=frontend/package-lock.json" >> $GITHUB_OUTPUT
+            exit 0
+          # Fallback to npm install when only package.json exists
+          elif [ -f "$FRONTEND/package.json" ]; then
+            echo "manager=npm" >> $GITHUB_OUTPUT
+            echo "command=install" >> $GITHUB_OUTPUT
+            echo "runner=npm" >> $GITHUB_OUTPUT
+            echo "lockfile_path=frontend/package-lock.json" >> $GITHUB_OUTPUT
             exit 0
           else
             # Neither found - fail the build
-            echo "Unable to determine package manager"
+            echo "Unable to determine package manager (missing frontend/)"
             exit 1
           fi
           
-      # Setup Node.js environment
+      # Setup Node.js environment with caching
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          
-      # Cache node_modules and npm cache for faster builds
-      - name: Cache node modules
-        uses: actions/cache@v4
-        with:
-          path: |
-            frontend/node_modules  # Cache installed packages
-            ~/.npm                 # Cache npm's global cache
-          # Create unique cache key based on package-lock.json content
-          key: ${{ runner.os }}-node-${{ hashFiles('frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-node-  # Fallback to any cached version
+          cache: ${{ steps.detect-package-manager.outputs.manager }}
+          cache-dependency-path: ${{ steps.detect-package-manager.outputs.lockfile_path }}
             
       # Configure GitHub Pages
       - name: Setup Pages
