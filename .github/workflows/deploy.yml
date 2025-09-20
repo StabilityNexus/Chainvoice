@@ -54,7 +54,7 @@ jobs:
             echo "manager=npm" >> $GITHUB_OUTPUT
             echo "command=install" >> $GITHUB_OUTPUT
             echo "runner=npm" >> $GITHUB_OUTPUT
-            echo "lockfile_path=frontend/package-lock.json" >> $GITHUB_OUTPUT
+            echo "lockfile_path=" >> $GITHUB_OUTPUT
             exit 0
           else
             # Neither found - fail the build
@@ -62,7 +62,7 @@ jobs:
             exit 1
           fi
           
-      # Setup Node.js environment with caching
+      # Setup Node.js environment with built-in caching
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -77,26 +77,26 @@ jobs:
       # Install project dependencies using detected package manager
       - name: Install dependencies
         run: ${{ steps.detect-package-manager.outputs.manager }} ${{ steps.detect-package-manager.outputs.command }}
-        working-directory: ./frontend  # Run command in frontend subfolder
+        working-directory: ./frontend
         
       # Build the React app using Vite
       - name: Build with Vite
         run: ${{ steps.detect-package-manager.outputs.runner }} run build
-        working-directory: ./frontend  # Run command in frontend subfolder
+        working-directory: ./frontend
         
       # Upload the built files for deployment
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./frontend/dist  # Vite builds to dist/ directory
+          path: ./frontend/dist
 
   # Deployment job - deploys the built files to GitHub Pages
   deploy:
     environment:
       name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}  # URL where site will be available
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
-    needs: build  # Wait for build job to complete successfully
+    needs: build
     steps:
       # Deploy the uploaded artifact to GitHub Pages
       - name: Deploy to GitHub Pages
