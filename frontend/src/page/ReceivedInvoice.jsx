@@ -749,7 +749,6 @@ function ReceivedInvoice() {
             if (batchInfo) {
               parsed.batchInfo = batchInfo;
             }
-
             if (parsed.paymentToken?.address) {
               const tokenInfo = getTokenInfo(parsed.paymentToken.address);
               if (tokenInfo) {
@@ -761,6 +760,7 @@ function ReceivedInvoice() {
                   symbol: tokenInfo.symbol || parsed.paymentToken.symbol,
                 };
               } else {
+                // Fallback: try to fetch token info from blockchain if not in our list
                 try {
                   const tokenContract = new ethers.Contract(
                     parsed.paymentToken.address,
@@ -1405,7 +1405,6 @@ function ReceivedInvoice() {
                                 />
                               )}
                             </TableCell>
-
                             <TableCell>
                               <span className="text-sm text-gray-600">
                                 {formatDate(invoice.issueDate)}
