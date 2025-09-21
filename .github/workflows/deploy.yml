@@ -30,17 +30,22 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
-      # Install dependencies
+      # Install dependencies with proper command detection
       - name: Install dependencies
-        run: npm install
-        working-directory: ./frontend  # remove this line if project is root
+        run: |
+          if [ -f "./frontend/package-lock.json" ]; then
+            npm ci
+          else
+            npm install
+          fi
+        working-directory: ./frontend
 
       # Build project
       - name: Build
         run: npm run build
-        working-directory: ./frontend  # remove if project is root
+        working-directory: ./frontend
 
       # Setup Pages
       - name: Setup Pages
@@ -50,7 +55,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: ./frontend/dist  # replace with './dist' if project is root
+          path: ./frontend/dist
 
       # Deploy to GitHub Pages
       - name: Deploy to GitHub Pages
