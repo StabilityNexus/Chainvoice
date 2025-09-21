@@ -5,7 +5,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 export default defineConfig({
   plugins: [react(), nodePolyfills()],
-  base:'/Chainvoice/',
+  base:'/',
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
