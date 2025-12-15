@@ -173,10 +173,10 @@ function SentInvoice() {
         );
 
         const res = await contract.getSentInvoices(address);
-        console.log("Raw invoices data:", res);
+
 
         if (!res || !Array.isArray(res) || res.length === 0) {
-          console.warn("No invoices found.");
+
           setSentInvoices([]);
           setLoading(false);
           return;
@@ -198,7 +198,6 @@ function SentInvoice() {
 
             const currentUserAddress = address.toLowerCase();
             if (currentUserAddress !== from && currentUserAddress !== to) {
-              console.warn(`Unauthorized access attempt for invoice ${id}`);
               continue;
             }
 
@@ -335,7 +334,6 @@ function SentInvoice() {
         console.error("Decryption error:", error);
         setError("Failed to fetch invoices. Please try again.");
       } finally {
-        console.log(sentInvoices);
         setLoading(false);
       }
     };
@@ -889,11 +887,11 @@ function SentInvoice() {
                     <p className="text-xs text-gray-600">
                       {drawerState.selectedInvoice.paymentToken?.address
                         ? `${drawerState.selectedInvoice.paymentToken.address.substring(
-                            0,
-                            10
-                          )}......${drawerState.selectedInvoice.paymentToken.address.substring(
-                            33
-                          )}`
+                          0,
+                          10
+                        )}......${drawerState.selectedInvoice.paymentToken.address.substring(
+                          33
+                        )}`
                         : "Native Currency"}
                     </p>
                   </div>
@@ -979,12 +977,11 @@ function SentInvoice() {
                   <span className="font-bold text-lg">
                     {drawerState.selectedInvoice.paymentToken?.symbol === "ETH"
                       ? `${(
-                          parseFloat(drawerState.selectedInvoice.amountDue) +
-                          parseFloat(ethers.formatUnits(fee))
-                        ).toFixed(6)} ETH`
-                      : `${drawerState.selectedInvoice.amountDue} ${
-                          drawerState.selectedInvoice.paymentToken?.symbol
-                        } + ${ethers.formatUnits(fee)} ETH`}
+                        parseFloat(drawerState.selectedInvoice.amountDue) +
+                        parseFloat(ethers.formatUnits(fee))
+                      ).toFixed(6)} ETH`
+                      : `${drawerState.selectedInvoice.amountDue} ${drawerState.selectedInvoice.paymentToken?.symbol
+                      } + ${ethers.formatUnits(fee)} ETH`}
                   </span>
                 </div>
               </div>
