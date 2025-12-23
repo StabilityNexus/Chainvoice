@@ -1,5 +1,5 @@
 // AppLayout.js
-import Footer from "@/components/Footer";
+
 import Navbar from "@/components/Navbar";
 import React from "react";
 import { Outlet } from "react-router-dom";
@@ -11,7 +11,6 @@ function Applayout() {
       <main className="flex-1 pt-20 mx-auto w-full">
         <Outlet />
       </main>
-      <Footer />
     </div>
   );
 }
