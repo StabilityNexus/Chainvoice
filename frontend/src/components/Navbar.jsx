@@ -220,7 +220,7 @@ function Navbar() {
 
           {/* Mobile menu button */}
           <div className="md:hidden flex items-center">
-            <motion.div
+            {/* <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="mr-4"
@@ -230,7 +230,7 @@ function Navbar() {
                 chainStatus="none"
                 showBalance={false}
               />
-            </motion.div>
+            </motion.div> */}
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
