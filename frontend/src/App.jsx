@@ -25,8 +25,8 @@ import ReceivedInvoice from "./page/ReceivedInvoice";
 const AllChains = [...Object.values(chains), citreaTestnet];
 
 export const config = getDefaultConfig({
-  appName: "My RainbowKit App",
-  projectId: "YOUR_PROJECT_ID",
+  appName: "Chainvoice",
+  projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
   chains: AllChains,
   ssr: true,
 });
