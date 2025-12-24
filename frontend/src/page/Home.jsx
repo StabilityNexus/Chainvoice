@@ -84,6 +84,7 @@ export default function Home() {
                   position: "relative",
                   height: "auto",
                   top: 0,
+                  zIndex: 1,
                 },
               }}
             >
