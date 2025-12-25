@@ -250,12 +250,13 @@ function Navbar() {
         <AnimatePresence>
           {isMobileMenuOpen && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: "auto" }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.3 }}
-              className="md:hidden overflow-hidden"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.3 }}
+                className="md:hidden fixed top-24 left-0 w-full z-40 bg-[#161920] overflow-hidden"
             >
+
               <div className="pt-2 pb-4 space-y-2">
                 {/* Navigation Links */}
                 {/* {navItems.map((item) => (
