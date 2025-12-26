@@ -105,7 +105,6 @@ export default function Home() {
                           : "transparent",
                         "&:hover": {
                           backgroundColor: "rgba(255, 255, 255, 0.05)",
-                          transform: "translateX(4px)",
                         },
                         "&.Mui-selected": {
                           borderLeft: "4px solid " + item.color,
