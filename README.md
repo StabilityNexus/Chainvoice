@@ -170,7 +170,7 @@ We welcome contributions! Please read our contributing guidelines and submit pul
 
 
 <p align="center">
-  <strong>Built with ❤️ by Stability Nexus</strong>
+  <strong>Built with ❤️ by Stability Nexus.</strong>
 </p>
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
