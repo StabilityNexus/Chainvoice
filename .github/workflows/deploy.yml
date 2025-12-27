@@ -46,6 +46,8 @@ jobs:
       - name: Build
         run: npm run build
         working-directory: ./frontend
+        env: 
+          VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
 
       # Setup Pages
       - name: Setup Pages
