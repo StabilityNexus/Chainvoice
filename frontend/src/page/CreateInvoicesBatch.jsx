@@ -532,7 +532,7 @@ function CreateInvoicesBatch() {
 
   return (
     <>
-      <div className="flex justify-center">
+      <div className="flex justify-center px-2 sm:px-4">
         <WalletConnectionAlert
           show={showWalletAlert}
           message="Connect your wallet to create batch invoices"
@@ -540,22 +540,22 @@ function CreateInvoicesBatch() {
         />
       </div>
 
-      <div className="mx-6">
+      <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
         {/* Simple Header */}
-        <div className="mb-8">
-          <h2 className="text-3xl font-bold text-white mb-2">
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
             Create Invoices (Batch)
           </h2>
-          <p className="text-gray-300">
+          <p className="text-sm sm:text-base text-gray-300">
             Create multiple invoices in a single transaction and save on gas
             fees
           </p>
         </div>
 
         {/* Clean Date Selection */}
-        <div className="bg-white p-6 rounded-lg shadow-sm mb-8 border border-gray-200">
-          <div className="flex flex-wrap items-center gap-6">
-            <div className="flex items-center space-x-3">
+        <div className="w-full bg-white p-4 sm:p-6 rounded-lg shadow-sm mb-6 sm:mb-8 border border-gray-200 overflow-hidden">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-4 sm:gap-6">
+            <div className="flex items-center space-x-3 w-full sm:w-auto">
               <div className="flex items-center justify-center gap-3">
                 <Label className="text-sm font-medium text-gray-700 mb-1">
                   Batch Size
@@ -566,20 +566,20 @@ function CreateInvoicesBatch() {
               </div>
             </div>
 
-            <div className="flex items-center space-x-3 text-gray-700">
+            <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 text-gray-700 w-full sm:w-auto">
               <Label className="text-sm font-medium text-gray-700">
                 Issued Date
               </Label>
               <Button
                 variant="outline"
-                className="w-[200px] justify-start text-left font-normal"
+                className="w-full sm:w-[200px] justify-start text-left font-normal"
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {format(issueDate, "PPP")}
               </Button>
             </div>
 
-            <div className="flex items-center space-x-3 text-gray-700">
+            <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-3 text-gray-700 w-full sm:w-auto">
               <Label className="text-sm font-medium text-gray-700">
                 Due Date
               </Label>
@@ -587,7 +587,7 @@ function CreateInvoicesBatch() {
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-[200px] justify-start text-left font-normal"
+                    className="w-full sm:w-[200px] justify-start text-left font-normal"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dueDate ? (
@@ -616,21 +616,21 @@ function CreateInvoicesBatch() {
         </div>
 
         {/* Clean Summary Stats */}
-        <div className="bg-gray-800 text-white p-6 rounded-lg mb-8 shadow-sm">
-          <div className="grid grid-cols-4 gap-6 text-center">
+        <div className="w-full bg-gray-800 text-white p-4 sm:p-6 rounded-lg mb-6 sm:mb-8 shadow-sm overflow-hidden">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 text-center">
             <div>
-              <div className="text-2xl font-bold">{invoiceRows.length}</div>
-              <div className="text-gray-300 text-sm">Total Invoices</div>
+              <div className="text-xl sm:text-2xl font-bold">{invoiceRows.length}</div>
+              <div className="text-gray-300 text-xs sm:text-sm">Total Invoices</div>
             </div>
             <div>
-              <div className="text-2xl font-bold">{validInvoices}</div>
-              <div className="text-gray-300 text-sm">Valid Invoices</div>
+              <div className="text-xl sm:text-2xl font-bold">{validInvoices}</div>
+              <div className="text-gray-300 text-xs sm:text-sm">Valid Invoices</div>
             </div>
             <div>
-              <div className="text-2xl font-bold">
+              <div className="text-xl sm:text-2xl font-bold">
                 {totalBatchAmount.toFixed(4)}
               </div>
-              <div className="text-gray-300 text-sm">
+              <div className="text-gray-300 text-xs sm:text-sm">
                 Total Amount (
                 {useCustomToken
                   ? verifiedToken?.symbol || "TOKEN"
@@ -639,16 +639,16 @@ function CreateInvoicesBatch() {
               </div>
             </div>
             <div>
-              <div className="text-2xl font-bold">~{gasSavingsPercent}%</div>
-              <div className="text-gray-300 text-sm">Gas Savings</div>
+              <div className="text-xl sm:text-2xl font-bold">~{gasSavingsPercent}%</div>
+              <div className="text-gray-300 text-xs sm:text-sm">Gas Savings</div>
             </div>
           </div>
         </div>
 
         <form onSubmit={handleSubmit}>
           {/* Clean User Information */}
-          <div className="mb-8">
-            <div className="bg-white border border-gray-200 p-6 rounded-lg shadow-sm">
+          <div className="mb-6 sm:mb-8">
+            <div className="w-full bg-white border border-gray-200 p-4 sm:p-6 rounded-lg shadow-sm overflow-hidden">
               <h3 className="text-lg font-semibold mb-4 text-gray-800">
                 From (Your Information)
               </h3>
@@ -734,7 +734,7 @@ function CreateInvoicesBatch() {
           </div>
 
           {/* Clean Token Selection */}
-          <div className="mb-8 bg-white p-6 rounded-lg border border-gray-200 shadow-sm">
+          <div className="w-full mb-6 sm:mb-8 bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm overflow-hidden">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
               Payment Currency
             </h3>
@@ -872,7 +872,7 @@ function CreateInvoicesBatch() {
           </div>
 
           {/* Clean Invoice Rows */}
-          <div className="mb-8 space-y-4">
+          <div className="w-full mb-6 sm:mb-8 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xl font-bold text-white">Invoices</h3>
               <Button
@@ -958,7 +958,7 @@ function CreateInvoicesBatch() {
                 {expandedInvoice === rowIndex && (
                   <div className="p-6">
                     {/* Clean Client Information */}
-                    <div className="border border-gray-200 p-4 rounded-lg bg-gray-50 mb-6">
+                    <div className="w-full border border-gray-200 p-3 sm:p-4 rounded-lg bg-gray-50 mb-4 sm:mb-6 overflow-hidden">
                       <h4 className="text-md font-semibold mb-4 text-gray-800">
                         Client Information
                       </h4>
@@ -1054,14 +1054,14 @@ function CreateInvoicesBatch() {
                     </div>
 
                     {/* Clean Invoice Items */}
-                    <div className="bg-white rounded-lg border border-gray-200">
+                    <div className="w-full bg-white rounded-lg border border-gray-200 overflow-hidden">
                       <div className="bg-gray-100 px-4 py-3 rounded-t-lg">
                         <h4 className="font-semibold text-gray-800">
                           Invoice Items
                         </h4>
                       </div>
 
-                      <div className="grid grid-cols-12 bg-gray-50 text-gray-700 py-3 px-4 font-medium text-sm border-b">
+                      <div className="hidden md:grid grid-cols-12 bg-gray-50 text-gray-700 py-3 px-4 font-medium text-sm border-b">
                         <div className="col-span-4">DESCRIPTION</div>
                         <div className="col-span-1">QTY</div>
                         <div className="col-span-2">UNIT PRICE</div>
@@ -1071,13 +1071,14 @@ function CreateInvoicesBatch() {
                         <div className="col-span-1">ACTION</div>
                       </div>
 
-                      <div className="p-4">
+                      <div className="p-2 sm:p-4">
                         {row.itemData.map((item, itemIndex) => (
                           <div
-                            className="grid grid-cols-12 gap-2 mb-3 items-center"
+                            className="flex flex-col md:grid md:grid-cols-12 gap-2 mb-3 pb-3 md:pb-0 border-b md:border-b-0 border-gray-200 md:items-center"
                             key={itemIndex}
                           >
-                            <div className="col-span-4">
+                            <div className="md:col-span-4 w-full">
+                              <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Description</label>
                               <Input
                                 placeholder="Enter Description"
                                 className="w-full border-gray-300 text-black"
@@ -1088,111 +1089,122 @@ function CreateInvoicesBatch() {
                                 }
                               />
                             </div>
-                            <div className="col-span-1">
-                              <Input
-                                type="number"
-                                placeholder="0"
-                                className="w-full border-gray-300 text-black"
-                                name="qty"
-                                value={item.qty}
-                                onChange={(e) =>
-                                  handleItemData(e, rowIndex, itemIndex)
-                                }
-                              />
-                            </div>
-                            <div className="col-span-2">
-                              <Input
-                                type="text"
-                                placeholder="0"
-                                className="w-full border-gray-300 text-black"
-                                name="unitPrice"
-                                value={item.unitPrice}
-                                onChange={(e) =>
-                                  handleItemData(e, rowIndex, itemIndex)
-                                }
-                              />
-                            </div>
-                            <div className="col-span-1">
-                              <Input
-                                type="text"
-                                placeholder="0"
-                                className="w-full border-gray-300 text-black"
-                                name="discount"
-                                value={item.discount}
-                                onChange={(e) =>
-                                  handleItemData(e, rowIndex, itemIndex)
-                                }
-                              />
-                            </div>
-                            <div className="col-span-1">
-                              <Input
-                                type="text"
-                                placeholder="0"
-                                className="w-full border-gray-300 text-black"
-                                name="tax"
-                                value={item.tax}
-                                onChange={(e) =>
-                                  handleItemData(e, rowIndex, itemIndex)
-                                }
-                              />
-                            </div>
-                            <div className="col-span-2">
-                              <div className="bg-gray-100 px-3 py-2 rounded border text-gray-700 font-mono text-sm">
-                                {(
-                                  (parseFloat(item.qty) || 0) *
-                                    (parseFloat(item.unitPrice) || 0) -
-                                  (parseFloat(item.discount) || 0) +
-                                  (parseFloat(item.tax) || 0)
-                                ).toFixed(4)}
+                            <div className="grid grid-cols-2 gap-2 md:contents">
+                              <div className="md:col-span-1">
+                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Qty</label>
+                                <Input
+                                  type="number"
+                                  placeholder="0"
+                                  className="w-full border-gray-300 text-black"
+                                  name="qty"
+                                  value={item.qty}
+                                  onChange={(e) =>
+                                    handleItemData(e, rowIndex, itemIndex)
+                                  }
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Unit Price</label>
+                                <Input
+                                  type="text"
+                                  placeholder="0"
+                                  className="w-full border-gray-300 text-black"
+                                  name="unitPrice"
+                                  value={item.unitPrice}
+                                  onChange={(e) =>
+                                    handleItemData(e, rowIndex, itemIndex)
+                                  }
+                                />
                               </div>
                             </div>
-                            <div className="col-span-1 flex justify-center">
-                              {row.itemData.length > 1 && (
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="ghost"
-                                  className="text-red-600 hover:text-red-800"
-                                  onClick={() => {
-                                    setInvoiceRows((prev) =>
-                                      prev.map((r, ri) => {
-                                        if (ri === rowIndex) {
-                                          return {
-                                            ...r,
-                                            itemData: r.itemData.filter(
-                                              (_, ii) => ii !== itemIndex
-                                            ),
-                                          };
-                                        }
-                                        return r;
-                                      })
-                                    );
-                                  }}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              )}
+                            <div className="grid grid-cols-2 gap-2 md:contents">
+                              <div className="md:col-span-1">
+                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Discount</label>
+                                <Input
+                                  type="text"
+                                  placeholder="0"
+                                  className="w-full border-gray-300 text-black"
+                                  name="discount"
+                                  value={item.discount}
+                                  onChange={(e) =>
+                                    handleItemData(e, rowIndex, itemIndex)
+                                  }
+                                />
+                              </div>
+                              <div className="md:col-span-1">
+                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Tax (%)</label>
+                                <Input
+                                  type="text"
+                                  placeholder="0"
+                                  className="w-full border-gray-300 text-black"
+                                  name="tax"
+                                  value={item.tax}
+                                  onChange={(e) =>
+                                    handleItemData(e, rowIndex, itemIndex)
+                                  }
+                                />
+                              </div>
+                            </div>
+                            <div className="flex items-center justify-between md:contents">
+                              <div className="md:col-span-2 flex-1">
+                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Amount</label>
+                                <div className="bg-gray-100 px-3 py-2 rounded border text-gray-700 font-mono text-sm">
+                                  {(
+                                    (parseFloat(item.qty) || 0) *
+                                      (parseFloat(item.unitPrice) || 0) -
+                                    (parseFloat(item.discount) || 0) +
+                                    (parseFloat(item.tax) || 0)
+                                  ).toFixed(4)}
+                                </div>
+                              </div>
+                              <div className="md:col-span-1 flex justify-center md:justify-center">
+                                {row.itemData.length > 1 && (
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="text-red-600 hover:text-red-800"
+                                    onClick={() => {
+                                      setInvoiceRows((prev) =>
+                                        prev.map((r, ri) => {
+                                          if (ri === rowIndex) {
+                                            return {
+                                              ...r,
+                                              itemData: r.itemData.filter(
+                                                (_, ii) => ii !== itemIndex
+                                              ),
+                                            };
+                                          }
+                                          return r;
+                                        })
+                                      );
+                                    }}
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))}
                       </div>
 
-                      <div className="flex justify-between items-center p-4 bg-gray-50 border-t">
+                      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 p-3 sm:p-4 bg-gray-50 border-t">
                         <Button
                           type="button"
                           onClick={() => addItem(rowIndex)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 flex items-center gap-2"
+                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 flex items-center justify-center gap-2"
                         >
                           <PlusIcon className="h-4 w-4" />
                           Add Item
                         </Button>
 
                         <div className="bg-white p-3 rounded-lg border border-gray-200">
-                          <div className="flex items-center gap-4">
-                            <span className="font-medium text-gray-700">
+                          <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-4">
+                            <span className="font-medium text-gray-700 text-sm sm:text-base">
                               Total:
                             </span>
-                            <span className="font-bold text-lg text-gray-900">
+                            <span className="font-bold text-base sm:text-lg text-gray-900">
                               {parseFloat(row.totalAmountDue).toFixed(4)}{" "}
                               {useCustomToken
                                 ? verifiedToken?.symbol || "TOKEN"
@@ -1209,30 +1221,30 @@ function CreateInvoicesBatch() {
           </div>
 
           {/* Clean Form Actions */}
-          <div className="flex justify-center">
+          <div className="flex justify-center px-4">
             <Button
-              className="bg-green-600 hover:bg-green-700 px-8 py-3 text-white text-lg font-semibold"
+              className="bg-green-600 hover:bg-green-700 w-full sm:w-auto px-6 sm:px-8 py-3 text-white text-base sm:text-lg font-semibold"
               type="submit"
               disabled={loading || !isConnected || validInvoices === 0}
             >
               {loading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="animate-spin h-5 w-5" />
-                  <span>Creating {validInvoices} Invoices...</span>
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 className="animate-spin h-4 w-4 sm:h-5 sm:w-5" />
+                  <span className="text-sm sm:text-base">Creating {validInvoices} Invoices...</span>
                 </div>
               ) : (
-                <div className="flex items-center gap-2">
-                  <Receipt className="w-5 h-5" />
-                  <span>Create {validInvoices} Invoices (Batch)</span>
+                <div className="flex items-center justify-center gap-2">
+                  <Receipt className="w-4 h-4 sm:w-5 sm:h-5" />
+                  <span className="text-sm sm:text-base">Create {validInvoices} Invoices (Batch)</span>
                 </div>
               )}
             </Button>
           </div>
 
           {validInvoices === 0 && (
-            <div className="flex justify-center mt-4">
-              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-center gap-2">
-                <AlertTriangle className="w-5 h-5" />
+            <div className="flex justify-center mt-4 px-4">
+              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
+                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
                 <span>
                   Please add at least one valid invoice with client address and
                   items
