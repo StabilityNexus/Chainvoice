@@ -125,7 +125,7 @@ const GenerateLink = () => {
 
   return (
     <>
-      <div className="flex justify-center">
+      <div className="flex justify-center px-2 sm:px-4">
         <WalletConnectionAlert
           show={showWalletAlert}
           message="Connect your wallet to create and manage invoices"
@@ -133,11 +133,11 @@ const GenerateLink = () => {
         />
       </div>
 
-      <div className="space-y-6 mx-6 transition-all duration-300">
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-3">
-            <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
-              <Link className="h-5 w-5 text-green-400" />
+      <div className="w-full max-w-7xl mx-auto space-y-6 px-2 sm:px-4 md:px-6 transition-all duration-300">
+        <div className="mb-6 sm:mb-8">
+          <h2 className="text-xl sm:text-2xl font-bold text-white mb-2 flex items-center gap-2 sm:gap-3">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+              <Link className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
             </div>
             Generate Prefilled Invoice Link
           </h2>
@@ -147,8 +147,8 @@ const GenerateLink = () => {
           </p>
         </div>
 
-        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
-          <div className="space-y-6">
+        <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200">
+          <div className="space-y-4 sm:space-y-6">
             <div>
               <Label className="text-sm font-medium text-gray-700 mb-2 block">
                 Your Wallet Address
@@ -156,17 +156,17 @@ const GenerateLink = () => {
               <Input
                 value={address || "Connect wallet to see address"}
                 readOnly
-                className="bg-gray-50 text-gray-500 border-gray-300 font-mono text-sm"
+                className="bg-gray-50 text-gray-500 border-gray-300 font-mono text-xs sm:text-sm"
               />
             </div>
 
             {/* Token Selection */}
-            <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
-              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <div className="w-full bg-gray-50 p-4 sm:p-6 rounded-xl border border-gray-100 overflow-hidden">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
+                  width="20"
+                  height="20"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -405,17 +405,17 @@ const GenerateLink = () => {
         </div>
 
         {/* Generated Link Preview */}
-        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+        <div className="w-full bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200 overflow-hidden">
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-8 h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
-              <Link className="h-4 w-4 text-green-500" />
+            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
+              <Link className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
             </div>
             <Label className="text-sm font-medium text-gray-700">
               Generated Link
             </Label>
           </div>
 
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-3">
             <Input
               value={generateLink()}
               readOnly
@@ -424,7 +424,7 @@ const GenerateLink = () => {
             <Button
               onClick={copyToClipboard}
               disabled={!isConnected}
-              className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2 px-4 py-2 transition-colors"
+              className="bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2 px-4 py-2 transition-colors w-full sm:w-auto"
             >
               {copied ? (
                 <>
@@ -451,12 +451,12 @@ const GenerateLink = () => {
         </div>
 
         {/* Usage Instructions */}
-        <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+        <div className="w-full bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200 overflow-hidden">
           <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
             <Wallet className="h-4 w-4 text-gray-600" />
             How it works
           </h4>
-          <div className="space-y-2 text-sm text-gray-600">
+          <div className="space-y-2 text-xs sm:text-sm text-gray-600">
             <div className="flex items-start gap-2">
               <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                 <span className="text-xs font-medium text-green-600">1</span>
