@@ -572,7 +572,7 @@ function CreateInvoicesBatch() {
               </Label>
               <Button
                 variant="outline"
-                className="w-full sm:w-[200px] justify-start text-left font-normal"
+                className="w-full sm:w-[220px] justify-start text-left font-normal"
               >
                 <CalendarIcon className="mr-2 h-4 w-4" />
                 {format(issueDate, "PPP")}
@@ -587,7 +587,7 @@ function CreateInvoicesBatch() {
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
-                    className="w-full sm:w-[200px] justify-start text-left font-normal"
+                    className="w-full sm:w-[220px] justify-start text-left font-normal"
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
                     {dueDate ? (

@@ -437,7 +437,7 @@ function CreateInvoice() {
             </Label>
             <Button
               className={cn(
-                "w-full sm:w-[200px] justify-start text-left font-normal bg-white border border-gray-300 text-gray-700 hover:bg-gray-50",
+                "w-full sm:w-[220px] justify-start text-left font-normal bg-white border border-gray-300 text-gray-700 hover:bg-gray-50",
                 !issueDate && "text-black"
               )}
             >
@@ -455,7 +455,7 @@ function CreateInvoice() {
                 <Button
                   variant="outline"
                   className={cn(
-                    "w-full sm:w-[260px] justify-start text-left font-normal text-gray-700",
+                    "w-full sm:w-[220px] justify-start text-left font-normal text-gray-700",
                     !dueDate && "text-muted-foreground"
                   )}
                 >
