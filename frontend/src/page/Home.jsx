@@ -53,9 +53,9 @@ export default function Home() {
 
   return (
     <>
-      <div className="px-10">
+      <div className="px-2 sm:px-4 md:px-10">
         <header className="mb-2">
-          <h1 className="text-2xl mt-4 text-white">
+          <h1 className="text-xl sm:text-2xl mt-4 text-white">
             Welcome <span className="font-medium text-green-400">Back!</span>
           </h1>
         </header>
@@ -65,10 +65,80 @@ export default function Home() {
             display: "flex",
             flexDirection: { xs: "column", lg: "row" },
             minHeight: "calc(100vh - 180px)",
-            gap: "24px",
+            gap: { xs: "12px", sm: "24px" },
           }}
         >
+          {/* Mobile Horizontal Menu */}
           <Box
+            className="lg:hidden overflow-x-auto scrollbar-hide"
+            sx={{
+              width: "100%",
+              flexShrink: 0,
+            }}
+          >
+            <List
+              sx={{
+                display: "flex",
+                flexDirection: "row",
+                gap: "8px",
+                padding: "8px 0",
+                minWidth: "max-content",
+              }}
+            >
+              {menuItems.map((item) => (
+                <ListItem
+                  key={item.route}
+                  disablePadding
+                  className="text-white"
+                  sx={{ width: "auto" }}
+                >
+                  <ListItemButton
+                    onClick={() => navigate(item.route)}
+                    selected={location.pathname.includes(item.route)}
+                    sx={{
+                      borderRadius: "8px",
+                      transition: "all 0.2s ease",
+                      backgroundColor: location.pathname.includes(item.route)
+                        ? "rgba(255, 255, 255, 0.08)"
+                        : "transparent",
+                      "&:hover": {
+                        backgroundColor: "rgba(255, 255, 255, 0.05)",
+                      },
+                      "&.Mui-selected": {
+                        borderBottom: "3px solid " + item.color,
+                      },
+                      padding: "8px 12px",
+                      minWidth: "fit-content",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        minWidth: "28px",
+                        color: item.color,
+                        fontSize: "1.1rem",
+                      }}
+                    >
+                      {item.icon}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={item.text}
+                      primaryTypographyProps={{
+                        fontSize: "0.875rem",
+                        fontWeight: location.pathname.includes(item.route)
+                          ? 600
+                          : 500,
+                      }}
+                    />
+                  </ListItemButton>
+                </ListItem>
+              ))}
+            </List>
+          </Box>
+
+          {/* Desktop Vertical Menu */}
+          <Box
+            className="hidden lg:block"
             sx={{
               width: { lg: "264px" },
               flexShrink: 0,
@@ -84,6 +154,7 @@ export default function Home() {
                   position: "relative",
                   height: "auto",
                   top: 0,
+                  zIndex: 1,
                 },
               }}
             >
@@ -142,7 +213,7 @@ export default function Home() {
             component="main"
             sx={{
               flexGrow: 1,
-              px: 1,
+              px: { xs: 0, sm: 1 },
               maxHeight: "calc(100vh - 180px)",
               overflowY: "auto",
               scrollbarWidth: "none",

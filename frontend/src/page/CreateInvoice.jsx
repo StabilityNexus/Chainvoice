@@ -387,7 +387,7 @@ function CreateInvoice() {
 
   return (
     <>
-      <div className="flex justify-center">
+      <div className="flex justify-center px-2 sm:px-4">
         <WalletConnectionAlert
           show={showWalletAlert}
           message="Connect your wallet to create and manage invoices"
@@ -395,11 +395,11 @@ function CreateInvoice() {
         />
       </div>
 
-      <div className="mx-6">
+      <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
         {(searchParams.get("clientAddress") ||
           searchParams.get("amount") ||
           searchParams.get("description")) && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 overflow-hidden">
             <div className="flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
               <div>
@@ -415,13 +415,13 @@ function CreateInvoice() {
           </div>
         )}
 
-        <h2 className="text-2xl font-bold mb-6 text-white">
+        <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-white">
           Create New Invoice Request
         </h2>
 
-        <div className="flex flex-wrap items-center gap-4 mb-8 bg-gray-50 p-4 rounded-lg shadow-sm">
-          <div className="flex items-center space-x-2">
-            <Label className="text-md font-medium text-gray-700">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8 bg-gray-50 p-4 rounded-lg shadow-sm overflow-hidden">
+          <div className="flex items-center space-x-2 w-full sm:w-auto">
+            <Label className="text-sm sm:text-md font-medium text-gray-700">
               Invoice #
             </Label>
             <Input
@@ -431,13 +431,13 @@ function CreateInvoice() {
             />
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Label className="text-md font-medium text-gray-700">
+          <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+            <Label className="text-sm sm:text-md font-medium text-gray-700">
               Issued Date
             </Label>
             <Button
               className={cn(
-                "w-[220px] justify-start text-left font-normal bg-white border border-gray-300 text-gray-700 hover:bg-gray-50",
+                "w-full sm:w-[220px] justify-start text-left font-normal bg-white border border-gray-300 text-gray-700 hover:bg-gray-50",
                 !issueDate && "text-black"
               )}
             >
@@ -446,8 +446,8 @@ function CreateInvoice() {
             </Button>
           </div>
 
-          <div className="flex items-center space-x-2">
-            <Label className="text-md font-medium text-gray-700">
+          <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
+            <Label className="text-sm sm:text-md font-medium text-gray-700">
               Due Date
             </Label>
             <Popover>
@@ -455,7 +455,7 @@ function CreateInvoice() {
                 <Button
                   variant="outline"
                   className={cn(
-                    "w-[220px] justify-start text-left font-normal text-gray-700",
+                    "w-full sm:w-[220px] justify-start text-left font-normal text-gray-700",
                     !dueDate && "text-muted-foreground"
                   )}
                 >
@@ -488,20 +488,20 @@ function CreateInvoice() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="flex flex-col lg:flex-row gap-6 mb-8">
-            <div className="border border-gray-200 flex-1 p-6 rounded-lg shadow-sm bg-white">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">
+          <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 mb-6 sm:mb-8">
+            <div className="w-full border border-gray-200 flex-1 p-4 sm:p-6 rounded-lg shadow-sm bg-white overflow-hidden">
+              <h3 className="text-base sm:text-lg font-semibold mb-4 text-gray-800">
                 From (Your Information)
               </h3>
               <Input
                 value={account?.address}
-                className="w-full mb-4 bg-gray-50 border-gray-300 text-gray-500"
+                className="w-full mb-4 bg-gray-50 border-gray-300 text-gray-500 text-xs sm:text-sm font-mono"
                 readOnly
                 name="userAddress"
               />
 
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row gap-4">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
                       First Name
@@ -888,114 +888,228 @@ function CreateInvoice() {
           </div>
 
           {/* Invoice Items Section */}
-          <div className="mb-8">
-            <div className="grid grid-cols-12 bg-green-500 text-white py-3 px-4 rounded-t-lg font-medium text-sm">
-              <div className="col-span-4 md:col-span-4">DESCRIPTION</div>
-              <div className="col-span-2 md:col-span-1">QTY</div>
+          <div className="mb-6 sm:mb-8">
+            {/* Desktop Header - Hidden on mobile */}
+            <div className="hidden md:grid grid-cols-12 bg-green-500 text-white py-3 px-4 rounded-t-lg font-medium text-sm gap-2">
+              <div className="col-span-4">DESCRIPTION</div>
+              <div className="col-span-1">QTY</div>
               <div className="col-span-2">UNIT PRICE</div>
-              <div className="col-span-2 md:col-span-1">DISCOUNT</div>
-              <div className="col-span-2 md:col-span-1">TAX(%)</div>
+              <div className="col-span-1">DISCOUNT</div>
+              <div className="col-span-1">TAX(%)</div>
               <div className="col-span-2">AMOUNT</div>
-              {/* <div className="col-span-1">AMOUNT</div> */}
             </div>
 
-            <div className="border border-gray-200 p-4 rounded-b-lg bg-white">
-              {itemData.map((_, index) => (
-                <div
-                  className="grid grid-cols-12 gap-2 mb-3 items-center relative"
-                  key={index}
-                >
-                  {/* Item Fields */}
-                  <div className="col-span-4 md:col-span-4">
-                    <Input
-                      type="text"
-                      placeholder="Enter Description"
-                      className="w-full border-gray-300 text-black"
-                      name="description"
-                      onChange={(e) => handleItemData(e, index)}
-                    />
-                  </div>
-                  <div className="col-span-2 md:col-span-1">
-                    <Input
-                      type="number"
-                      placeholder="0"
-                      className="w-full border-gray-300 text-black py-2"
-                      name="qty"
-                      onChange={(e) => handleItemData(e, index)}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Input
-                      type="text"
-                      placeholder="0"
-                      className="w-full border-gray-300 text-black py-2"
-                      name="unitPrice"
-                      onChange={(e) => handleItemData(e, index)}
-                    />
-                  </div>
-                  <div className="col-span-2 md:col-span-1">
-                    <Input
-                      type="text"
-                      placeholder="0"
-                      className="w-full border-gray-300 text-black py-2"
-                      name="discount"
-                      onChange={(e) => handleItemData(e, index)}
-                    />
-                  </div>
-                  <div className="col-span-2 md:col-span-1">
-                    <Input
-                      type="text"
-                      placeholder="0"
-                      className="w-full border-gray-300 text-black py-2"
-                      name="tax"
-                      onChange={(e) => handleItemData(e, index)}
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <Input
-                      type="text"
-                      placeholder="0.00"
-                      className="w-full bg-gray-50 border-gray-300 text-gray-700 py-2"
-                      name="amount"
-                      disabled
-                      value={
-                        (parseFloat(itemData[index].qty) || 0) *
-                          (parseFloat(itemData[index].unitPrice) || 0) -
-                        (parseFloat(itemData[index].discount) || 0) +
-                        (parseFloat(itemData[index].tax) || 0)
-                      }
-                    />
-                  </div>
+            {/* Mobile Header */}
+            <div className="md:hidden bg-green-500 text-white py-3 px-4 rounded-t-lg">
+              <h3 className="font-semibold text-sm">Invoice Items</h3>
+            </div>
 
-                  {index > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const newItems = [...itemData];
-                        newItems.splice(index, 1);
-                        setItemData(newItems);
-                      }}
-                      className="absolute right-14 top-1/2 transform -translate-y-1/2 bg-green-500 text-white rounded-full p-1 hover:bg-green-600 transition-colors"
-                      aria-label="Delete item"
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        className="h-4 w-4"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                      >
-                        <path
-                          fillRule="evenodd"
-                          d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                          clipRule="evenodd"
+            <div className="border border-gray-200 rounded-b-lg bg-white overflow-hidden">
+              <div className="p-3 sm:p-4 space-y-4 md:space-y-3">
+                {itemData.map((_, index) => (
+                  <div
+                    className="relative"
+                    key={index}
+                  >
+                    {/* Mobile Layout - Stacked */}
+                    <div className="md:hidden space-y-3 pb-4 border-b border-gray-200 last:border-b-0">
+                      <div>
+                        <Label className="text-xs font-medium text-gray-600 mb-1 block">Description</Label>
+                        <Input
+                          type="text"
+                          placeholder="Enter Description"
+                          className="w-full border-gray-300 text-black"
+                          name="description"
+                          onChange={(e) => handleItemData(e, index)}
                         />
-                      </svg>
-                    </button>
-                  )}
-                </div>
-              ))}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 block">Qty</Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            className="w-full border-gray-300 text-black"
+                            name="qty"
+                            onChange={(e) => handleItemData(e, index)}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 block">Unit Price</Label>
+                          <Input
+                            type="text"
+                            placeholder="0"
+                            className="w-full border-gray-300 text-black"
+                            name="unitPrice"
+                            onChange={(e) => handleItemData(e, index)}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 block">Discount</Label>
+                          <Input
+                            type="text"
+                            placeholder="0"
+                            className="w-full border-gray-300 text-black"
+                            name="discount"
+                            onChange={(e) => handleItemData(e, index)}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 block">Tax (%)</Label>
+                          <Input
+                            type="text"
+                            placeholder="0"
+                            className="w-full border-gray-300 text-black"
+                            name="tax"
+                            onChange={(e) => handleItemData(e, index)}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label className="text-xs font-medium text-gray-600 mb-1 block">Amount</Label>
+                        <Input
+                          type="text"
+                          placeholder="0.00"
+                          className="w-full bg-gray-100 border-gray-300 text-gray-700 font-semibold"
+                          name="amount"
+                          disabled
+                          value={
+                            (parseFloat(itemData[index].qty) || 0) *
+                              (parseFloat(itemData[index].unitPrice) || 0) -
+                            (parseFloat(itemData[index].discount) || 0) +
+                            (parseFloat(itemData[index].tax) || 0)
+                          }
+                        />
+                      </div>
+
+                      {index > 0 && (
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            const newItems = [...itemData];
+                            newItems.splice(index, 1);
+                            setItemData(newItems);
+                          }}
+                          variant="ghost"
+                          size="sm"
+                          className="w-full text-red-600 hover:text-red-800 hover:bg-red-50"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-4 w-4 mr-2"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                          Remove Item
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Desktop Layout - Grid */}
+                    <div className="hidden md:grid grid-cols-12 gap-2 items-center">
+                      <div className="col-span-4">
+                        <Input
+                          type="text"
+                          placeholder="Enter Description"
+                          className="w-full border-gray-300 text-black"
+                          name="description"
+                          onChange={(e) => handleItemData(e, index)}
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <Input
+                          type="number"
+                          placeholder="0"
+                          className="w-full border-gray-300 text-black py-2"
+                          name="qty"
+                          onChange={(e) => handleItemData(e, index)}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          type="text"
+                          placeholder="0"
+                          className="w-full border-gray-300 text-black py-2"
+                          name="unitPrice"
+                          onChange={(e) => handleItemData(e, index)}
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <Input
+                          type="text"
+                          placeholder="0"
+                          className="w-full border-gray-300 text-black py-2"
+                          name="discount"
+                          onChange={(e) => handleItemData(e, index)}
+                        />
+                      </div>
+                      <div className="col-span-1">
+                        <Input
+                          type="text"
+                          placeholder="0"
+                          className="w-full border-gray-300 text-black py-2"
+                          name="tax"
+                          onChange={(e) => handleItemData(e, index)}
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <Input
+                          type="text"
+                          placeholder="0.00"
+                          className="w-full bg-gray-50 border-gray-300 text-gray-700 py-2"
+                          name="amount"
+                          disabled
+                          value={
+                            (parseFloat(itemData[index].qty) || 0) *
+                              (parseFloat(itemData[index].unitPrice) || 0) -
+                            (parseFloat(itemData[index].discount) || 0) +
+                            (parseFloat(itemData[index].tax) || 0)
+                          }
+                        />
+                      </div>
+
+                      {index > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newItems = [...itemData];
+                            newItems.splice(index, 1);
+                            setItemData(newItems);
+                          }}
+                          className="col-span-1 flex justify-center bg-green-500 text-white rounded-full p-2 hover:bg-green-600 transition-colors mx-auto"
+                          aria-label="Delete item"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            className="h-4 w-4"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div className="flex justify-between mt-4">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mt-4">
               <Button
                 className="bg-white text-gray-800 border border-gray-300 hover:bg-gray-50 px-6 py-2 flex items-center gap-2"
                 onClick={addItem}

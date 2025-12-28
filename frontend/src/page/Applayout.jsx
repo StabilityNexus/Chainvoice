@@ -6,9 +6,9 @@ import { Outlet } from "react-router-dom";
 
 function Applayout() {
   return (
-    <div className="flex flex-col ">
+    <div className="flex flex-col min-h-screen overflow-x-hidden bg-[#161920]">
       <Navbar />
-      <main className="flex-1 pt-20 mx-auto w-full">
+      <main className="flex-1 pt-20 w-full max-w-[100vw] overflow-x-hidden">
         <Outlet />
       </main>
     </div>
