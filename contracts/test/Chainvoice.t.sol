@@ -1,160 +1,116 @@
 // SPDX-License-Identifier: Unlicense
 pragma solidity ^0.8.13;
 
-import {Test} from "../lib/forge-std/src/Test.sol";
-import {console} from "../lib/forge-std/src/console.sol";
+import {Test} from "forge-std/Test.sol";
+import {console} from "forge-std/console.sol";
 import "../src/Chainvoice.sol";
 
-contract TestChainvoice is Test {
-    Chainvoice c;
-    receive() external payable {}
+contract ChainvoiceTest is Test {
+    Chainvoice chainvoice;
+
+    address alice = address(0xA11CE);
+    address bob = address(0xB0B);
+
     function setUp() public {
-        c = new Chainvoice();
+        chainvoice = new Chainvoice();
+        vm.deal(alice, 10 ether);
+        vm.deal(bob, 10 ether);
     }
 
-    function testCreateInvoice() public {
-        address receiverAdd = 0x24F13d40CF7DE6a81a2a1949aA45F2242e81f1e2;
-        uint256 amount = 100;
-        string memory dueDate = "4/1/2025, 8:45:47 PM";
-        string memory issueDate = "4/19/2025, 8:45:47 PM";
-        Chainvoice.UserDetails memory sender = Chainvoice.UserDetails({
-            fname: "Alice",
-            lname: "Doe",
-            email: "alice@example.com",
-            country: "UK",
-            city: "London",
-            postalcode: "SW1A 1AA"
-        });
-        Chainvoice.UserDetails memory receiver = Chainvoice.UserDetails({
-            fname: "Bob",
-            lname: "Smith",
-            email: "bob@example.com",
-            country: "UK",
-            city: "Manchester",
-            postalcode: "M1 1AA"
-        });
+    /* ------------------------------------------------------------ */
+    /*                       CREATE INVOICE                         */
+    /* ------------------------------------------------------------ */
 
-        Chainvoice.ItemData[] memory items = new Chainvoice.ItemData[](1);
-        items[0] = Chainvoice.ItemData({
-            description: "Laptop",
-            qty: 1,
-            unitPrice: 1000,
-            discount: 100,
-            tax: 50,
-            amount: 950
-        });
-
-        c.createInvoice(
-            amount,
-            receiverAdd,
-            dueDate,
-            issueDate,
-            sender,
-            receiver,
-            items
+    function testCreateInvoice_Native() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(
+            bob,
+            1 ether,
+            address(0),
+            "encryptedData",
+            "hash123"
         );
 
-        (
-            Chainvoice.InvoiceDetails[] memory sentInvoices,
-            Chainvoice.ItemData[][] memory itemsData
-        ) = c.getSentInvoices(address(this));
-        assertEq(sentInvoices.length, 1);
-        assertEq(sentInvoices[0].to, receiverAdd);
-        // assertEq(sentInvoices[0].amountDue, amount);
-        assertTrue(sentInvoices[0].isPaid == false);
-        assertTrue(itemsData.length == 1);
-        assertTrue(itemsData[0].length == 1);
-        assertTrue(itemsData[0][0].amount == 950);
-        // console.log("Sent Invoices Length: ", c.getSentInvoices().length);
-        console.log("Sender Address: ", address(this));
-        console.log("Receiver Address: ", receiverAdd);
-        console.log("Invoice Amount Due: ", amount);
-        console.log("-------------------------------------------");
-
-        (
-            Chainvoice.InvoiceDetails[] memory receivedInvoices,
-            // Chainvoice.ItemData[][] memory itemsDetail
-        ) = c.getReceivedInvoices(0x24F13d40CF7DE6a81a2a1949aA45F2242e81f1e2);
-        assertEq(receivedInvoices.length, 1);
-        assertEq(
-            receivedInvoices[0].to,
-            0x24F13d40CF7DE6a81a2a1949aA45F2242e81f1e2
+        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(
+            alice
         );
-        assertEq(receivedInvoices[0].from, address(this));
-        assertEq(receivedInvoices[0].amountDue, amount);
-        assertTrue(receivedInvoices[0].isPaid == false);
+
+        Chainvoice.InvoiceDetails[] memory received = chainvoice
+            .getReceivedInvoices(bob);
+
+        assertEq(sent.length, 1);
+        assertEq(received.length, 1);
+
+        Chainvoice.InvoiceDetails memory inv = sent[0];
+
+        assertEq(inv.from, alice);
+        assertEq(inv.to, bob);
+        assertEq(inv.amountDue, 1 ether);
+        assertEq(inv.tokenAddress, address(0));
+        assertFalse(inv.isPaid);
+        assertFalse(inv.isCancelled);
     }
 
-    function testPayInvoice() public {
-        // Set up invoice details
-        address receiverAdd = 0x24F13d40CF7DE6a81a2a1949aA45F2242e81f1e2;
-        uint256 amount = 100;
-        uint256 fee = 500000000000000; //0.0005 ether
-        string memory dueDate = "4/1/2025, 8:45:47 PM";
-        string memory issueDate = "4/19/2025, 8:45:47 PM";
-        Chainvoice.UserDetails memory sender = Chainvoice.UserDetails({
-            fname: "Alice",
-            lname: "Doe",
-            email: "alice@example.com",
-            country: "UK",
-            city: "London",
-            postalcode: "SW1A 1AA"
-        });
+    /* ------------------------------------------------------------ */
+    /*                       PAY INVOICE                            */
+    /* ------------------------------------------------------------ */
 
-        Chainvoice.UserDetails memory receiver = Chainvoice.UserDetails({
-            fname: "Bob",
-            lname: "Smith",
-            email: "bob@example.com",
-            country: "UK",
-            city: "Manchester",
-            postalcode: "M1 1AA"
-        });
+    function testPayInvoice_Native() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), "encrypted", "hash");
 
-        Chainvoice.ItemData[] memory Items = new Chainvoice.ItemData[](1);
-        Items[0] = Chainvoice.ItemData({
-            description: "Laptop",
-            qty: 1,
-            unitPrice: 1000,
-            discount: 100,
-            tax: 50,
-            amount: 950
-        });
-        c.createInvoice(
-            amount,
-            receiverAdd,
-            issueDate,
-            dueDate,
-            sender,
-            receiver,
-            Items
-        );
+        uint256 fee = chainvoice.fee();
+        uint256 bobStartBal = bob.balance;
+        uint256 aliceStartBal = alice.balance;
 
-        vm.deal(receiverAdd, 500000000000100);
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
 
-        console.log("Fee in native currency : ", fee);
-        uint256 initialBalance = receiverAdd.balance;
-        console.log("Initial Receiver Balance: ", initialBalance);
-        vm.prank(receiverAdd);
-        c.payInvoice{value: amount + fee}(0);
+        Chainvoice.InvoiceDetails memory inv = chainvoice.getInvoice(0);
 
-        (Chainvoice.InvoiceDetails[] memory sentInvoices, ) = // Chainvoice.ItemData[][] memory itemsDetail
-        c.getSentInvoices(address(this));
-        assertEq(sentInvoices.length, 1);
-        assertEq(sentInvoices[0].to, receiverAdd);
-        assertEq(sentInvoices[0].amountDue, amount);
-        assertTrue(sentInvoices[0].isPaid == true);
+        assertTrue(inv.isPaid);
+        assertEq(chainvoice.accumulatedFees(), fee);
 
-        assertEq(c.accumulatedFees(), fee);
-        uint256 finalBalance = receiverAdd.balance;
-        console.log("Final Receiver Balance: ", finalBalance);
-        assertEq(finalBalance, initialBalance - (amount + fee));
+        assertEq(bob.balance, bobStartBal - (1 ether + fee));
+        assertEq(alice.balance, aliceStartBal + 1 ether);
+    }
 
-        // console.log("Sent Invoices Length: ", c.getSentInvoices().length);
-        console.log("Sender Address: ", address(this));
-        console.log("Receiver Address: ", receiverAdd);
-        console.log("Invoice Amount Due: ", amount);
-        console.log("Paid", sentInvoices[0].isPaid);
-        console.log("Accumulated Fees: ", c.accumulatedFees());
-        console.log("-------------------------------------------");
+    /* ------------------------------------------------------------ */
+    /*                       CANCEL INVOICE                         */
+    /* ------------------------------------------------------------ */
+
+    function testCancelInvoice() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
+
+        vm.prank(alice);
+        chainvoice.cancelInvoice(0);
+
+        Chainvoice.InvoiceDetails memory inv = chainvoice.getInvoice(0);
+
+        assertTrue(inv.isCancelled);
+        assertFalse(inv.isPaid);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                       FAILURE CASES                          */
+    /* ------------------------------------------------------------ */
+
+    function testPayInvoice_RevertIfWrongPayer() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
+        uint256 fee = chainvoice.fee();
+        vm.expectRevert("Not authorized");
+        vm.prank(alice);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+    }
+
+    function testPayInvoice_RevertIfIncorrectValue() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
+
+        vm.expectRevert("Incorrect payment amount");
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether}(0);
     }
 }
