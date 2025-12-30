@@ -208,7 +208,7 @@ function Navbar() {
             >
               <ConnectButton
                 accountStatus="address"
-                chainStatus="none"
+                chainStatus="full"
                 showBalance={{
                   smallScreen: false,
                   largeScreen: true,
@@ -298,8 +298,8 @@ function Navbar() {
                 <div className="px-4 py-2">
                   <ConnectButton
                     accountStatus="full"
-                    chainStatus="none"
-                    showBalance={false}
+                    chainStatus="full"
+                    showBalance={true}
                   />
                 </div>
               </div>
