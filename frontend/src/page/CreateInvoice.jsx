@@ -45,6 +45,7 @@ import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
+import CountryPicker from "@/components/CountryPicker";
 
 function CreateInvoice() {
   const { data: walletClient } = useWalletClient();
@@ -58,6 +59,8 @@ function CreateInvoice() {
 
   const [searchParams] = useSearchParams();
   const [clientAddress, setClientAddress] = useState("");
+  const [userCountry, setUserCountry] = useState("");
+  const [clientCountry, setClientCountry] = useState("");
 
   // Token selection state
   const [selectedToken, setSelectedToken] = useState(null);
@@ -370,14 +373,14 @@ function CreateInvoice() {
       userFname: formData.get("userFname"),
       userLname: formData.get("userLname"),
       userEmail: formData.get("userEmail"),
-      userCountry: formData.get("userCountry"),
+      userCountry: userCountry || formData.get("userCountry") || "",
       userCity: formData.get("userCity"),
       userPostalcode: formData.get("userPostalcode"),
       clientAddress: formData.get("clientAddress"),
       clientFname: formData.get("clientFname"),
       clientLname: formData.get("clientLname"),
       clientEmail: formData.get("clientEmail"),
-      clientCountry: formData.get("clientCountry"),
+      clientCountry: clientCountry || formData.get("clientCountry") || "",
       clientCity: formData.get("clientCity"),
       clientPostalcode: formData.get("clientPostalcode"),
       itemData,
@@ -542,12 +545,20 @@ function CreateInvoice() {
                     <Label className="text-sm font-medium text-gray-700">
                       Country
                     </Label>
-                    <Input
-                      type="text"
-                      placeholder="Country"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="userCountry"
-                    />
+                    <div className="mt-1">
+                      <CountryPicker
+                        value={userCountry}
+                        onChange={setUserCountry}
+                        placeholder="Select country"
+                        className="w-full border-gray-300 text-black"
+                        disabled={loading}
+                      />
+                      <input
+                        type="hidden"
+                        name="userCountry"
+                        value={userCountry}
+                      />
+                    </div>
                   </div>
                 </div>
 
@@ -632,12 +643,20 @@ function CreateInvoice() {
                     <Label className="text-sm font-medium text-gray-700">
                       Country
                     </Label>
-                    <Input
-                      type="text"
-                      placeholder="Country"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="clientCountry"
-                    />
+                    <div className="mt-1">
+                      <CountryPicker
+                        value={clientCountry}
+                        onChange={setClientCountry}
+                        placeholder="Select country"
+                        className="w-full border-gray-300 text-black"
+                        disabled={loading}
+                      />
+                      <input
+                        type="hidden"
+                        name="clientCountry"
+                        value={clientCountry}
+                      />
+                    </div>
                   </div>
                 </div>
 
