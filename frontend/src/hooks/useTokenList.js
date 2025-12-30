@@ -25,6 +25,8 @@ export function useTokenList(chainId) {
       // Return cached tokens if available
       if (tokenCache[chainId]) {
         setTokens(tokenCache[chainId]);
+        setError(null);
+        setLoading(false);
         return;
       }
 

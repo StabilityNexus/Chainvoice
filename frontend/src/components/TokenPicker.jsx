@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useTokenList } from "../hooks/useTokenList";
+import { ChainIdToName, useTokenList } from "../hooks/useTokenList";
 import { useTokenSearch } from "../hooks/useTokenSearch";
 import { CopyButton } from "./ui/copyButton";
 import { Avatar } from "./ui/avatar";
@@ -315,12 +315,37 @@ export function TokenPicker({
                 <div className="flex items-center justify-center py-12">
                   <div className="flex flex-col items-center gap-3 text-gray-500">
                     <AlertCircle className="w-8 h-8" />
-                    <span className="text-sm font-medium">
-                      Failed to load tokens
-                    </span>
-                    <span className="text-xs text-center max-w-[280px]">
-                      {tokensError}
-                    </span>
+                    {tokensError.includes("manually input") ? (
+                      <>
+                        <span className="text-sm font-medium">
+                          Testnet:{" "}
+                          {ChainIdToName[chainId] || "Unknown"} (
+                          {chainId})
+                        </span>
+                        <span className="text-xs text-center max-w-[280px]">
+                          Token Selection is not supported in testnets.
+                        </span>
+                        <span className="text-xs text-center max-w-[280px]">
+                          {tokensError}
+                        </span>
+                      </>
+                    ) : tokensError.includes("not supported") ? (
+                      <>
+                        <span className="text-sm font-medium">
+                          Chain Not Supported
+                        </span>
+                        <span className="text-xs text-center">{tokensError}</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm font-medium">
+                          Failed to load tokens
+                        </span>
+                        <span className="text-xs text-center max-w-[280px]">
+                          {tokensError}
+                        </span>
+                      </>
+                    )}
                   </div>
                 </div>
               ) : filteredTokens.length === 0 ? (
