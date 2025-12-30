@@ -1,4 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import {
@@ -28,7 +30,9 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Label } from "../components/ui/label";
-import { useNavigate, useSearchParams } from "react-router-dom"; 
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { createInvoiceSchema } from "@/lib/validationSchemas";
+import { ErrorMessage } from "@/components/ui/errorMessage"; 
 
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { encryptString } from "@lit-protocol/encryption/src/lib/encryption.js";
@@ -58,9 +62,49 @@ function CreateInvoice() {
   const litClientRef = useRef(null);
 
   const [searchParams] = useSearchParams();
-  const [clientAddress, setClientAddress] = useState("");
   const [userCountry, setUserCountry] = useState("");
   const [clientCountry, setClientCountry] = useState("");
+
+  // React Hook Form setup
+  const {
+    register,
+    handleSubmit: handleFormSubmit,
+    formState: { errors, touchedFields, isSubmitted },
+    setValue,
+    watch,
+    trigger,
+  } = useForm({
+    resolver: zodResolver(createInvoiceSchema),
+    mode: "onTouched",
+    defaultValues: {
+      userAddress: account?.address || "",
+      userFname: "",
+      userLname: "",
+      userEmail: "",
+      userCountry: "",
+      userCity: "",
+      userPostalcode: "",
+      clientAddress: "",
+      clientFname: "",
+      clientLname: "",
+      clientEmail: "",
+      clientCountry: "",
+      clientCity: "",
+      clientPostalcode: "",
+      itemData: [
+        {
+          description: "",
+          qty: "",
+          unitPrice: "",
+          discount: "",
+          tax: "",
+          amount: "",
+        },
+      ],
+    },
+  });
+
+  const clientAddress = watch("clientAddress");
 
   // Token selection state
   const [selectedToken, setSelectedToken] = useState(null);
@@ -74,7 +118,7 @@ function CreateInvoice() {
 
   const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"]; //sepolia based chainvoice test token (CIN)
 
-  const [itemData, setItemData] = useState([
+  const itemData = watch("itemData") || [
     {
       description: "",
       qty: "",
@@ -83,7 +127,7 @@ function CreateInvoice() {
       tax: "",
       amount: "",
     },
-  ]);
+  ];
 
   const [totalAmountDue, setTotalAmountDue] = useState(0);
 
@@ -94,7 +138,12 @@ function CreateInvoice() {
     const isCustomFromURL = searchParams.get("customToken") === "true";
 
     if (urlClientAddress) {
-      setClientAddress(urlClientAddress);
+      setValue("clientAddress", urlClientAddress);
+      trigger("clientAddress");
+    }
+
+    if (account?.address) {
+      setValue("userAddress", account.address, { shouldValidate: false });
     }
 
     if (urlTokenAddress) {
@@ -120,7 +169,8 @@ function CreateInvoice() {
   }, [searchParams]);
 
   useEffect(() => {
-    const total = itemData.reduce((sum, item) => {
+    const currentItems = itemData || [];
+    const total = currentItems.reduce((sum, item) => {
       const qty = parseUnits(item.qty || "0", 18);
       const unitPrice = parseUnits(item.unitPrice || "0", 18);
       const discount = parseUnits(item.discount || "0", 18);
@@ -154,37 +204,40 @@ function CreateInvoice() {
 
   const handleItemData = (e, index) => {
     const { name, value } = e.target;
+    const currentItems = watch("itemData") || [];
 
-    setItemData((prevItemData) =>
-      prevItemData.map((item, i) => {
-        if (i === index) {
-          const updatedItem = { ...item, [name]: value };
-          if (
-            name === "qty" ||
-            name === "unitPrice" ||
-            name === "discount" ||
-            name === "tax"
-          ) {
-            const qty = parseUnits(updatedItem.qty || "0", 18);
-            const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
-            const discount = parseUnits(updatedItem.discount || "0", 18);
-            const tax = parseUnits(updatedItem.tax || "0", 18);
+    const updatedItems = currentItems.map((item, i) => {
+      if (i === index) {
+        const updatedItem = { ...item, [name]: value };
+        if (
+          name === "qty" ||
+          name === "unitPrice" ||
+          name === "discount" ||
+          name === "tax"
+        ) {
+          const qty = parseUnits(updatedItem.qty || "0", 18);
+          const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
+          const discount = parseUnits(updatedItem.discount || "0", 18);
+          const tax = parseUnits(updatedItem.tax || "0", 18);
 
-            const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-            const finalAmount = lineTotal - discount + tax;
+          const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
+          const finalAmount = lineTotal - discount + tax;
 
-            updatedItem.amount = formatUnits(finalAmount, 18);
-          }
-          return updatedItem;
+          updatedItem.amount = formatUnits(finalAmount, 18);
         }
-        return item;
-      })
-    );
+        return updatedItem;
+      }
+      return item;
+    });
+
+    setValue("itemData", updatedItems, { shouldValidate: true });
+    trigger(`itemData.${index}.${name}`);
   };
 
   const addItem = () => {
-    setItemData((prev) => [
-      ...prev,
+    const currentItems = watch("itemData") || [];
+    setValue("itemData", [
+      ...currentItems,
       {
         description: "",
         qty: "",
@@ -193,7 +246,7 @@ function CreateInvoice() {
         tax: "",
         amount: "",
       },
-    ]);
+    ], { shouldValidate: true });
   };
 
   const verifyToken = async (address) => {
@@ -363,29 +416,14 @@ function CreateInvoice() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const formData = new FormData(e.target);
-
-
-    const data = {
-      userAddress: formData.get("userAddress"),
-      userFname: formData.get("userFname"),
-      userLname: formData.get("userLname"),
-      userEmail: formData.get("userEmail"),
-      userCountry: userCountry || formData.get("userCountry") || "",
-      userCity: formData.get("userCity"),
-      userPostalcode: formData.get("userPostalcode"),
-      clientAddress: formData.get("clientAddress"),
-      clientFname: formData.get("clientFname"),
-      clientLname: formData.get("clientLname"),
-      clientEmail: formData.get("clientEmail"),
-      clientCountry: clientCountry || formData.get("clientCountry") || "",
-      clientCity: formData.get("clientCity"),
-      clientPostalcode: formData.get("clientPostalcode"),
-      itemData,
+  const handleSubmit = async (data) => {
+    // Merge country values from state (CountryPicker) with form data
+    const formData = {
+      ...data,
+      userCountry: userCountry || data.userCountry || "",
+      clientCountry: clientCountry || data.clientCountry || "",
     };
-    await createInvoiceRequest(data);
+    await createInvoiceRequest(formData);
   };
 
   return (
@@ -490,18 +528,23 @@ function CreateInvoice() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleFormSubmit(handleSubmit)}>
           <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 mb-6 sm:mb-8">
             <div className="w-full border border-gray-200 flex-1 p-4 sm:p-6 rounded-lg shadow-sm bg-white overflow-hidden">
               <h3 className="text-base sm:text-lg font-semibold mb-4 text-gray-800">
                 From (Your Information)
               </h3>
-              <Input
-                value={account?.address}
-                className="w-full mb-4 bg-gray-50 border-gray-300 text-gray-500 text-xs sm:text-sm font-mono"
-                readOnly
-                name="userAddress"
-              />
+              <div className="mb-4">
+                <Input
+                  {...register("userAddress")}
+                  className={cn(
+                    "w-full bg-gray-50 border-gray-300 text-gray-500 text-xs sm:text-sm font-mono",
+                    errors.userAddress && "border-red-500"
+                  )}
+                  readOnly
+                />
+                <ErrorMessage message={errors.userAddress?.message} />
+              </div>
 
               <div className="space-y-3 sm:space-y-4">
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
@@ -512,9 +555,13 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Your First Name"
-                      className="w-full mt-1 border-gray-300 text-black "
-                      name="userFname"
+                      className={cn(
+                        "w-full mt-1 border-gray-300 text-black",
+                        errors.userFname && "border-red-500"
+                      )}
+                      {...register("userFname")}
                     />
+                    <ErrorMessage message={errors.userFname?.message} />
                   </div>
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
@@ -523,9 +570,13 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Your Last Name"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="userLname"
+                      className={cn(
+                        "w-full mt-1 border-gray-300 text-black",
+                        errors.userLname && "border-red-500"
+                      )}
+                      {...register("userLname")}
                     />
+                    <ErrorMessage message={errors.userLname?.message} />
                   </div>
                 </div>
 
@@ -537,9 +588,13 @@ function CreateInvoice() {
                     <Input
                       type="email"
                       placeholder="Email"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="userEmail"
+                      className={cn(
+                        "w-full mt-1 border-gray-300 text-black",
+                        errors.userEmail && "border-red-500"
+                      )}
+                      {...register("userEmail")}
                     />
+                    <ErrorMessage message={errors.userEmail?.message} />
                   </div>
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
@@ -548,17 +603,19 @@ function CreateInvoice() {
                     <div className="mt-1">
                       <CountryPicker
                         value={userCountry}
-                        onChange={setUserCountry}
+                        onChange={(value) => {
+                          setUserCountry(value);
+                          setValue("userCountry", value, { shouldValidate: true });
+                        }}
                         placeholder="Select country"
-                        className="w-full border-gray-300 text-black"
+                        className={cn(
+                          "w-full border-gray-300 text-black",
+                          errors.userCountry && "border-red-500"
+                        )}
                         disabled={loading}
                       />
-                      <input
-                        type="hidden"
-                        name="userCountry"
-                        value={userCountry}
-                      />
                     </div>
+                    <ErrorMessage message={errors.userCountry?.message} />
                   </div>
                 </div>
 
@@ -570,9 +627,13 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="City"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="userCity"
+                      className={cn(
+                        "w-full mt-1 border-gray-300 text-black",
+                        errors.userCity && "border-red-500"
+                      )}
+                      {...register("userCity")}
                     />
+                    <ErrorMessage message={errors.userCity?.message} />
                   </div>
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
@@ -581,9 +642,13 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Postal Code"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="userPostalcode"
+                      className={cn(
+                        "w-full mt-1 border-gray-300 text-black",
+                        errors.userPostalcode && "border-red-500"
+                      )}
+                      {...register("userPostalcode")}
                     />
+                    <ErrorMessage message={errors.userPostalcode?.message} />
                   </div>
                 </div>
               </div>
@@ -593,13 +658,21 @@ function CreateInvoice() {
               <h3 className="text-lg font-semibold mb-4 text-gray-800">
                 Client Information
               </h3>
-              <Input
-                placeholder="Client Wallet Address"
-                className="w-full mb-4 border-gray-300 text-black"
-                name="clientAddress"
-                value={clientAddress}
-                onChange={(e) => setClientAddress(e.target.value)}
-              />
+              <div className="mb-4">
+                <Input
+                  placeholder="Client Wallet Address (0x...)"
+                  className={cn(
+                    "w-full border-gray-300 text-black font-mono",
+                    errors.clientAddress && "border-red-500"
+                  )}
+                  {...register("clientAddress", {
+                    onChange: (e) => {
+                      trigger("clientAddress");
+                    },
+                  })}
+                />
+                <ErrorMessage message={errors.clientAddress?.message} />
+              </div>
 
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row gap-4">
@@ -610,9 +683,13 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Client First Name"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="clientFname"
+                      className={cn(
+                        "w-full mt-1 border-gray-300 text-black",
+                        errors.clientFname && "border-red-500"
+                      )}
+                      {...register("clientFname")}
                     />
+                    <ErrorMessage message={errors.clientFname?.message} />
                   </div>
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
@@ -621,9 +698,13 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Client Last Name"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="clientLname"
+                      className={cn(
+                        "w-full mt-1 border-gray-300 text-black",
+                        errors.clientLname && "border-red-500"
+                      )}
+                      {...register("clientLname")}
                     />
+                    <ErrorMessage message={errors.clientLname?.message} />
                   </div>
                 </div>
 
@@ -635,9 +716,13 @@ function CreateInvoice() {
                     <Input
                       type="email"
                       placeholder="Email"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="clientEmail"
+                      className={cn(
+                        "w-full mt-1 border-gray-300 text-black",
+                        errors.clientEmail && "border-red-500"
+                      )}
+                      {...register("clientEmail")}
                     />
+                    <ErrorMessage message={errors.clientEmail?.message} />
                   </div>
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
@@ -646,17 +731,19 @@ function CreateInvoice() {
                     <div className="mt-1">
                       <CountryPicker
                         value={clientCountry}
-                        onChange={setClientCountry}
+                        onChange={(value) => {
+                          setClientCountry(value);
+                          setValue("clientCountry", value, { shouldValidate: true });
+                        }}
                         placeholder="Select country"
-                        className="w-full border-gray-300 text-black"
+                        className={cn(
+                          "w-full border-gray-300 text-black",
+                          errors.clientCountry && "border-red-500"
+                        )}
                         disabled={loading}
                       />
-                      <input
-                        type="hidden"
-                        name="clientCountry"
-                        value={clientCountry}
-                      />
                     </div>
+                    <ErrorMessage message={errors.clientCountry?.message} />
                   </div>
                 </div>
 
@@ -668,9 +755,13 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="City"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="clientCity"
+                      className={cn(
+                        "w-full mt-1 border-gray-300 text-black",
+                        errors.clientCity && "border-red-500"
+                      )}
+                      {...register("clientCity")}
                     />
+                    <ErrorMessage message={errors.clientCity?.message} />
                   </div>
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
@@ -679,9 +770,13 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Postal Code"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="clientPostalcode"
+                      className={cn(
+                        "w-full mt-1 border-gray-300 text-black",
+                        errors.clientPostalcode && "border-red-500"
+                      )}
+                      {...register("clientPostalcode")}
                     />
+                    <ErrorMessage message={errors.clientPostalcode?.message} />
                   </div>
                 </div>
               </div>
@@ -937,9 +1032,16 @@ function CreateInvoice() {
                         <Input
                           type="text"
                           placeholder="Enter Description"
-                          className="w-full border-gray-300 text-black"
-                          name="description"
+                          className={cn(
+                            "w-full border-gray-300 text-black",
+                            errors.itemData?.[index]?.description && (touchedFields.itemData?.[index]?.description || isSubmitted) && "border-red-500"
+                          )}
+                          {...register(`itemData.${index}.description`)}
                           onChange={(e) => handleItemData(e, index)}
+                        />
+                        <ErrorMessage 
+                          message={errors.itemData?.[index]?.description?.message} 
+                          show={!!touchedFields.itemData?.[index]?.description || isSubmitted}
                         />
                       </div>
                       
@@ -949,9 +1051,16 @@ function CreateInvoice() {
                           <Input
                             type="number"
                             placeholder="0"
-                            className="w-full border-gray-300 text-black"
-                            name="qty"
+                            className={cn(
+                              "w-full border-gray-300 text-black",
+                              errors.itemData?.[index]?.qty && (touchedFields.itemData?.[index]?.qty || isSubmitted) && "border-red-500"
+                            )}
+                            {...register(`itemData.${index}.qty`)}
                             onChange={(e) => handleItemData(e, index)}
+                          />
+                          <ErrorMessage 
+                            message={errors.itemData?.[index]?.qty?.message} 
+                            show={!!touchedFields.itemData?.[index]?.qty || isSubmitted}
                           />
                         </div>
                         <div>
@@ -959,9 +1068,16 @@ function CreateInvoice() {
                           <Input
                             type="text"
                             placeholder="0"
-                            className="w-full border-gray-300 text-black"
-                            name="unitPrice"
+                            className={cn(
+                              "w-full border-gray-300 text-black",
+                              errors.itemData?.[index]?.unitPrice && (touchedFields.itemData?.[index]?.unitPrice || isSubmitted) && "border-red-500"
+                            )}
+                            {...register(`itemData.${index}.unitPrice`)}
                             onChange={(e) => handleItemData(e, index)}
+                          />
+                          <ErrorMessage 
+                            message={errors.itemData?.[index]?.unitPrice?.message} 
+                            show={!!touchedFields.itemData?.[index]?.unitPrice || isSubmitted}
                           />
                         </div>
                       </div>
@@ -972,9 +1088,16 @@ function CreateInvoice() {
                           <Input
                             type="text"
                             placeholder="0"
-                            className="w-full border-gray-300 text-black"
-                            name="discount"
+                            className={cn(
+                              "w-full border-gray-300 text-black",
+                              errors.itemData?.[index]?.discount && (touchedFields.itemData?.[index]?.discount || isSubmitted) && "border-red-500"
+                            )}
+                            {...register(`itemData.${index}.discount`)}
                             onChange={(e) => handleItemData(e, index)}
+                          />
+                          <ErrorMessage 
+                            message={errors.itemData?.[index]?.discount?.message} 
+                            show={!!touchedFields.itemData?.[index]?.discount || isSubmitted}
                           />
                         </div>
                         <div>
@@ -982,9 +1105,16 @@ function CreateInvoice() {
                           <Input
                             type="text"
                             placeholder="0"
-                            className="w-full border-gray-300 text-black"
-                            name="tax"
+                            className={cn(
+                              "w-full border-gray-300 text-black",
+                              errors.itemData?.[index]?.tax && (touchedFields.itemData?.[index]?.tax || isSubmitted) && "border-red-500"
+                            )}
+                            {...register(`itemData.${index}.tax`)}
                             onChange={(e) => handleItemData(e, index)}
+                          />
+                          <ErrorMessage 
+                            message={errors.itemData?.[index]?.tax?.message} 
+                            show={!!touchedFields.itemData?.[index]?.tax || isSubmitted}
                           />
                         </div>
                       </div>
@@ -1010,9 +1140,10 @@ function CreateInvoice() {
                         <Button
                           type="button"
                           onClick={() => {
-                            const newItems = [...itemData];
+                            const currentItems = watch("itemData") || [];
+                            const newItems = [...currentItems];
                             newItems.splice(index, 1);
-                            setItemData(newItems);
+                            setValue("itemData", newItems, { shouldValidate: true });
                           }}
                           variant="ghost"
                           size="sm"
@@ -1036,50 +1167,85 @@ function CreateInvoice() {
                     </div>
 
                     {/* Desktop Layout - Grid */}
-                    <div className="hidden md:grid grid-cols-12 gap-2 items-center">
+                    <div className="hidden md:grid grid-cols-12 gap-2 items-start">
                       <div className="col-span-4">
                         <Input
                           type="text"
                           placeholder="Enter Description"
-                          className="w-full border-gray-300 text-black"
-                          name="description"
+                          className={cn(
+                            "w-full border-gray-300 text-black",
+                            errors.itemData?.[index]?.description && (touchedFields.itemData?.[index]?.description || isSubmitted) && "border-red-500"
+                          )}
+                          {...register(`itemData.${index}.description`)}
                           onChange={(e) => handleItemData(e, index)}
+                        />
+                        <ErrorMessage 
+                          message={errors.itemData?.[index]?.description?.message} 
+                          show={!!touchedFields.itemData?.[index]?.description || isSubmitted}
                         />
                       </div>
                       <div className="col-span-1">
                         <Input
                           type="number"
                           placeholder="0"
-                          className="w-full border-gray-300 text-black py-2"
-                          name="qty"
+                          className={cn(
+                            "w-full border-gray-300 text-black py-2",
+                            errors.itemData?.[index]?.qty && (touchedFields.itemData?.[index]?.qty || isSubmitted) && "border-red-500"
+                          )}
+                          {...register(`itemData.${index}.qty`)}
                           onChange={(e) => handleItemData(e, index)}
+                        />
+                        <ErrorMessage 
+                          message={errors.itemData?.[index]?.qty?.message} 
+                          show={!!touchedFields.itemData?.[index]?.qty || isSubmitted}
                         />
                       </div>
                       <div className="col-span-2">
                         <Input
                           type="text"
                           placeholder="0"
-                          className="w-full border-gray-300 text-black py-2"
-                          name="unitPrice"
+                          className={cn(
+                            "w-full border-gray-300 text-black py-2",
+                            errors.itemData?.[index]?.unitPrice && (touchedFields.itemData?.[index]?.unitPrice || isSubmitted) && "border-red-500"
+                          )}
+                          {...register(`itemData.${index}.unitPrice`)}
                           onChange={(e) => handleItemData(e, index)}
+                        />
+                        <ErrorMessage 
+                          message={errors.itemData?.[index]?.unitPrice?.message} 
+                          show={!!touchedFields.itemData?.[index]?.unitPrice || isSubmitted}
                         />
                       </div>
                       <div className="col-span-1">
                         <Input
                           type="text"
                           placeholder="0"
-                          className="w-full border-gray-300 text-black py-2"
-                          name="discount"
+                          className={cn(
+                            "w-full border-gray-300 text-black py-2",
+                            errors.itemData?.[index]?.discount && (touchedFields.itemData?.[index]?.discount || isSubmitted) && "border-red-500"
+                          )}
+                          {...register(`itemData.${index}.discount`)}
                           onChange={(e) => handleItemData(e, index)}
+                        />
+                        <ErrorMessage 
+                          message={errors.itemData?.[index]?.discount?.message} 
+                          show={!!touchedFields.itemData?.[index]?.discount || isSubmitted}
                         />
                       </div>
                       <div className="col-span-1">
                         <Input
                           type="text"
                           placeholder="0"
-                          className="w-full border-gray-300 text-black py-2"
-                          name="tax"
+                          className={cn(
+                            "w-full border-gray-300 text-black py-2",
+                            errors.itemData?.[index]?.tax && (touchedFields.itemData?.[index]?.tax || isSubmitted) && "border-red-500"
+                          )}
+                          {...register(`itemData.${index}.tax`)}
                           onChange={(e) => handleItemData(e, index)}
+                        />
+                        <ErrorMessage 
+                          message={errors.itemData?.[index]?.tax?.message} 
+                          show={!!touchedFields.itemData?.[index]?.tax || isSubmitted}
                         />
                       </div>
                       <div className="col-span-2">
@@ -1102,9 +1268,10 @@ function CreateInvoice() {
                         <button
                           type="button"
                           onClick={() => {
-                            const newItems = [...itemData];
+                            const currentItems = watch("itemData") || [];
+                            const newItems = [...currentItems];
                             newItems.splice(index, 1);
-                            setItemData(newItems);
+                            setValue("itemData", newItems, { shouldValidate: true });
                           }}
                           className="col-span-1 flex justify-center bg-green-500 text-white rounded-full p-2 hover:bg-green-600 transition-colors mx-auto"
                           aria-label="Delete item"
@@ -1128,6 +1295,11 @@ function CreateInvoice() {
                 ))}
               </div>
             </div>
+            {errors.itemData && typeof errors.itemData.message === "string" && (
+              <div className="mt-2">
+                <ErrorMessage message={errors.itemData.message} />
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 mt-4">
               <Button
                 className="bg-white text-gray-800 border border-gray-300 hover:bg-gray-50 px-6 py-2 flex items-center gap-2"

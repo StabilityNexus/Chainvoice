@@ -1,5 +1,7 @@
 // pages/CreateInvoicesBatch.jsx - Clean & Professional
 import React, { useEffect, useRef, useState } from "react";
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import {
@@ -38,6 +40,8 @@ import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { createBatchInvoicesSchema } from "@/lib/validationSchemas";
+import { ErrorMessage } from "@/components/ui/errorMessage";
 
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { encryptString } from "@lit-protocol/encryption/src/lib/encryption.js";
@@ -76,61 +80,84 @@ function CreateInvoicesBatch() {
   // UI state for collapsible invoices
   const [expandedInvoice, setExpandedInvoice] = useState(0);
 
-  // Batch invoice data
-  const [invoiceRows, setInvoiceRows] = useState([
-    {
-      clientAddress: "",
-      clientFname: "",
-      clientLname: "",
-      clientEmail: "",
-      clientCountry: "",
-      clientCity: "",
-      clientPostalcode: "",
-      itemData: [
+  // React Hook Form setup
+  const {
+    register,
+    handleSubmit: handleFormSubmit,
+    formState: { errors, touchedFields, isSubmitted },
+    setValue,
+    watch,
+    control,
+    trigger,
+  } = useForm({
+    resolver: zodResolver(createBatchInvoicesSchema),
+    mode: "onTouched",
+    defaultValues: {
+      userFname: "",
+      userLname: "",
+      userEmail: "",
+      userCountry: "",
+      userCity: "",
+      userPostalcode: "",
+      invoiceRows: [
         {
-          description: "",
-          qty: "",
-          unitPrice: "",
-          discount: "",
-          tax: "",
-          amount: "",
+          clientAddress: "",
+          clientFname: "",
+          clientLname: "",
+          clientEmail: "",
+          clientCountry: "",
+          clientCity: "",
+          clientPostalcode: "",
+          itemData: [
+            {
+              description: "",
+              qty: "",
+              unitPrice: "",
+              discount: "",
+              tax: "",
+              amount: "",
+            },
+          ],
+          totalAmountDue: 0,
         },
       ],
-      totalAmountDue: 0,
     },
-  ]);
-
-  // User info (shared across all invoices)
-  const [userInfo, setUserInfo] = useState({
-    userFname: "",
-    userLname: "",
-    userEmail: "",
-    userCountry: "",
-    userCity: "",
-    userPostalcode: "",
   });
+
+  const { fields: invoiceRowFields, append: appendInvoiceRow, remove: removeInvoiceRow } = useFieldArray({
+    control,
+    name: "invoiceRows",
+  });
+
+  // Watch form values
+  const invoiceRows = watch("invoiceRows") || [];
+  const userInfo = watch();
 
   // Calculate totals for each invoice
   useEffect(() => {
-    setInvoiceRows((prev) =>
-      prev.map((row) => {
-        const total = row.itemData.reduce((sum, item) => {
-          const qty = parseUnits(item.qty || "0", 18);
-          const unitPrice = parseUnits(item.unitPrice || "0", 18);
-          const discount = parseUnits(item.discount || "0", 18);
-          const tax = parseUnits(item.tax || "0", 18);
-          const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-          const adjusted = lineTotal - discount + tax;
-          return sum + adjusted;
-        }, 0n);
+    const currentRows = watch("invoiceRows") || [];
+    const updatedRows = currentRows.map((row) => {
+      const total = (row.itemData || []).reduce((sum, item) => {
+        const qty = parseUnits(item.qty || "0", 18);
+        const unitPrice = parseUnits(item.unitPrice || "0", 18);
+        const discount = parseUnits(item.discount || "0", 18);
+        const tax = parseUnits(item.tax || "0", 18);
+        const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
+        const adjusted = lineTotal - discount + tax;
+        return sum + adjusted;
+      }, 0n);
 
-        return {
-          ...row,
-          totalAmountDue: formatUnits(total, 18),
-        };
-      })
-    );
-  }, [invoiceRows.map((r) => JSON.stringify(r.itemData)).join(",")]);
+      return {
+        ...row,
+        totalAmountDue: parseFloat(formatUnits(total, 18)),
+      };
+    });
+
+    // Update form values
+    updatedRows.forEach((row, index) => {
+      setValue(`invoiceRows.${index}.totalAmountDue`, row.totalAmountDue, { shouldValidate: false });
+    });
+  }, [watch("invoiceRows")]);
 
   // Initialize Lit
   useEffect(() => {
@@ -154,36 +181,33 @@ function CreateInvoicesBatch() {
   // Invoice management
   const addInvoiceRow = () => {
     const newIndex = invoiceRows.length;
-    setInvoiceRows((prev) => [
-      ...prev,
-      {
-        clientAddress: "",
-        clientFname: "",
-        clientLname: "",
-        clientEmail: "",
-        clientCountry: "",
-        clientCity: "",
-        clientPostalcode: "",
-        itemData: [
-          {
-            description: "",
-            qty: "",
-            unitPrice: "",
-            discount: "",
-            tax: "",
-            amount: "",
-          },
-        ],
-        totalAmountDue: 0,
-      },
-    ]);
+    appendInvoiceRow({
+      clientAddress: "",
+      clientFname: "",
+      clientLname: "",
+      clientEmail: "",
+      clientCountry: "",
+      clientCity: "",
+      clientPostalcode: "",
+      itemData: [
+        {
+          description: "",
+          qty: "",
+          unitPrice: "",
+          discount: "",
+          tax: "",
+          amount: "",
+        },
+      ],
+      totalAmountDue: 0,
+    });
     setExpandedInvoice(newIndex);
     toast.success("New invoice added to batch");
   };
 
-  const removeInvoiceRow = (index) => {
+  const handleRemoveInvoiceRow = (index) => {
     if (invoiceRows.length > 1) {
-      setInvoiceRows((prev) => prev.filter((_, i) => i !== index));
+      removeInvoiceRow(index);
       if (expandedInvoice === index) {
         setExpandedInvoice(0);
       }
@@ -192,71 +216,47 @@ function CreateInvoicesBatch() {
   };
 
   const updateInvoiceRow = (rowIndex, field, value) => {
-    setInvoiceRows((prev) =>
-      prev.map((row, i) => (i === rowIndex ? { ...row, [field]: value } : row))
-    );
+    setValue(`invoiceRows.${rowIndex}.${field}`, value, { shouldValidate: true });
+    trigger(`invoiceRows.${rowIndex}.${field}`);
   };
 
   // Item management
   const handleItemData = (e, rowIndex, itemIndex) => {
     const { name, value } = e.target;
+    setValue(`invoiceRows.${rowIndex}.itemData.${itemIndex}.${name}`, value, { shouldValidate: true });
+    
+    // Calculate amount if needed
+    if (name === "qty" || name === "unitPrice" || name === "discount" || name === "tax") {
+      const currentItems = watch(`invoiceRows.${rowIndex}.itemData`) || [];
+      const item = currentItems[itemIndex] || {};
+      const qty = parseUnits(item.qty || "0", 18);
+      const unitPrice = parseUnits(item.unitPrice || "0", 18);
+      const discount = parseUnits(item.discount || "0", 18);
+      const tax = parseUnits(item.tax || "0", 18);
 
-    setInvoiceRows((prevRows) =>
-      prevRows.map((row, rIndex) => {
-        if (rIndex === rowIndex) {
-          const updatedItemData = row.itemData.map((item, iIndex) => {
-            if (iIndex === itemIndex) {
-              const updatedItem = { ...item, [name]: value };
-              if (
-                name === "qty" ||
-                name === "unitPrice" ||
-                name === "discount" ||
-                name === "tax"
-              ) {
-                const qty = parseUnits(updatedItem.qty || "0", 18);
-                const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
-                const discount = parseUnits(updatedItem.discount || "0", 18);
-                const tax = parseUnits(updatedItem.tax || "0", 18);
+      const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
+      const finalAmount = lineTotal - discount + tax;
 
-                const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-                const finalAmount = lineTotal - discount + tax;
-
-                updatedItem.amount = formatUnits(finalAmount, 18);
-              }
-              return updatedItem;
-            }
-            return item;
-          });
-
-          return { ...row, itemData: updatedItemData };
-        }
-        return row;
-      })
-    );
+      setValue(`invoiceRows.${rowIndex}.itemData.${itemIndex}.amount`, formatUnits(finalAmount, 18), { shouldValidate: false });
+    }
+    
+    trigger(`invoiceRows.${rowIndex}.itemData.${itemIndex}.${name}`);
   };
 
   const addItem = (rowIndex) => {
-    setInvoiceRows((prev) =>
-      prev.map((row, i) => {
-        if (i === rowIndex) {
-          return {
-            ...row,
-            itemData: [
-              ...row.itemData,
-              {
-                description: "",
-                qty: "",
-                unitPrice: "",
-                discount: "",
-                tax: "",
-                amount: "",
-              },
-            ],
-          };
-        }
-        return row;
-      })
-    );
+    const currentItems = watch(`invoiceRows.${rowIndex}.itemData`) || [];
+    const newItems = [
+      ...currentItems,
+      {
+        description: "",
+        qty: "",
+        unitPrice: "",
+        discount: "",
+        tax: "",
+        amount: "",
+      },
+    ];
+    setValue(`invoiceRows.${rowIndex}.itemData`, newItems, { shouldValidate: true });
   };
 
   // Token verification
@@ -327,8 +327,9 @@ function CreateInvoicesBatch() {
         return;
       }
 
-      // Validate invoices
-      const validInvoices = invoiceRows.filter(
+      // Validate invoices - use form data
+      const formInvoiceRows = data.invoiceRows || [];
+      const validInvoices = formInvoiceRows.filter(
         (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
       );
 
@@ -353,7 +354,7 @@ function CreateInvoicesBatch() {
 
       toast.info(`Processing ${validInvoices.length} invoices...`);
 
-      // Process each invoice
+      // Process each invoice - use form data
       for (const [index, row] of validInvoices.entries()) {
         toast.info(
           `Encrypting invoice ${index + 1} of ${validInvoices.length}...`
@@ -370,12 +371,12 @@ function CreateInvoicesBatch() {
           },
           user: {
             address: account?.address.toString(),
-            fname: userInfo.userFname,
-            lname: userInfo.userLname,
-            email: userInfo.userEmail,
-            country: userInfo.userCountry,
-            city: userInfo.userCity,
-            postalcode: userInfo.userPostalcode,
+            fname: data.userFname,
+            lname: data.userLname,
+            email: data.userEmail,
+            country: data.userCountry || "",
+            city: data.userCity || "",
+            postalcode: data.userPostalcode || "",
           },
           client: {
             address: row.clientAddress,
@@ -516,16 +517,15 @@ function CreateInvoicesBatch() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    await createInvoicesRequest();
+  const handleSubmit = async (data) => {
+    await createInvoicesRequest(data);
   };
 
-  const totalBatchAmount = invoiceRows.reduce((sum, row) => {
+  const totalBatchAmount = (invoiceRows || []).reduce((sum, row) => {
     return sum + (parseFloat(row.totalAmountDue) || 0);
   }, 0);
 
-  const validInvoices = invoiceRows.filter(
+  const validInvoices = (invoiceRows || []).filter(
     (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
   ).length;
 
@@ -646,7 +646,7 @@ function CreateInvoicesBatch() {
           </div>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleFormSubmit(handleSubmit)}>
           {/* Clean User Information */}
           <div className="mb-6 sm:mb-8">
             <div className="w-full bg-white border border-gray-200 p-4 sm:p-6 rounded-lg shadow-sm overflow-hidden">
@@ -671,15 +671,13 @@ function CreateInvoicesBatch() {
                   </Label>
                   <Input
                     placeholder="Your First Name"
-                    className="w-full mt-1 border-gray-300 text-black"
-                    value={userInfo.userFname}
-                    onChange={(e) =>
-                      setUserInfo((prev) => ({
-                        ...prev,
-                        userFname: e.target.value,
-                      }))
-                    }
+                    className={cn(
+                      "w-full mt-1 border-gray-300 text-black",
+                      errors.userFname && "border-red-500"
+                    )}
+                    {...register("userFname")}
                   />
+                  <ErrorMessage message={errors.userFname?.message} />
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
@@ -687,15 +685,13 @@ function CreateInvoicesBatch() {
                   </Label>
                   <Input
                     placeholder="Your Last Name"
-                    className="w-full mt-1 border-gray-300 text-black"
-                    value={userInfo.userLname}
-                    onChange={(e) =>
-                      setUserInfo((prev) => ({
-                        ...prev,
-                        userLname: e.target.value,
-                      }))
-                    }
+                    className={cn(
+                      "w-full mt-1 border-gray-300 text-black",
+                      errors.userLname && "border-red-500"
+                    )}
+                    {...register("userLname")}
                   />
+                  <ErrorMessage message={errors.userLname?.message} />
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
@@ -704,15 +700,13 @@ function CreateInvoicesBatch() {
                   <Input
                     type="email"
                     placeholder="your.email@example.com"
-                    className="w-full mt-1 border-gray-300 text-black"
-                    value={userInfo.userEmail}
-                    onChange={(e) =>
-                      setUserInfo((prev) => ({
-                        ...prev,
-                        userEmail: e.target.value,
-                      }))
-                    }
+                    className={cn(
+                      "w-full mt-1 border-gray-300 text-black",
+                      errors.userEmail && "border-red-500"
+                    )}
+                    {...register("userEmail")}
                   />
+                  <ErrorMessage message={errors.userEmail?.message} />
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
@@ -720,18 +714,19 @@ function CreateInvoicesBatch() {
                   </Label>
                   <div className="mt-1">
                     <CountryPicker
-                      value={userInfo.userCountry}
-                      onChange={(value) =>
-                        setUserInfo((prev) => ({
-                          ...prev,
-                          userCountry: value,
-                        }))
-                      }
+                      value={watch("userCountry") || ""}
+                      onChange={(value) => {
+                        setValue("userCountry", value, { shouldValidate: true });
+                      }}
                       placeholder="Select country"
-                      className="w-full border-gray-300 text-black"
+                      className={cn(
+                        "w-full border-gray-300 text-black",
+                        errors.userCountry && "border-red-500"
+                      )}
                       disabled={loading}
                     />
                   </div>
+                  <ErrorMessage message={errors.userCountry?.message} />
                 </div>
               </div>
             </div>
@@ -949,7 +944,7 @@ function CreateInvoicesBatch() {
                         className="text-red-600 hover:text-red-800"
                         onClick={(e) => {
                           e.stopPropagation();
-                          removeInvoiceRow(rowIndex);
+                          handleRemoveInvoiceRow(rowIndex);
                         }}
                       >
                         <X className="w-4 h-4" />
@@ -972,16 +967,17 @@ function CreateInvoicesBatch() {
                         </Label>
                         <Input
                           placeholder="0x... (Client's wallet address)"
-                          className="w-full border-gray-300 text-black font-mono"
-                          value={row.clientAddress}
-                          onChange={(e) =>
-                            updateInvoiceRow(
-                              rowIndex,
-                              "clientAddress",
-                              e.target.value
-                            )
-                          }
+                          className={cn(
+                            "w-full border-gray-300 text-black font-mono",
+                            errors.invoiceRows?.[rowIndex]?.clientAddress && "border-red-500"
+                          )}
+                          {...register(`invoiceRows.${rowIndex}.clientAddress`, {
+                            onChange: (e) => {
+                              updateInvoiceRow(rowIndex, "clientAddress", e.target.value);
+                            },
+                          })}
                         />
+                        <ErrorMessage message={errors.invoiceRows?.[rowIndex]?.clientAddress?.message} />
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -991,16 +987,16 @@ function CreateInvoicesBatch() {
                           </Label>
                           <Input
                             placeholder="Client First Name"
-                            className="w-full mt-1 border-gray-300 text-black"
-                            value={row.clientFname}
-                            onChange={(e) =>
-                              updateInvoiceRow(
-                                rowIndex,
-                                "clientFname",
-                                e.target.value
-                              )
-                            }
+                            className={cn(
+                              "w-full mt-1 border-gray-300 text-black",
+                              errors.invoiceRows?.[rowIndex]?.clientFname && "border-red-500"
+                            )}
+                            {...register(`invoiceRows.${rowIndex}.clientFname`)}
+                            onChange={(e) => {
+                              updateInvoiceRow(rowIndex, "clientFname", e.target.value);
+                            }}
                           />
+                          <ErrorMessage message={errors.invoiceRows?.[rowIndex]?.clientFname?.message} />
                         </div>
                         <div>
                           <Label className="text-sm font-medium text-gray-700">
@@ -1008,16 +1004,16 @@ function CreateInvoicesBatch() {
                           </Label>
                           <Input
                             placeholder="Client Last Name"
-                            className="w-full mt-1 border-gray-300 text-black"
-                            value={row.clientLname}
-                            onChange={(e) =>
-                              updateInvoiceRow(
-                                rowIndex,
-                                "clientLname",
-                                e.target.value
-                              )
-                            }
+                            className={cn(
+                              "w-full mt-1 border-gray-300 text-black",
+                              errors.invoiceRows?.[rowIndex]?.clientLname && "border-red-500"
+                            )}
+                            {...register(`invoiceRows.${rowIndex}.clientLname`)}
+                            onChange={(e) => {
+                              updateInvoiceRow(rowIndex, "clientLname", e.target.value);
+                            }}
                           />
+                          <ErrorMessage message={errors.invoiceRows?.[rowIndex]?.clientLname?.message} />
                         </div>
                         <div>
                           <Label className="text-sm font-medium text-gray-700">
@@ -1026,16 +1022,16 @@ function CreateInvoicesBatch() {
                           <Input
                             type="email"
                             placeholder="client@example.com"
-                            className="w-full mt-1 border-gray-300 text-black"
-                            value={row.clientEmail}
-                            onChange={(e) =>
-                              updateInvoiceRow(
-                                rowIndex,
-                                "clientEmail",
-                                e.target.value
-                              )
-                            }
+                            className={cn(
+                              "w-full mt-1 border-gray-300 text-black",
+                              errors.invoiceRows?.[rowIndex]?.clientEmail && "border-red-500"
+                            )}
+                            {...register(`invoiceRows.${rowIndex}.clientEmail`)}
+                            onChange={(e) => {
+                              updateInvoiceRow(rowIndex, "clientEmail", e.target.value);
+                            }}
                           />
+                          <ErrorMessage message={errors.invoiceRows?.[rowIndex]?.clientEmail?.message} />
                         </div>
                         <div>
                           <Label className="text-sm font-medium text-gray-700">
@@ -1043,19 +1039,19 @@ function CreateInvoicesBatch() {
                           </Label>
                           <div className="mt-1">
                             <CountryPicker
-                              value={row.clientCountry}
-                              onChange={(value) =>
-                                updateInvoiceRow(
-                                  rowIndex,
-                                  "clientCountry",
-                                  value
-                                )
-                              }
+                              value={watch(`invoiceRows.${rowIndex}.clientCountry`) || ""}
+                              onChange={(value) => {
+                                updateInvoiceRow(rowIndex, "clientCountry", value);
+                              }}
                               placeholder="Select country"
-                              className="w-full border-gray-300 text-black"
+                              className={cn(
+                                "w-full border-gray-300 text-black",
+                                errors.invoiceRows?.[rowIndex]?.clientCountry && "border-red-500"
+                              )}
                               disabled={loading}
                             />
                           </div>
+                          <ErrorMessage message={errors.invoiceRows?.[rowIndex]?.clientCountry?.message} />
                         </div>
                       </div>
                     </div>
@@ -1081,19 +1077,23 @@ function CreateInvoicesBatch() {
                       <div className="p-2 sm:p-4">
                         {row.itemData.map((item, itemIndex) => (
                           <div
-                            className="flex flex-col md:grid md:grid-cols-12 gap-2 mb-3 pb-3 md:pb-0 border-b md:border-b-0 border-gray-200 md:items-center"
+                            className="flex flex-col md:grid md:grid-cols-12 gap-2 mb-3 pb-3 md:pb-0 border-b md:border-b-0 border-gray-200 md:items-start"
                             key={itemIndex}
                           >
                             <div className="md:col-span-4 w-full">
                               <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Description</label>
                               <Input
                                 placeholder="Enter Description"
-                                className="w-full border-gray-300 text-black"
-                                name="description"
-                                value={item.description}
-                                onChange={(e) =>
-                                  handleItemData(e, rowIndex, itemIndex)
-                                }
+                                className={cn(
+                                  "w-full border-gray-300 text-black",
+                                  errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.description && (touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.description || isSubmitted) && "border-red-500"
+                                )}
+                                {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.description`)}
+                                onChange={(e) => handleItemData(e, rowIndex, itemIndex)}
+                              />
+                              <ErrorMessage 
+                                message={errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.description?.message}
+                                show={!!touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.description || isSubmitted}
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-2 md:contents">
@@ -1102,12 +1102,16 @@ function CreateInvoicesBatch() {
                                 <Input
                                   type="number"
                                   placeholder="0"
-                                  className="w-full border-gray-300 text-black"
-                                  name="qty"
-                                  value={item.qty}
-                                  onChange={(e) =>
-                                    handleItemData(e, rowIndex, itemIndex)
-                                  }
+                                  className={cn(
+                                    "w-full border-gray-300 text-black",
+                                    errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.qty && (touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.qty || isSubmitted) && "border-red-500"
+                                  )}
+                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.qty`)}
+                                  onChange={(e) => handleItemData(e, rowIndex, itemIndex)}
+                                />
+                                <ErrorMessage 
+                                  message={errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.qty?.message}
+                                  show={!!touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.qty || isSubmitted}
                                 />
                               </div>
                               <div className="md:col-span-2">
@@ -1115,12 +1119,16 @@ function CreateInvoicesBatch() {
                                 <Input
                                   type="text"
                                   placeholder="0"
-                                  className="w-full border-gray-300 text-black"
-                                  name="unitPrice"
-                                  value={item.unitPrice}
-                                  onChange={(e) =>
-                                    handleItemData(e, rowIndex, itemIndex)
-                                  }
+                                  className={cn(
+                                    "w-full border-gray-300 text-black",
+                                    errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.unitPrice && (touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.unitPrice || isSubmitted) && "border-red-500"
+                                  )}
+                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.unitPrice`)}
+                                  onChange={(e) => handleItemData(e, rowIndex, itemIndex)}
+                                />
+                                <ErrorMessage 
+                                  message={errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.unitPrice?.message}
+                                  show={!!touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.unitPrice || isSubmitted}
                                 />
                               </div>
                             </div>
@@ -1130,12 +1138,16 @@ function CreateInvoicesBatch() {
                                 <Input
                                   type="text"
                                   placeholder="0"
-                                  className="w-full border-gray-300 text-black"
-                                  name="discount"
-                                  value={item.discount}
-                                  onChange={(e) =>
-                                    handleItemData(e, rowIndex, itemIndex)
-                                  }
+                                  className={cn(
+                                    "w-full border-gray-300 text-black",
+                                    errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.discount && (touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.discount || isSubmitted) && "border-red-500"
+                                  )}
+                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.discount`)}
+                                  onChange={(e) => handleItemData(e, rowIndex, itemIndex)}
+                                />
+                                <ErrorMessage 
+                                  message={errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.discount?.message}
+                                  show={!!touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.discount || isSubmitted}
                                 />
                               </div>
                               <div className="md:col-span-1">
@@ -1143,12 +1155,16 @@ function CreateInvoicesBatch() {
                                 <Input
                                   type="text"
                                   placeholder="0"
-                                  className="w-full border-gray-300 text-black"
-                                  name="tax"
-                                  value={item.tax}
-                                  onChange={(e) =>
-                                    handleItemData(e, rowIndex, itemIndex)
-                                  }
+                                  className={cn(
+                                    "w-full border-gray-300 text-black",
+                                    errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.tax && (touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.tax || isSubmitted) && "border-red-500"
+                                  )}
+                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.tax`)}
+                                  onChange={(e) => handleItemData(e, rowIndex, itemIndex)}
+                                />
+                                <ErrorMessage 
+                                  message={errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.tax?.message}
+                                  show={!!touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.tax || isSubmitted}
                                 />
                               </div>
                             </div>
@@ -1172,19 +1188,9 @@ function CreateInvoicesBatch() {
                                     variant="ghost"
                                     className="text-red-600 hover:text-red-800"
                                     onClick={() => {
-                                      setInvoiceRows((prev) =>
-                                        prev.map((r, ri) => {
-                                          if (ri === rowIndex) {
-                                            return {
-                                              ...r,
-                                              itemData: r.itemData.filter(
-                                                (_, ii) => ii !== itemIndex
-                                              ),
-                                            };
-                                          }
-                                          return r;
-                                        })
-                                      );
+                                      const currentItems = watch(`invoiceRows.${rowIndex}.itemData`) || [];
+                                      const newItems = currentItems.filter((_, ii) => ii !== itemIndex);
+                                      setValue(`invoiceRows.${rowIndex}.itemData`, newItems, { shouldValidate: true });
                                     }}
                                   >
                                     <X className="h-4 w-4" />
@@ -1200,7 +1206,7 @@ function CreateInvoicesBatch() {
                         <Button
                           type="button"
                           onClick={() => addItem(rowIndex)}
-                          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 flex items-center justify-center gap-2"
+                          className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 flex items-center justify-center gap-2"
                         >
                           <PlusIcon className="h-4 w-4" />
                           Add Item
@@ -1228,7 +1234,38 @@ function CreateInvoicesBatch() {
           </div>
 
           {/* Clean Form Actions */}
-          <div className="flex justify-center px-4">
+          <div className="flex flex-col items-center gap-4 px-4">
+            {/* Consolidated validation message */}
+            {(errors.invoiceRows && typeof errors.invoiceRows.message === "string") || validInvoices === 0 ? (
+              <div className="w-full max-w-2xl">
+                <div className={cn(
+                  "border rounded-lg p-4 flex items-start gap-3",
+                  errors.invoiceRows && typeof errors.invoiceRows.message === "string"
+                    ? "bg-red-50 border-red-200"
+                    : "bg-yellow-50 border-yellow-200" 
+                )}>
+                  <AlertTriangle className={cn(
+                    "h-5 w-5 flex-shrink-0 mt-0.5",
+                    errors.invoiceRows && typeof errors.invoiceRows.message === "string"
+                      ? "text-red-500"
+                      : "text-yellow-600"
+                  )} />
+                  <div className="flex-1">
+                    <p className={cn(
+                      "text-sm font-medium",
+                      errors.invoiceRows && typeof errors.invoiceRows.message === "string"
+                        ? "text-red-600"
+                        : "text-yellow-800"
+                    )}>
+                      {errors.invoiceRows && typeof errors.invoiceRows.message === "string"
+                        ? errors.invoiceRows.message
+                        : "Please add at least one valid invoice with a client wallet address and items with a total amount greater than 0"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <Button
               className="bg-green-600 hover:bg-green-700 w-full sm:w-auto px-6 sm:px-8 py-3 text-white text-base sm:text-lg font-semibold"
               type="submit"
@@ -1247,18 +1284,6 @@ function CreateInvoicesBatch() {
               )}
             </Button>
           </div>
-
-          {validInvoices === 0 && (
-            <div className="flex justify-center mt-4 px-4">
-              <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
-                <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-                <span>
-                  Please add at least one valid invoice with client address and
-                  items
-                </span>
-              </div>
-            </div>
-          )}
         </form>
       </div>
     </>
