@@ -32,6 +32,8 @@ export const config = getDefaultConfig({
 });
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
+import { ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import GenerateLink from "./page/GenerateLink";
 import CreateInvoicesBatch from "./page/CreateInvoicesBatch";
 import BatchPayment from "./page/BatchPayment"; // New import needed
@@ -62,6 +64,26 @@ function App() {
             },
           },
         }}
+      />
+      <ToastContainer
+        position="top-center"
+        autoClose={4000}
+        hideProgressBar={false}
+        newestOnTop={true}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+        limit={5}
+        transition="slide"
+        style={{
+          top: "20px",
+        }}
+        toastClassName="custom-toast"
+        bodyClassName="custom-toast-body"
+        progressClassName="custom-toast-progress"
       />
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>

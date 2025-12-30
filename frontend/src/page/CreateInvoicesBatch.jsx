@@ -38,8 +38,6 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
 import { createBatchInvoicesSchema } from "@/lib/validationSchemas";
 import { ErrorMessage } from "@/components/ui/errorMessage";
 
@@ -135,7 +133,7 @@ function CreateInvoicesBatch() {
 
   // Calculate totals for each invoice
   useEffect(() => {
-    const currentRows = watch("invoiceRows") || [];
+    const currentRows = invoiceRows || [];
     const updatedRows = currentRows.map((row) => {
       const total = (row.itemData || []).reduce((sum, item) => {
         const qty = parseUnits(item.qty || "0", 18);
@@ -157,7 +155,7 @@ function CreateInvoicesBatch() {
     updatedRows.forEach((row, index) => {
       setValue(`invoiceRows.${index}.totalAmountDue`, row.totalAmountDue, { shouldValidate: false });
     });
-  }, [watch("invoiceRows")]);
+  }, [invoiceRows, setValue]);
 
   // Initialize Lit
   useEffect(() => {
@@ -202,7 +200,6 @@ function CreateInvoicesBatch() {
       totalAmountDue: 0,
     });
     setExpandedInvoice(newIndex);
-    toast.success("New invoice added to batch");
   };
 
   const handleRemoveInvoiceRow = (index) => {
@@ -211,7 +208,6 @@ function CreateInvoicesBatch() {
       if (expandedInvoice === index) {
         setExpandedInvoice(0);
       }
-      toast.success("Invoice removed from batch");
     }
   };
 
@@ -223,23 +219,32 @@ function CreateInvoicesBatch() {
   // Item management
   const handleItemData = (e, rowIndex, itemIndex) => {
     const { name, value } = e.target;
-    setValue(`invoiceRows.${rowIndex}.itemData.${itemIndex}.${name}`, value, { shouldValidate: true });
+    const currentItems = watch(`invoiceRows.${rowIndex}.itemData`) || [];
     
-    // Calculate amount if needed
-    if (name === "qty" || name === "unitPrice" || name === "discount" || name === "tax") {
-      const currentItems = watch(`invoiceRows.${rowIndex}.itemData`) || [];
-      const item = currentItems[itemIndex] || {};
-      const qty = parseUnits(item.qty || "0", 18);
-      const unitPrice = parseUnits(item.unitPrice || "0", 18);
-      const discount = parseUnits(item.discount || "0", 18);
-      const tax = parseUnits(item.tax || "0", 18);
+    // Update the item with new value
+    const updatedItems = currentItems.map((item, i) => {
+      if (i === itemIndex) {
+        const updatedItem = { ...item, [name]: value };
+        
+        // Calculate amount if needed
+        if (name === "qty" || name === "unitPrice" || name === "discount" || name === "tax") {
+          const qty = parseUnits(updatedItem.qty || "0", 18);
+          const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
+          const discount = parseUnits(updatedItem.discount || "0", 18);
+          const tax = parseUnits(updatedItem.tax || "0", 18);
 
-      const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-      const finalAmount = lineTotal - discount + tax;
+          const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
+          const finalAmount = lineTotal - discount + tax;
 
-      setValue(`invoiceRows.${rowIndex}.itemData.${itemIndex}.amount`, formatUnits(finalAmount, 18), { shouldValidate: false });
-    }
-    
+          updatedItem.amount = formatUnits(finalAmount, 18);
+        }
+        return updatedItem;
+      }
+      return item;
+    });
+
+    // Update the entire itemData array
+    setValue(`invoiceRows.${rowIndex}.itemData`, updatedItems, { shouldValidate: true, shouldDirty: true });
     trigger(`invoiceRows.${rowIndex}.itemData.${itemIndex}.${name}`);
   };
 
@@ -276,16 +281,13 @@ function CreateInvoicesBatch() {
 
         setVerifiedToken({ address, symbol, name, decimals });
         setTokenVerificationState("success");
-        toast.success(`Token verified: ${name} (${symbol})`);
       } else {
         console.error("No Ethereum provider found");
         setTokenVerificationState("error");
-        toast.error("No Ethereum provider found");
       }
     } catch (error) {
       console.error("Verification failed:", error);
       setTokenVerificationState("error");
-      toast.error("Token verification failed. Please check the address.");
     }
   };
 
@@ -307,15 +309,13 @@ function CreateInvoicesBatch() {
   };
 
   // Create batch invoices
-  const createInvoicesRequest = async () => {
+  const createInvoicesRequest = async (data) => {
     if (!isConnected || !walletClient) {
-      toast.error("Please connect your wallet to continue");
       return;
     }
 
     try {
       setLoading(true);
-      toast.info("Starting batch invoice creation...");
 
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
@@ -323,7 +323,7 @@ function CreateInvoicesBatch() {
       const paymentToken = useCustomToken ? verifiedToken : selectedToken;
 
       if (!paymentToken) {
-        toast.error("Please select a payment token");
+        setLoading(false);
         return;
       }
 
@@ -334,9 +334,7 @@ function CreateInvoicesBatch() {
       );
 
       if (validInvoices.length === 0) {
-        toast.error(
-          "Please add at least one valid invoice with client address and amount"
-        );
+        setLoading(false);
         return;
       }
 
@@ -348,17 +346,12 @@ function CreateInvoicesBatch() {
 
       const litNodeClient = litClientRef.current;
       if (!litNodeClient) {
-        toast.error("Encryption service not ready. Please try again.");
+        setLoading(false);
         return;
       }
 
-      toast.info(`Processing ${validInvoices.length} invoices...`);
-
       // Process each invoice - use form data
       for (const [index, row] of validInvoices.entries()) {
-        toast.info(
-          `Encrypting invoice ${index + 1} of ${validInvoices.length}...`
-        );
 
         const invoicePayload = {
           amountDue: row.totalAmountDue.toString(),
@@ -477,9 +470,6 @@ function CreateInvoicesBatch() {
         encryptedHashes.push(dataToEncryptHash);
       }
 
-      toast.success("All invoices encrypted successfully!");
-      toast.info("Submitting batch transaction to blockchain...");
-
       // Send to contract
       const contract = new Contract(
         import.meta.env.VITE_CONTRACT_ADDRESS,
@@ -495,23 +485,12 @@ function CreateInvoicesBatch() {
         encryptedHashes
       );
 
-      toast.info("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
-
-      toast.success(
-        `Successfully created ${validInvoices.length} invoices in batch!`
-      );
-      toast.success(
-        `Gas saved: ~${
-          (validInvoices.length - 1) * 75
-        }% compared to individual transactions!`
-      );
 
       setTimeout(() => navigate("/dashboard/sent"), 3000);
     } catch (err) {
       console.error("Batch creation failed:", err);
       const errorMsg = getErrorMessage(err);
-      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -762,7 +741,6 @@ function CreateInvoicesBatch() {
                           logo: token.image,
                           decimals: 18,
                         });
-                        toast.success(`Selected ${token.symbol}`);
                       }}
                       chainId={account?.chainId || 1}
                       disabled={loading}
@@ -930,7 +908,19 @@ function CreateInvoicesBatch() {
                           : "No client"}
                       </div>
                       <div className="font-semibold text-gray-800">
-                        {parseFloat(row.totalAmountDue).toFixed(4)}{" "}
+                        {(() => {
+                          const currentRow = watch(`invoiceRows.${rowIndex}`) || row;
+                          const calculatedTotal = (currentRow.itemData || []).reduce((sum, item) => {
+                            const qty = parseFloat(item.qty || "0");
+                            const unitPrice = parseFloat(item.unitPrice || "0");
+                            const discount = parseFloat(item.discount || "0");
+                            const tax = parseFloat(item.tax || "0");
+                            const lineTotal = qty * unitPrice;
+                            const adjusted = lineTotal - discount + tax;
+                            return sum + adjusted;
+                          }, 0);
+                          return calculatedTotal.toFixed(4);
+                        })()}{" "}
                         {useCustomToken
                           ? verifiedToken?.symbol || "TOKEN"
                           : selectedToken?.symbol || "TOKEN"}
@@ -1088,8 +1078,9 @@ function CreateInvoicesBatch() {
                                   "w-full border-gray-300 text-black",
                                   errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.description && (touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.description || isSubmitted) && "border-red-500"
                                 )}
-                                {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.description`)}
-                                onChange={(e) => handleItemData(e, rowIndex, itemIndex)}
+                                {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.description`, {
+                                  onChange: (e) => handleItemData(e, rowIndex, itemIndex)
+                                })}
                               />
                               <ErrorMessage 
                                 message={errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.description?.message}
@@ -1106,8 +1097,9 @@ function CreateInvoicesBatch() {
                                     "w-full border-gray-300 text-black",
                                     errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.qty && (touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.qty || isSubmitted) && "border-red-500"
                                   )}
-                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.qty`)}
-                                  onChange={(e) => handleItemData(e, rowIndex, itemIndex)}
+                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.qty`, {
+                                    onChange: (e) => handleItemData(e, rowIndex, itemIndex)
+                                  })}
                                 />
                                 <ErrorMessage 
                                   message={errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.qty?.message}
@@ -1123,8 +1115,9 @@ function CreateInvoicesBatch() {
                                     "w-full border-gray-300 text-black",
                                     errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.unitPrice && (touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.unitPrice || isSubmitted) && "border-red-500"
                                   )}
-                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.unitPrice`)}
-                                  onChange={(e) => handleItemData(e, rowIndex, itemIndex)}
+                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.unitPrice`, {
+                                    onChange: (e) => handleItemData(e, rowIndex, itemIndex)
+                                  })}
                                 />
                                 <ErrorMessage 
                                   message={errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.unitPrice?.message}
@@ -1142,8 +1135,9 @@ function CreateInvoicesBatch() {
                                     "w-full border-gray-300 text-black",
                                     errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.discount && (touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.discount || isSubmitted) && "border-red-500"
                                   )}
-                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.discount`)}
-                                  onChange={(e) => handleItemData(e, rowIndex, itemIndex)}
+                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.discount`, {
+                                    onChange: (e) => handleItemData(e, rowIndex, itemIndex)
+                                  })}
                                 />
                                 <ErrorMessage 
                                   message={errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.discount?.message}
@@ -1159,8 +1153,9 @@ function CreateInvoicesBatch() {
                                     "w-full border-gray-300 text-black",
                                     errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.tax && (touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.tax || isSubmitted) && "border-red-500"
                                   )}
-                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.tax`)}
-                                  onChange={(e) => handleItemData(e, rowIndex, itemIndex)}
+                                  {...register(`invoiceRows.${rowIndex}.itemData.${itemIndex}.tax`, {
+                                    onChange: (e) => handleItemData(e, rowIndex, itemIndex)
+                                  })}
                                 />
                                 <ErrorMessage 
                                   message={errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.tax?.message}
@@ -1218,7 +1213,19 @@ function CreateInvoicesBatch() {
                               Total:
                             </span>
                             <span className="font-bold text-base sm:text-lg text-gray-900">
-                              {parseFloat(row.totalAmountDue).toFixed(4)}{" "}
+                              {(() => {
+                                const currentRow = watch(`invoiceRows.${rowIndex}`) || row;
+                                const calculatedTotal = (currentRow.itemData || []).reduce((sum, item) => {
+                                  const qty = parseFloat(item.qty || "0");
+                                  const unitPrice = parseFloat(item.unitPrice || "0");
+                                  const discount = parseFloat(item.discount || "0");
+                                  const tax = parseFloat(item.tax || "0");
+                                  const lineTotal = qty * unitPrice;
+                                  const adjusted = lineTotal - discount + tax;
+                                  return sum + adjusted;
+                                }, 0);
+                                return calculatedTotal.toFixed(4);
+                              })()}{" "}
                               {useCustomToken
                                 ? verifiedToken?.symbol || "TOKEN"
                                 : selectedToken?.symbol || "TOKEN"}
@@ -1259,7 +1266,7 @@ function CreateInvoicesBatch() {
                     )}>
                       {errors.invoiceRows && typeof errors.invoiceRows.message === "string"
                         ? errors.invoiceRows.message
-                        : "Please add at least one valid invoice with a client wallet address and items with a total amount greater than 0"}
+                        : "Please add at least one valid invoice with client address and items"}
                     </p>
                   </div>
                 </div>

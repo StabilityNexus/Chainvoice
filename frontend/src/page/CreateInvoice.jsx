@@ -202,18 +202,18 @@ function CreateInvoice() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
-  const handleItemData = (e, index) => {
-    const { name, value } = e.target;
+  const handleItemData = (e, index, fieldName) => {
+    const { value } = e.target;
     const currentItems = watch("itemData") || [];
 
     const updatedItems = currentItems.map((item, i) => {
       if (i === index) {
-        const updatedItem = { ...item, [name]: value };
+        const updatedItem = { ...item, [fieldName]: value };
         if (
-          name === "qty" ||
-          name === "unitPrice" ||
-          name === "discount" ||
-          name === "tax"
+          fieldName === "qty" ||
+          fieldName === "unitPrice" ||
+          fieldName === "discount" ||
+          fieldName === "tax"
         ) {
           const qty = parseUnits(updatedItem.qty || "0", 18);
           const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
@@ -230,8 +230,8 @@ function CreateInvoice() {
       return item;
     });
 
-    setValue("itemData", updatedItems, { shouldValidate: true });
-    trigger(`itemData.${index}.${name}`);
+    setValue("itemData", updatedItems, { shouldValidate: true, shouldDirty: true });
+    trigger(`itemData.${index}.${fieldName}`);
   };
 
   const addItem = () => {
@@ -247,6 +247,7 @@ function CreateInvoice() {
         amount: "",
       },
     ], { shouldValidate: true });
+    
   };
 
   const verifyToken = async (address) => {
@@ -1036,8 +1037,9 @@ function CreateInvoice() {
                             "w-full border-gray-300 text-black",
                             errors.itemData?.[index]?.description && (touchedFields.itemData?.[index]?.description || isSubmitted) && "border-red-500"
                           )}
-                          {...register(`itemData.${index}.description`)}
-                          onChange={(e) => handleItemData(e, index)}
+                          {...register(`itemData.${index}.description`, {
+                            onChange: () => handleItemData(null, index, "description")
+                          })}
                         />
                         <ErrorMessage 
                           message={errors.itemData?.[index]?.description?.message} 
@@ -1055,8 +1057,9 @@ function CreateInvoice() {
                               "w-full border-gray-300 text-black",
                               errors.itemData?.[index]?.qty && (touchedFields.itemData?.[index]?.qty || isSubmitted) && "border-red-500"
                             )}
-                            {...register(`itemData.${index}.qty`)}
-                            onChange={(e) => handleItemData(e, index)}
+                            {...register(`itemData.${index}.qty`, {
+                              onChange: () => handleItemData(null, index, "qty")
+                            })}
                           />
                           <ErrorMessage 
                             message={errors.itemData?.[index]?.qty?.message} 
@@ -1072,8 +1075,9 @@ function CreateInvoice() {
                               "w-full border-gray-300 text-black",
                               errors.itemData?.[index]?.unitPrice && (touchedFields.itemData?.[index]?.unitPrice || isSubmitted) && "border-red-500"
                             )}
-                            {...register(`itemData.${index}.unitPrice`)}
-                            onChange={(e) => handleItemData(e, index)}
+                            {...register(`itemData.${index}.unitPrice`, {
+                              onChange: () => handleItemData(null, index, "unitPrice")
+                            })}
                           />
                           <ErrorMessage 
                             message={errors.itemData?.[index]?.unitPrice?.message} 
@@ -1092,8 +1096,9 @@ function CreateInvoice() {
                               "w-full border-gray-300 text-black",
                               errors.itemData?.[index]?.discount && (touchedFields.itemData?.[index]?.discount || isSubmitted) && "border-red-500"
                             )}
-                            {...register(`itemData.${index}.discount`)}
-                            onChange={(e) => handleItemData(e, index)}
+                            {...register(`itemData.${index}.discount`, {
+                              onChange: () => handleItemData(null, index, "discount")
+                            })}
                           />
                           <ErrorMessage 
                             message={errors.itemData?.[index]?.discount?.message} 
@@ -1109,8 +1114,9 @@ function CreateInvoice() {
                               "w-full border-gray-300 text-black",
                               errors.itemData?.[index]?.tax && (touchedFields.itemData?.[index]?.tax || isSubmitted) && "border-red-500"
                             )}
-                            {...register(`itemData.${index}.tax`)}
-                            onChange={(e) => handleItemData(e, index)}
+                            {...register(`itemData.${index}.tax`, {
+                              onChange: () => handleItemData(null, index, "tax")
+                            })}
                           />
                           <ErrorMessage 
                             message={errors.itemData?.[index]?.tax?.message} 
@@ -1176,8 +1182,9 @@ function CreateInvoice() {
                             "w-full border-gray-300 text-black",
                             errors.itemData?.[index]?.description && (touchedFields.itemData?.[index]?.description || isSubmitted) && "border-red-500"
                           )}
-                          {...register(`itemData.${index}.description`)}
-                          onChange={(e) => handleItemData(e, index)}
+                          {...register(`itemData.${index}.description`, {
+                            onChange: () => handleItemData(null, index, "description")
+                          })}
                         />
                         <ErrorMessage 
                           message={errors.itemData?.[index]?.description?.message} 
@@ -1192,8 +1199,9 @@ function CreateInvoice() {
                             "w-full border-gray-300 text-black py-2",
                             errors.itemData?.[index]?.qty && (touchedFields.itemData?.[index]?.qty || isSubmitted) && "border-red-500"
                           )}
-                          {...register(`itemData.${index}.qty`)}
-                          onChange={(e) => handleItemData(e, index)}
+                          {...register(`itemData.${index}.qty`, {
+                            onChange: (e) => handleItemData(e, index, "qty")
+                          })}
                         />
                         <ErrorMessage 
                           message={errors.itemData?.[index]?.qty?.message} 
@@ -1208,8 +1216,9 @@ function CreateInvoice() {
                             "w-full border-gray-300 text-black py-2",
                             errors.itemData?.[index]?.unitPrice && (touchedFields.itemData?.[index]?.unitPrice || isSubmitted) && "border-red-500"
                           )}
-                          {...register(`itemData.${index}.unitPrice`)}
-                          onChange={(e) => handleItemData(e, index)}
+                          {...register(`itemData.${index}.unitPrice`, {
+                            onChange: (e) => handleItemData(e, index, "unitPrice")
+                          })}
                         />
                         <ErrorMessage 
                           message={errors.itemData?.[index]?.unitPrice?.message} 
@@ -1224,8 +1233,9 @@ function CreateInvoice() {
                             "w-full border-gray-300 text-black py-2",
                             errors.itemData?.[index]?.discount && (touchedFields.itemData?.[index]?.discount || isSubmitted) && "border-red-500"
                           )}
-                          {...register(`itemData.${index}.discount`)}
-                          onChange={(e) => handleItemData(e, index)}
+                          {...register(`itemData.${index}.discount`, {
+                            onChange: (e) => handleItemData(e, index, "discount")
+                          })}
                         />
                         <ErrorMessage 
                           message={errors.itemData?.[index]?.discount?.message} 
@@ -1240,8 +1250,9 @@ function CreateInvoice() {
                             "w-full border-gray-300 text-black py-2",
                             errors.itemData?.[index]?.tax && (touchedFields.itemData?.[index]?.tax || isSubmitted) && "border-red-500"
                           )}
-                          {...register(`itemData.${index}.tax`)}
-                          onChange={(e) => handleItemData(e, index)}
+                          {...register(`itemData.${index}.tax`, {
+                            onChange: (e) => handleItemData(e, index, "tax")
+                          })}
                         />
                         <ErrorMessage 
                           message={errors.itemData?.[index]?.tax?.message} 
