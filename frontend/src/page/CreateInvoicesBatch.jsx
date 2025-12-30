@@ -490,6 +490,7 @@ function CreateInvoicesBatch() {
     } catch (err) {
       console.error("Batch creation failed:", err);
       const errorMsg = getErrorMessage(err);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }

@@ -203,8 +203,8 @@ function CreateInvoice() {
   }, [isConnected]);
 
   const handleItemData = (e, index, fieldName) => {
-    // Get value from event if provided, otherwise get from current form state
-    const value = e?.target?.value ?? watch(`itemData.${index}.${fieldName}`);
+    // Get value from event synchronously to ensure we have the current value
+    const value = e.target.value;
     const currentItems = watch("itemData") || [];
 
     const updatedItems = currentItems.map((item, i) => {
@@ -1039,7 +1039,7 @@ function CreateInvoice() {
                             errors.itemData?.[index]?.description && (touchedFields.itemData?.[index]?.description || isSubmitted) && "border-red-500"
                           )}
                           {...register(`itemData.${index}.description`, {
-                            onChange: () => handleItemData(null, index, "description")
+                            onChange: (e) => handleItemData(e, index, "description")
                           })}
                         />
                         <ErrorMessage 
@@ -1059,7 +1059,7 @@ function CreateInvoice() {
                               errors.itemData?.[index]?.qty && (touchedFields.itemData?.[index]?.qty || isSubmitted) && "border-red-500"
                             )}
                             {...register(`itemData.${index}.qty`, {
-                              onChange: () => handleItemData(null, index, "qty")
+                              onChange: (e) => handleItemData(e, index, "qty")
                             })}
                           />
                           <ErrorMessage 
@@ -1077,7 +1077,7 @@ function CreateInvoice() {
                               errors.itemData?.[index]?.unitPrice && (touchedFields.itemData?.[index]?.unitPrice || isSubmitted) && "border-red-500"
                             )}
                             {...register(`itemData.${index}.unitPrice`, {
-                              onChange: () => handleItemData(null, index, "unitPrice")
+                              onChange: (e) => handleItemData(e, index, "unitPrice")
                             })}
                           />
                           <ErrorMessage 
@@ -1098,7 +1098,7 @@ function CreateInvoice() {
                               errors.itemData?.[index]?.discount && (touchedFields.itemData?.[index]?.discount || isSubmitted) && "border-red-500"
                             )}
                             {...register(`itemData.${index}.discount`, {
-                              onChange: () => handleItemData(null, index, "discount")
+                              onChange: (e) => handleItemData(e, index, "discount")
                             })}
                           />
                           <ErrorMessage 
@@ -1116,7 +1116,7 @@ function CreateInvoice() {
                               errors.itemData?.[index]?.tax && (touchedFields.itemData?.[index]?.tax || isSubmitted) && "border-red-500"
                             )}
                             {...register(`itemData.${index}.tax`, {
-                              onChange: () => handleItemData(null, index, "tax")
+                              onChange: (e) => handleItemData(e, index, "tax")
                             })}
                           />
                           <ErrorMessage 
@@ -1184,7 +1184,7 @@ function CreateInvoice() {
                             errors.itemData?.[index]?.description && (touchedFields.itemData?.[index]?.description || isSubmitted) && "border-red-500"
                           )}
                           {...register(`itemData.${index}.description`, {
-                            onChange: () => handleItemData(null, index, "description")
+                            onChange: (e) => handleItemData(e, index, "description")
                           })}
                         />
                         <ErrorMessage 
