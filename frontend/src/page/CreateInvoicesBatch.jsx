@@ -56,6 +56,7 @@ import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
+import { toast } from "react-toastify";
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
@@ -134,7 +135,7 @@ function CreateInvoicesBatch() {
   // Calculate totals for each invoice
   useEffect(() => {
     const currentRows = invoiceRows || [];
-    const updatedRows = currentRows.map((row) => {
+    currentRows.forEach((row, index) => {
       const total = (row.itemData || []).reduce((sum, item) => {
         const qty = parseUnits(item.qty || "0", 18);
         const unitPrice = parseUnits(item.unitPrice || "0", 18);
@@ -144,16 +145,11 @@ function CreateInvoicesBatch() {
         const adjusted = lineTotal - discount + tax;
         return sum + adjusted;
       }, 0n);
-
-      return {
-        ...row,
-        totalAmountDue: parseFloat(formatUnits(total, 18)),
-      };
-    });
-
-    // Update form values
-    updatedRows.forEach((row, index) => {
-      setValue(`invoiceRows.${index}.totalAmountDue`, row.totalAmountDue, { shouldValidate: false });
+      const newTotal = parseFloat(formatUnits(total, 18));
+      // Only update if value actually changed to prevent loops
+      if (row.totalAmountDue !== newTotal) {
+        setValue(`invoiceRows.${index}.totalAmountDue`, newTotal, { shouldValidate: false });
+      }
     });
   }, [invoiceRows, setValue]);
 
@@ -323,6 +319,7 @@ function CreateInvoicesBatch() {
       const paymentToken = useCustomToken ? verifiedToken : selectedToken;
 
       if (!paymentToken) {
+        toast.error("Please select a payment token");
         setLoading(false);
         return;
       }
@@ -334,6 +331,7 @@ function CreateInvoicesBatch() {
       );
 
       if (validInvoices.length === 0) {
+        toast.error("No valid invoices to create. Please ensure all invoices have a client address and amount.");
         setLoading(false);
         return;
       }
@@ -346,6 +344,7 @@ function CreateInvoicesBatch() {
 
       const litNodeClient = litClientRef.current;
       if (!litNodeClient) {
+        toast.error("Encryption service not initialized. Please try again.");
         setLoading(false);
         return;
       }
@@ -981,10 +980,11 @@ function CreateInvoicesBatch() {
                               "w-full mt-1 border-gray-300 text-black",
                               errors.invoiceRows?.[rowIndex]?.clientFname && "border-red-500"
                             )}
-                            {...register(`invoiceRows.${rowIndex}.clientFname`)}
-                            onChange={(e) => {
-                              updateInvoiceRow(rowIndex, "clientFname", e.target.value);
-                            }}
+                            {...register(`invoiceRows.${rowIndex}.clientFname`, {
+                              onChange: (e) => {
+                                updateInvoiceRow(rowIndex, "clientFname", e.target.value);
+                              },
+                            })}
                           />
                           <ErrorMessage message={errors.invoiceRows?.[rowIndex]?.clientFname?.message} />
                         </div>
@@ -998,10 +998,11 @@ function CreateInvoicesBatch() {
                               "w-full mt-1 border-gray-300 text-black",
                               errors.invoiceRows?.[rowIndex]?.clientLname && "border-red-500"
                             )}
-                            {...register(`invoiceRows.${rowIndex}.clientLname`)}
-                            onChange={(e) => {
-                              updateInvoiceRow(rowIndex, "clientLname", e.target.value);
-                            }}
+                            {...register(`invoiceRows.${rowIndex}.clientLname`, {
+                              onChange: (e) => {
+                                updateInvoiceRow(rowIndex, "clientLname", e.target.value);
+                              },
+                            })}
                           />
                           <ErrorMessage message={errors.invoiceRows?.[rowIndex]?.clientLname?.message} />
                         </div>
@@ -1016,10 +1017,11 @@ function CreateInvoicesBatch() {
                               "w-full mt-1 border-gray-300 text-black",
                               errors.invoiceRows?.[rowIndex]?.clientEmail && "border-red-500"
                             )}
-                            {...register(`invoiceRows.${rowIndex}.clientEmail`)}
-                            onChange={(e) => {
-                              updateInvoiceRow(rowIndex, "clientEmail", e.target.value);
-                            }}
+                            {...register(`invoiceRows.${rowIndex}.clientEmail`, {
+                              onChange: (e) => {
+                                updateInvoiceRow(rowIndex, "clientEmail", e.target.value);
+                              },
+                            })}
                           />
                           <ErrorMessage message={errors.invoiceRows?.[rowIndex]?.clientEmail?.message} />
                         </div>

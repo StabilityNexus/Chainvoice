@@ -203,7 +203,8 @@ function CreateInvoice() {
   }, [isConnected]);
 
   const handleItemData = (e, index, fieldName) => {
-    const { value } = e.target;
+    // Get value from event if provided, otherwise get from current form state
+    const value = e?.target?.value ?? watch(`itemData.${index}.${fieldName}`);
     const currentItems = watch("itemData") || [];
 
     const updatedItems = currentItems.map((item, i) => {

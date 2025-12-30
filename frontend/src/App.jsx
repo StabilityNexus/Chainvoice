@@ -32,7 +32,7 @@ export const config = getDefaultConfig({
 });
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
-import { ToastContainer } from "react-toastify";
+import { ToastContainer, Slide } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import GenerateLink from "./page/GenerateLink";
 import CreateInvoicesBatch from "./page/CreateInvoicesBatch";
@@ -77,7 +77,7 @@ function App() {
         pauseOnHover
         theme="dark"
         limit={5}
-        transition="slide"
+        transition={Slide}
         style={{
           top: "20px",
         }}
