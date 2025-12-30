@@ -1,5 +1,6 @@
 // Updated Navbar.js
 import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { CustomBalance } from './CustomBalance';
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAccount } from "wagmi";
@@ -206,13 +207,11 @@ function Navbar() {
               whileTap={{ scale: 0.95 }}
               className="ml-4"
             >
+             <CustomBalance />
               <ConnectButton
                 accountStatus="address"
-                chainStatus="none"
-                showBalance={{
-                  smallScreen: false,
-                  largeScreen: true,
-                }}
+                chainStatus="icon"
+                showBalance={false}
                 label="Connect Wallet"
               />
             </motion.div>
