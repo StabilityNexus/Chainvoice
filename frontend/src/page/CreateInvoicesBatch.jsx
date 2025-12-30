@@ -53,6 +53,7 @@ import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
+import CountryPicker from "@/components/CountryPicker";
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
@@ -717,17 +718,20 @@ function CreateInvoicesBatch() {
                   <Label className="text-sm font-medium text-gray-700">
                     Country
                   </Label>
-                  <Input
-                    placeholder="Country"
-                    className="w-full mt-1 border-gray-300 text-black"
-                    value={userInfo.userCountry}
-                    onChange={(e) =>
-                      setUserInfo((prev) => ({
-                        ...prev,
-                        userCountry: e.target.value,
-                      }))
-                    }
-                  />
+                  <div className="mt-1">
+                    <CountryPicker
+                      value={userInfo.userCountry}
+                      onChange={(value) =>
+                        setUserInfo((prev) => ({
+                          ...prev,
+                          userCountry: value,
+                        }))
+                      }
+                      placeholder="Select country"
+                      className="w-full border-gray-300 text-black"
+                      disabled={loading}
+                    />
+                  </div>
                 </div>
               </div>
             </div>
@@ -1037,18 +1041,21 @@ function CreateInvoicesBatch() {
                           <Label className="text-sm font-medium text-gray-700">
                             Country
                           </Label>
-                          <Input
-                            placeholder="Country"
-                            className="w-full mt-1 border-gray-300 text-black"
-                            value={row.clientCountry}
-                            onChange={(e) =>
-                              updateInvoiceRow(
-                                rowIndex,
-                                "clientCountry",
-                                e.target.value
-                              )
-                            }
-                          />
+                          <div className="mt-1">
+                            <CountryPicker
+                              value={row.clientCountry}
+                              onChange={(value) =>
+                                updateInvoiceRow(
+                                  rowIndex,
+                                  "clientCountry",
+                                  value
+                                )
+                              }
+                              placeholder="Select country"
+                              className="w-full border-gray-300 text-black"
+                              disabled={loading}
+                            />
+                          </div>
                         </div>
                       </div>
                     </div>
