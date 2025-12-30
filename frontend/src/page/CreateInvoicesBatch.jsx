@@ -215,15 +215,18 @@ function CreateInvoicesBatch() {
   // Item management
   const handleItemData = (e, rowIndex, itemIndex) => {
     const { name, value } = e.target;
+    // Extract the final field name from the full react-hook-form path
+    // e.g., "invoiceRows.0.itemData.0.qty" -> "qty"
+    const field = name.split('.').pop();
     const currentItems = watch(`invoiceRows.${rowIndex}.itemData`) || [];
     
-    // Update the item with new value
+    // Update the item with new value using the extracted field name
     const updatedItems = currentItems.map((item, i) => {
       if (i === itemIndex) {
-        const updatedItem = { ...item, [name]: value };
+        const updatedItem = { ...item, [field]: value };
         
-        // Calculate amount if needed
-        if (name === "qty" || name === "unitPrice" || name === "discount" || name === "tax") {
+        // Calculate amount if needed - check using the extracted field name
+        if (field === "qty" || field === "unitPrice" || field === "discount" || field === "tax") {
           const qty = parseUnits(updatedItem.qty || "0", 18);
           const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
           const discount = parseUnits(updatedItem.discount || "0", 18);
@@ -241,7 +244,8 @@ function CreateInvoicesBatch() {
 
     // Update the entire itemData array
     setValue(`invoiceRows.${rowIndex}.itemData`, updatedItems, { shouldValidate: true, shouldDirty: true });
-    trigger(`invoiceRows.${rowIndex}.itemData.${itemIndex}.${name}`);
+    // Use the full registered path for trigger
+    trigger(name);
   };
 
   const addItem = (rowIndex) => {
