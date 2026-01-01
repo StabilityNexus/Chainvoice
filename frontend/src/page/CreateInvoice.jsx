@@ -28,7 +28,7 @@ import {
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Label } from "../components/ui/label";
-import { useNavigate, useSearchParams } from "react-router-dom"; 
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { encryptString } from "@lit-protocol/encryption/src/lib/encryption.js";
@@ -66,7 +66,7 @@ function CreateInvoice() {
   const [selectedToken, setSelectedToken] = useState(null);
   const [customTokenAddress, setCustomTokenAddress] = useState("");
   const [useCustomToken, setUseCustomToken] = useState(false);
- 
+
   const [tokenVerificationState, setTokenVerificationState] = useState("idle");
   const [verifiedToken, setVerifiedToken] = useState(null);
 
@@ -339,11 +339,15 @@ function CreateInvoice() {
 
       const encryptedStringBase64 = btoa(ciphertext);
 
-      const contract = new Contract(
-        import.meta.env.VITE_CONTRACT_ADDRESS,
-        ChainvoiceABI,
-        signer
-      );
+      const contractAddress = import.meta.env[
+        `VITE_CONTRACT_ADDRESS_${chainId}`
+      ];
+
+      if (!contractAddress) {
+        throw new Error("Unsupported network");
+      }
+
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
       const tx = await contract.createInvoice(
         data.clientAddress,
@@ -366,7 +370,6 @@ function CreateInvoice() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const formData = new FormData(e.target);
-
 
     const data = {
       userAddress: formData.get("userAddress"),
@@ -926,14 +929,13 @@ function CreateInvoice() {
             <div className="border border-gray-200 rounded-b-lg bg-white overflow-hidden">
               <div className="p-3 sm:p-4 space-y-4 md:space-y-3">
                 {itemData.map((_, index) => (
-                  <div
-                    className="relative"
-                    key={index}
-                  >
+                  <div className="relative" key={index}>
                     {/* Mobile Layout - Stacked */}
                     <div className="md:hidden space-y-3 pb-4 border-b border-gray-200 last:border-b-0">
                       <div>
-                        <Label className="text-xs font-medium text-gray-600 mb-1 block">Description</Label>
+                        <Label className="text-xs font-medium text-gray-600 mb-1 block">
+                          Description
+                        </Label>
                         <Input
                           type="text"
                           placeholder="Enter Description"
@@ -942,10 +944,12 @@ function CreateInvoice() {
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
-                      
+
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-xs font-medium text-gray-600 mb-1 block">Qty</Label>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 block">
+                            Qty
+                          </Label>
                           <Input
                             type="number"
                             placeholder="0"
@@ -955,7 +959,9 @@ function CreateInvoice() {
                           />
                         </div>
                         <div>
-                          <Label className="text-xs font-medium text-gray-600 mb-1 block">Unit Price</Label>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 block">
+                            Unit Price
+                          </Label>
                           <Input
                             type="text"
                             placeholder="0"
@@ -968,7 +974,9 @@ function CreateInvoice() {
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <Label className="text-xs font-medium text-gray-600 mb-1 block">Discount</Label>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 block">
+                            Discount
+                          </Label>
                           <Input
                             type="text"
                             placeholder="0"
@@ -978,7 +986,9 @@ function CreateInvoice() {
                           />
                         </div>
                         <div>
-                          <Label className="text-xs font-medium text-gray-600 mb-1 block">Tax (%)</Label>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 block">
+                            Tax (%)
+                          </Label>
                           <Input
                             type="text"
                             placeholder="0"
@@ -990,7 +1000,9 @@ function CreateInvoice() {
                       </div>
 
                       <div>
-                        <Label className="text-xs font-medium text-gray-600 mb-1 block">Amount</Label>
+                        <Label className="text-xs font-medium text-gray-600 mb-1 block">
+                          Amount
+                        </Label>
                         <Input
                           type="text"
                           placeholder="0.00"
