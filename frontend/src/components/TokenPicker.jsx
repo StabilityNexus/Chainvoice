@@ -12,7 +12,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ChainIdToName, useTokenList } from "../hooks/useTokenList";
+import { ChainIdToName, useTokenList, isTestnet } from "../hooks/useTokenList";
 import { useTokenSearch } from "../hooks/useTokenSearch";
 import { CopyButton } from "./ui/copyButton";
 import { Avatar } from "./ui/avatar";
@@ -216,20 +216,22 @@ export function TokenPicker({
     setOpen(false);
   };
 
+  const isOnTestnet = isTestnet(chainId);
+
   return (
     <>
       <Button
-        type="button"
-        variant="outline"
-        disabled={disabled}
-        onClick={() => setOpen(true)}
-        className={cn(
-          "h-12 px-4 justify-between bg-white hover:bg-gray-50 border border-gray-300 text-gray-900",
-          "shadow-sm hover:shadow-md transition-all duration-200 hover:border-gray-400",
-          disabled && "opacity-50 cursor-not-allowed",
-          className
-        )}
-      >
+          type="button"
+          variant="outline"
+          disabled={disabled || isOnTestnet}
+          onClick={() => setOpen(true)}
+          className={cn(
+            "h-12 px-4 justify-between bg-white hover:bg-gray-50 border border-gray-300 text-gray-900",
+            "shadow-sm hover:shadow-md transition-all duration-200 hover:border-gray-400",
+            (disabled || isOnTestnet) && "opacity-50 cursor-not-allowed",
+            className
+          )}
+        >
         {selected ? (
           <div className="flex items-center gap-3">
             <Avatar
@@ -261,6 +263,15 @@ export function TokenPicker({
         )}
         <ChevronDown className="w-4 h-4 text-gray-500" />
       </Button>
+
+      {isOnTestnet && (
+        <div className="mt-2 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+          <p className="text-sm text-amber-800">
+            Token selection is disabled on testnets. Please switch to a mainnet network to use this feature.
+          </p>
+        </div>
+      )}
 
       <Modal isOpen={open} onClose={() => setOpen(false)}>
         <div className="p-6">

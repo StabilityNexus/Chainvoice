@@ -7,7 +7,7 @@ const tokenCache = {};
 const TESTNET_CHAIN_IDS = new Set([11155111, 5]); // Sepolia, Goerli
 
 // Helper function to check if a chain is testnet
-const isTestnet = (chainId) => TESTNET_CHAIN_IDS.has(chainId);
+export const isTestnet = (chainId) => TESTNET_CHAIN_IDS.has(chainId);
 
 export const ChainIdToName = {
   1: "ethereum",
