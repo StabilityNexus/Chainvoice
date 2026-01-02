@@ -380,11 +380,15 @@ function ReceivedInvoice() {
     try {
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
-      const contract = new Contract(
-        import.meta.env.VITE_CONTRACT_ADDRESS,
-        ChainvoiceABI,
-        signer
-      );
+      const contractAddress = import.meta.env[
+        `VITE_CONTRACT_ADDRESS_${chainId}`
+      ];
+
+      if (!contractAddress) {
+        throw new Error("Unsupported network");
+      }
+
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
       const invoice = receivedInvoices.find((inv) => inv.id === invoiceId);
       if (invoice?.isCancelled) {
@@ -407,9 +411,16 @@ function ReceivedInvoice() {
 
       if (!isNativeToken) {
         const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
+        const contractAddress = import.meta.env[
+          `VITE_CONTRACT_ADDRESS_${chainId}`
+        ];
+
+        if (!contractAddress) {
+          throw new Error("Unsupported network");
+        }
         const currentAllowance = await tokenContract.allowance(
           await signer.getAddress(),
-          import.meta.env.VITE_CONTRACT_ADDRESS
+          contractAddress
         );
 
         const decimals = await tokenContract.decimals();
@@ -417,8 +428,15 @@ function ReceivedInvoice() {
 
         if (currentAllowance < amountDueInWei) {
           toast.info(`Requesting approval for ${tokenSymbol}...`);
+          const contractAddress = import.meta.env[
+            `VITE_CONTRACT_ADDRESS_${chainId}`
+          ];
+
+          if (!contractAddress) {
+            throw new Error("Unsupported network");
+          }
           const approveTx = await tokenContract.approve(
-            import.meta.env.VITE_CONTRACT_ADDRESS,
+            contractAddress,
             amountDueInWei
           );
           toast.info("Approval transaction submitted. Please wait...");
@@ -476,11 +494,15 @@ function ReceivedInvoice() {
     try {
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
-      const contract = new Contract(
-        import.meta.env.VITE_CONTRACT_ADDRESS,
-        ChainvoiceABI,
-        signer
-      );
+      const contractAddress = import.meta.env[
+        `VITE_CONTRACT_ADDRESS_${chainId}`
+      ];
+
+      if (!contractAddress) {
+        throw new Error("Unsupported network");
+      }
+
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
       const grouped = getGroupedInvoices();
 
@@ -534,15 +556,23 @@ function ReceivedInvoice() {
 
         if (!isNativeToken) {
           const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
+          const contractAddress = import.meta.env[
+            `VITE_CONTRACT_ADDRESS_${chainId}`
+          ];
+
+          if (!contractAddress) {
+            throw new Error("Unsupported network");
+          }
+
           const currentAllowance = await tokenContract.allowance(
             await signer.getAddress(),
-            import.meta.env.VITE_CONTRACT_ADDRESS
+            contractAddress
           );
 
           if (currentAllowance < totalAmount) {
             toast.info(`Approving ${symbol} for spending...`);
             const approveTx = await tokenContract.approve(
-              import.meta.env.VITE_CONTRACT_ADDRESS,
+              contractAddress,
               totalAmount
             );
             await approveTx.wait();
@@ -626,16 +656,7 @@ function ReceivedInvoice() {
         setError(null);
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
-        const network = await provider.getNetwork();
-
-        if (network.chainId != 11155111) {
-          setError(
-            `You're connected to ${network.name}. Please switch to Sepolia network to view your invoices.`
-          );
-          setLoading(false);
-          return;
-        }
-
+      
         const litNodeClient = litClientRef.current;
         if (!litNodeClient) {
           setError("Lit client not initialized. Please refresh the page.");
@@ -643,11 +664,15 @@ function ReceivedInvoice() {
           return;
         }
 
-        const contract = new Contract(
-          import.meta.env.VITE_CONTRACT_ADDRESS,
-          ChainvoiceABI,
-          signer
-        );
+        const contractAddress = import.meta.env[
+          `VITE_CONTRACT_ADDRESS_${chainId}`
+        ];
+
+        if (!contractAddress) {
+          throw new Error("Unsupported network");
+        }
+
+        const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
         const res = await contract.getReceivedInvoices(address);
 
@@ -807,7 +832,10 @@ function ReceivedInvoice() {
         setFee(fee);
       } catch (error) {
         console.error("Fetch error:", error);
-        setError("Failed to fetch invoices. Please try again.");
+        setError(
+          "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
+        );
+        
       } finally {
         setLoading(false);
       }
@@ -849,24 +877,6 @@ function ReceivedInvoice() {
     }
   };
 
-  const switchNetwork = async () => {
-    try {
-      setNetworkLoading(true);
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0xaa36a7" }],
-      });
-      setError(null);
-      toast.success("Successfully switched to Sepolia network!");
-    } catch (error) {
-      console.error("Network switch failed:", error);
-      toast.error(
-        "Failed to switch network. Please switch to Sepolia manually in your wallet."
-      );
-    } finally {
-      setNetworkLoading(false);
-    }
-  };
 
   const formatAddress = (address) => {
     return `${address.substring(0, 10)}...${address.substring(
@@ -905,26 +915,6 @@ function ReceivedInvoice() {
                 Manage and pay your incoming invoices
               </p>
             </div>
-            {error && (
-              <button
-                onClick={switchNetwork}
-                disabled={networkLoading}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors"
-              >
-                {networkLoading ? (
-                  <>
-                    <CircularProgress
-                      size={20}
-                      className="mr-2"
-                      color="inherit"
-                    />
-                    Switching...
-                  </>
-                ) : (
-                  "Switch to Sepolia"
-                )}
-              </button>
-            )}
           </div>
 
           {/* UNIFORM ERROR DISPLAY */}

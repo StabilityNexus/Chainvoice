@@ -37,11 +37,15 @@ const Treasure = () => {
         setLoading((prev) => ({ ...prev, fetch: true }));
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
-        const contract = new Contract(
-          import.meta.env.VITE_CONTRACT_ADDRESS,
-          ChainvoiceABI,
-          signer
-        );
+        const contractAddress = import.meta.env[
+          `VITE_CONTRACT_ADDRESS_${chainId}`
+        ];
+
+        if (!contractAddress) {
+          throw new Error("Unsupported network");
+        }
+
+        const contract = new Contract(contractAddress, ChainvoiceABI, signer);
         const [amt, add, feeAmt] = await Promise.all([
           contract.accumulatedFees(),
           contract.treasuryAddress(),
@@ -70,11 +74,15 @@ const Treasure = () => {
       setLoading((prev) => ({ ...prev, setAddress: true }));
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
-      const contract = new Contract(
-        import.meta.env.VITE_CONTRACT_ADDRESS,
-        ChainvoiceABI,
-        signer
-      );
+      const contractAddress = import.meta.env[
+        `VITE_CONTRACT_ADDRESS_${chainId}`
+      ];
+
+      if (!contractAddress) {
+        throw new Error("Unsupported network");
+      }
+
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
       const tx = await contract.setTreasuryAddress(newTreasuryAddress);
       await tx.wait();
       setTreasuryAddress(newTreasuryAddress);
@@ -94,11 +102,15 @@ const Treasure = () => {
       setLoading((prev) => ({ ...prev, withdraw: true }));
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
-      const contract = new Contract(
-        import.meta.env.VITE_CONTRACT_ADDRESS,
-        ChainvoiceABI,
-        signer
-      );
+      const contractAddress = import.meta.env[
+        `VITE_CONTRACT_ADDRESS_${chainId}`
+      ];
+
+      if (!contractAddress) {
+        throw new Error("Unsupported network");
+      }
+
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
       const tx = await contract.withdrawFees();
       await tx.wait();
       const newAmt = await contract.accumulatedFees();
@@ -122,11 +134,15 @@ const Treasure = () => {
       setLoading((prev) => ({ ...prev, feeUpdate: true }));
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
-      const contract = new Contract(
-        import.meta.env.VITE_CONTRACT_ADDRESS,
-        ChainvoiceABI,
-        signer
-      );
+      const contractAddress = import.meta.env[
+        `VITE_CONTRACT_ADDRESS_${chainId}`
+      ];
+
+      if (!contractAddress) {
+        throw new Error("Unsupported network");
+      }
+
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
       const tx = await contract.setFeeAmount(
         ethers.parseUnits(newFee, "ether")
       );

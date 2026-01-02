@@ -474,11 +474,15 @@ function CreateInvoicesBatch() {
       }
 
       // Send to contract
-      const contract = new Contract(
-        import.meta.env.VITE_CONTRACT_ADDRESS,
-        ChainvoiceABI,
-        signer
-      );
+      const contractAddress = import.meta.env[
+        `VITE_CONTRACT_ADDRESS_${chainId}`
+      ];
+
+      if (!contractAddress) {
+        throw new Error("Unsupported network");
+      }
+
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
       const tx = await contract.createInvoicesBatch(
         tos,
@@ -603,12 +607,20 @@ function CreateInvoicesBatch() {
         <div className="w-full bg-gray-800 text-white p-4 sm:p-6 rounded-lg mb-6 sm:mb-8 shadow-sm overflow-hidden">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 text-center">
             <div>
-              <div className="text-xl sm:text-2xl font-bold">{invoiceRows.length}</div>
-              <div className="text-gray-300 text-xs sm:text-sm">Total Invoices</div>
+              <div className="text-xl sm:text-2xl font-bold">
+                {invoiceRows.length}
+              </div>
+              <div className="text-gray-300 text-xs sm:text-sm">
+                Total Invoices
+              </div>
             </div>
             <div>
-              <div className="text-xl sm:text-2xl font-bold">{validInvoices}</div>
-              <div className="text-gray-300 text-xs sm:text-sm">Valid Invoices</div>
+              <div className="text-xl sm:text-2xl font-bold">
+                {validInvoices}
+              </div>
+              <div className="text-gray-300 text-xs sm:text-sm">
+                Valid Invoices
+              </div>
             </div>
             <div>
               <div className="text-xl sm:text-2xl font-bold">
@@ -623,8 +635,12 @@ function CreateInvoicesBatch() {
               </div>
             </div>
             <div>
-              <div className="text-xl sm:text-2xl font-bold">~{gasSavingsPercent}%</div>
-              <div className="text-gray-300 text-xs sm:text-sm">Gas Savings</div>
+              <div className="text-xl sm:text-2xl font-bold">
+                ~{gasSavingsPercent}%
+              </div>
+              <div className="text-gray-300 text-xs sm:text-sm">
+                Gas Savings
+              </div>
             </div>
           </div>
         </div>
@@ -1078,7 +1094,9 @@ function CreateInvoicesBatch() {
                             key={itemIndex}
                           >
                             <div className="md:col-span-4 w-full">
-                              <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Description</label>
+                              <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
+                                Description
+                              </label>
                               <Input
                                 placeholder="Enter Description"
                                 className={cn(
@@ -1096,7 +1114,9 @@ function CreateInvoicesBatch() {
                             </div>
                             <div className="grid grid-cols-2 gap-2 md:contents">
                               <div className="md:col-span-1">
-                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Qty</label>
+                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
+                                  Qty
+                                </label>
                                 <Input
                                   type="number"
                                   placeholder="0"
@@ -1114,7 +1134,9 @@ function CreateInvoicesBatch() {
                                 />
                               </div>
                               <div className="md:col-span-2">
-                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Unit Price</label>
+                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
+                                  Unit Price
+                                </label>
                                 <Input
                                   type="text"
                                   placeholder="0"
@@ -1134,7 +1156,9 @@ function CreateInvoicesBatch() {
                             </div>
                             <div className="grid grid-cols-2 gap-2 md:contents">
                               <div className="md:col-span-1">
-                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Discount</label>
+                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
+                                  Discount
+                                </label>
                                 <Input
                                   type="text"
                                   placeholder="0"
@@ -1152,7 +1176,9 @@ function CreateInvoicesBatch() {
                                 />
                               </div>
                               <div className="md:col-span-1">
-                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Tax (%)</label>
+                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
+                                  Tax (%)
+                                </label>
                                 <Input
                                   type="text"
                                   placeholder="0"
@@ -1172,7 +1198,9 @@ function CreateInvoicesBatch() {
                             </div>
                             <div className="flex items-center justify-between md:contents">
                               <div className="md:col-span-2 flex-1">
-                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">Amount</label>
+                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
+                                  Amount
+                                </label>
                                 <div className="bg-gray-100 px-3 py-2 rounded border text-gray-700 font-mono text-sm">
                                   {(
                                     (parseFloat(item.qty) || 0) *
@@ -1288,12 +1316,16 @@ function CreateInvoicesBatch() {
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
                   <Loader2 className="animate-spin h-4 w-4 sm:h-5 sm:w-5" />
-                  <span className="text-sm sm:text-base">Creating {validInvoices} Invoices...</span>
+                  <span className="text-sm sm:text-base">
+                    Creating {validInvoices} Invoices...
+                  </span>
                 </div>
               ) : (
                 <div className="flex items-center justify-center gap-2">
                   <Receipt className="w-4 h-4 sm:w-5 sm:h-5" />
-                  <span className="text-sm sm:text-base">Create {validInvoices} Invoices (Batch)</span>
+                  <span className="text-sm sm:text-base">
+                    Create {validInvoices} Invoices (Batch)
+                  </span>
                 </div>
               )}
             </Button>

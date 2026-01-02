@@ -150,28 +150,23 @@ function SentInvoice() {
         setError(null);
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
-        const network = await provider.getNetwork();
-
-        if (network.chainId != 11155111) {
-          setError(
-            `You're connected to ${network.name}. Please switch to Sepolia network to view your invoices.`
-          );
-          setLoading(false);
-          return;
-        }
 
         const litNodeClient = litClientRef.current;
         if (!litNodeClient) {
           alert("Lit client not initialized");
           return;
         }
+        console.log("chainid",chainId)
+        const contractAddress = import.meta.env[
+          `VITE_CONTRACT_ADDRESS_${chainId}`
+        ];
 
-        const contract = new Contract(
-          import.meta.env.VITE_CONTRACT_ADDRESS,
-          ChainvoiceABI,
-          signer
-        );
+        if (!contractAddress) {
+          throw new Error("Unsupported network");
+        }
 
+        const contract = new Contract(contractAddress, ChainvoiceABI, signer);
+        
         const res = await contract.getSentInvoices(address);
         console.log("Raw invoices data:", res);
 
@@ -333,7 +328,10 @@ function SentInvoice() {
         setFee(fee);
       } catch (error) {
         console.error("Decryption error:", error);
-        setError("Failed to fetch invoices. Please try again.");
+        setError(
+          "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
+        );
+        
       } finally {
         console.log(sentInvoices);
         setLoading(false);
@@ -380,11 +378,15 @@ function SentInvoice() {
       setPaymentLoading((prev) => ({ ...prev, [invoiceId]: true }));
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
-      const contract = new Contract(
-        import.meta.env.VITE_CONTRACT_ADDRESS,
-        ChainvoiceABI,
-        signer
-      );
+      const contractAddress = import.meta.env[
+        `VITE_CONTRACT_ADDRESS_${chainId}`
+      ];
+
+      if (!contractAddress) {
+        throw new Error("Unsupported network");
+      }
+
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
       const tx = await contract.cancelInvoice(invoiceId);
       await tx.wait();
@@ -403,21 +405,6 @@ function SentInvoice() {
     }
   };
 
-  const switchNetwork = async () => {
-    try {
-      setNetworkLoading(true);
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0xaa36a7" }], // Sepolia chain ID
-      });
-      setError(null);
-    } catch (error) {
-      console.error("Network switch failed:", error);
-      alert("Failed to switch network. Please switch to Sepolia manually.");
-    } finally {
-      setNetworkLoading(false);
-    }
-  };
 
   const formatAddress = (address) => {
     return `${address.substring(0, 10)}...${address.substring(
@@ -445,26 +432,6 @@ function SentInvoice() {
             <div>
               <h2 className="text-2xl font-bold text-white">Sent Invoices</h2>
             </div>
-            {error && (
-              <button
-                onClick={switchNetwork}
-                disabled={networkLoading}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center"
-              >
-                {networkLoading ? (
-                  <>
-                    <CircularProgress
-                      size={20}
-                      className="mr-2"
-                      color="inherit"
-                    />
-                    Switching...
-                  </>
-                ) : (
-                  "Switch to Sepolia"
-                )}
-              </button>
-            )}
           </div>
 
           <Paper

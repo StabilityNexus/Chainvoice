@@ -47,8 +47,10 @@ jobs:
         run: npm run build
         working-directory: ./frontend
         env: 
-          VITE_CONTRACT_ADDRESS: ${{ secrets.VITE_CONTRACT_ADDRESS }}
           VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
+          VITE_CONTRACT_ADDRESS_11155111: ${{ secrets.VITE_CONTRACT_ADDRESS_11155111 }}
+          VITE_CONTRACT_ADDRESS_61: ${{ secrets.VITE_CONTRACT_ADDRESS_61 }}
+          VITE_CONTRACT_ADDRESS_137: ${{ secrets.VITE_CONTRACT_ADDRESS_137 }}
 
       # Setup Pages
       - name: Setup Pages

@@ -10,7 +10,7 @@ import { decryptToString } from "@lit-protocol/encryption/src/lib/encryption.js"
 import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
 import {
   createSiweMessageWithRecaps,
-    generateAuthSig,
+  generateAuthSig,
   LitAccessControlConditionResource,
 } from "@lit-protocol/auth-helpers";
 import { ERC20_ABI } from "../contractsABI/ERC20_ABI";
@@ -59,8 +59,8 @@ function BatchPayment() {
   });
 
   // Get tokens from the hook
-    const { tokens } = useTokenList(chainId || 1);
-    
+  const { tokens } = useTokenList(chainId || 1);
+
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
@@ -343,25 +343,21 @@ function BatchPayment() {
         const signer = await provider.getSigner();
         const network = await provider.getNetwork();
 
-        if (network.chainId != 11155111) {
-          setError(
-            `You're connected to ${network.name}. Please switch to Sepolia network to view your invoices.`
-          );
-          setLoading(false);
-          return;
-        }
-
         const litNodeClient = litClientRef.current;
         if (!litNodeClient) {
           alert("Lit client not initialized");
           return;
         }
 
-        const contract = new Contract(
-          import.meta.env.VITE_CONTRACT_ADDRESS,
-          ChainvoiceABI,
-          signer
-        );
+        const contractAddress = import.meta.env[
+          `VITE_CONTRACT_ADDRESS_${chainId}`
+        ];
+
+        if (!contractAddress) {
+          throw new Error("Unsupported network");
+        }
+
+        const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
         const res = await contract.getReceivedInvoices(address);
 
@@ -546,11 +542,15 @@ function BatchPayment() {
     try {
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
-      const contract = new Contract(
-        import.meta.env.VITE_CONTRACT_ADDRESS,
-        ChainvoiceABI,
-        signer
-      );
+      const contractAddress = import.meta.env[
+        `VITE_CONTRACT_ADDRESS_${chainId}`
+      ];
+
+      if (!contractAddress) {
+        throw new Error("Unsupported network");
+      }
+
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
       const grouped = getGroupedInvoices();
 
@@ -607,16 +607,23 @@ function BatchPayment() {
         if (!isNativeToken) {
           // For ERC20 tokens: Check and approve allowance
           const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
+          const contractAddress = import.meta.env[
+            `VITE_CONTRACT_ADDRESS_${chainId}`
+          ];
+
+          if (!contractAddress) {
+            throw new Error("Unsupported network");
+          }
 
           const currentAllowance = await tokenContract.allowance(
             await signer.getAddress(),
-            import.meta.env.VITE_CONTRACT_ADDRESS
+            contractAddress
           );
 
           if (currentAllowance < totalAmount) {
             toast.info(`Approving ${symbol} for spending...`);
             const approveTx = await tokenContract.approve(
-              import.meta.env.VITE_CONTRACT_ADDRESS,
+              contractAddress,
               totalAmount
             );
             await approveTx.wait();
@@ -689,11 +696,16 @@ function BatchPayment() {
     try {
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
-      const contract = new Contract(
-        import.meta.env.VITE_CONTRACT_ADDRESS,
-        ChainvoiceABI,
-        signer
-      );
+      const contractAddress = import.meta.env[
+        `VITE_CONTRACT_ADDRESS_${chainId}`
+      ];
+
+      if (!contractAddress) {
+        throw new Error("Unsupported network");
+      }
+
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
+
       const invoice = receivedInvoices.find((inv) => inv.id === invoiceId);
       if (invoice?.isCancelled) {
         throw new Error("Cannot pay a cancelled invoice");
@@ -709,10 +721,17 @@ function BatchPayment() {
 
       if (!isNativeToken) {
         const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
+        const contractAddress = import.meta.env[
+          `VITE_CONTRACT_ADDRESS_${chainId}`
+        ];
+
+        if (!contractAddress) {
+          throw new Error("Unsupported network");
+        }
 
         const currentAllowance = await tokenContract.allowance(
           await signer.getAddress(),
-          import.meta.env.VITE_CONTRACT_ADDRESS
+          contractAddress
         );
 
         const decimals = await tokenContract.decimals();
@@ -720,7 +739,7 @@ function BatchPayment() {
 
         if (currentAllowance < amountDueInWei) {
           const approveTx = await tokenContract.approve(
-            import.meta.env.VITE_CONTRACT_ADDRESS,
+            contractAddress,
             amountDueInWei
           );
 
@@ -797,22 +816,6 @@ function BatchPayment() {
     link.click();
   };
 
-  const switchNetwork = async () => {
-    try {
-      setNetworkLoading(true);
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0xaa36a7" }], // Sepolia chain ID
-      });
-      setError(null);
-    } catch (error) {
-      console.error("Network switch failed:", error);
-      alert("Failed to switch network. Please switch to Sepolia manually.");
-    } finally {
-      setNetworkLoading(false);
-    }
-  };
-
   const formatAddress = (address) => {
     return `${address.substring(0, 10)}...${address.substring(
       address.length - 10
@@ -848,22 +851,6 @@ function BatchPayment() {
                 Select and pay multiple invoices in one transaction
               </p>
             </div>
-            {error && (
-              <button
-                onClick={switchNetwork}
-                disabled={networkLoading}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center"
-              >
-                {networkLoading ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                    Switching...
-                  </>
-                ) : (
-                  "Switch to Sepolia"
-                )}
-              </button>
-            )}
           </div>
 
           {/* Balance Error Alerts */}
