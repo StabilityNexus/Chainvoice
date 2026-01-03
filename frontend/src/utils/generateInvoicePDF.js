@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { ethers } from "ethers";
+import { getWagmiChainName, getWagmiChainInfo } from "./wagmiChainHelpers";
 
 /**
  * Load logo image with multiple fallback methods
@@ -347,8 +348,11 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
     const contractAddr = invoice.paymentToken.address;
     const shortAddr = `${contractAddr.substring(0, 10)}......${contractAddr.substring(contractAddr.length - 8)}`;
     pdf.text(shortAddr, 25, yPos + 19);
+    const chainId = invoice.paymentToken?.chainId || invoice.chainId;
+    const network = getWagmiChainInfo(chainId);
+    const chainName = network?.name || getWagmiChainName(chainId) || "Unknown network";
     pdf.text(
-      `Decimals: ${invoice.paymentToken.decimals || 18} | Chain: Sepolia Testnet`,
+      `Decimals: ${invoice.paymentToken.decimals || 18} | Chain: ${chainName}`,
       120,
       yPos + 14
     );
