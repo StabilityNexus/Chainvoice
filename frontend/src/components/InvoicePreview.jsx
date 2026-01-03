@@ -54,7 +54,7 @@ const InvoicePreview = ({
               </div>
               <div className="flex flex-col justify-center">
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1 leading-tight">
-                  <span className="text-green-500">Chain</span>
+                  <span className="text-green-500">Cha</span>
                   <span className="text-gray-600">in</span>
                   <span className="text-green-500">voice</span>
                 </h1>
