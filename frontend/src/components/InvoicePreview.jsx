@@ -319,12 +319,18 @@ const InvoicePreview = ({
               </thead>
               <tbody className="divide-y divide-gray-200 bg-white">
                 {invoice.items?.map((item, index) => {
-                  // Check if unitPrice already contains the symbol
+                  // Check if unitPrice already ends with the symbol (with optional whitespace)
                   const unitPriceStr = String(item.unitPrice || "");
                   const symbol = invoice.paymentToken?.symbol || "";
-                  const unitPriceDisplay = unitPriceStr.includes(symbol)
-                    ? unitPriceStr
-                    : `${unitPriceStr} ${symbol}`;
+                  let unitPriceDisplay = unitPriceStr;
+                  if (symbol) {
+                    const trimmed = unitPriceStr.trim();
+                    if (!trimmed.endsWith(symbol)) {
+                      unitPriceDisplay = `${trimmed} ${symbol}`;
+                    } else {
+                      unitPriceDisplay = unitPriceStr;
+                    }
+                  }
 
                   return (
                     <tr
