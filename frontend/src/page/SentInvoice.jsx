@@ -695,6 +695,7 @@ function SentInvoice() {
               id="invoice-print"
               className="bg-white p-6 rounded-lg shadow-none"
             >
+<<<<<<< HEAD
               {/* Header Section */}
               <div className="flex justify-between items-start mb-8">
                 <div>
@@ -707,6 +708,48 @@ function SentInvoice() {
                         in
                       </span>
                       voice
+=======
+              {/* Header - Enhanced Layout with Bigger Logo */}
+              <div className="border-b-2 border-gray-200 pb-6 mb-8">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
+                  <div className="flex items-center space-x-4">
+                    <div className="bg-white p-3.5 rounded-xl border-2 border-gray-200 shadow-lg flex-shrink-0">
+                      <img
+                        src="/logo.png"
+                        alt="Chainvoice"
+                        className="h-16 w-16 object-contain"
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                          const fallback = e.target.parentElement.querySelector(
+                            ".logo-fallback"
+                          );
+                          if (fallback) fallback.style.display = "flex";
+                        }}
+                      />
+                      <div className="logo-fallback hidden h-16 w-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl items-center justify-center shadow-sm">
+                        <span className="text-white font-bold text-2xl">
+                          CV
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col justify-center">
+                      <h1 className="text-3xl sm:text-4xl font-bold mb-1 leading-tight">
+                        <span className="text-green-500">Cha</span>
+                        <span className="text-gray-600">in</span>
+                        <span className="text-green-500">voice</span>
+                      </h1>
+                      <p className="text-sm text-gray-500 font-medium">
+                        Powered by Chainvoice
+                      </p>
+                    </div>
+                  </div>
+                  <div className="text-left sm:text-right flex flex-col items-start sm:items-end">
+                    <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
+                      INVOICE
+                    </h2>
+                    <p className="text-base text-gray-600 font-semibold mb-3 font-mono">
+                      #{drawerState.selectedInvoice.id.toString().padStart(6, "0")}
+>>>>>>> 1c49341 (updated-ui-fixed-bug)
                     </p>
                   </div>
                 </div>
