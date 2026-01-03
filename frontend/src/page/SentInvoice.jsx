@@ -13,7 +13,7 @@ import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import { useRef } from "react";
-import html2canvas from "html2canvas";
+import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { decryptToString } from "@lit-protocol/encryption/src/lib/encryption.js";
 import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
@@ -361,16 +361,21 @@ function SentInvoice() {
   };
 
   const handlePrint = async () => {
-    const element = document.getElementById("invoice-print");
-    if (!element) return;
+    if (!drawerState.selectedInvoice) {
+      toast.error("No invoice selected");
+      return;
+    }
 
-    const canvas = await html2canvas(element, { scale: 2 });
-    const data = canvas.toDataURL("image/png");
-
-    const link = document.createElement("a");
-    link.download = `invoice-${drawerState.selectedInvoice.id}.png`;
-    link.href = data;
-    link.click();
+    try {
+      toast.info("Generating PDF...");
+      const pdf = await generateInvoicePDF(drawerState.selectedInvoice, fee);
+      const fileName = `invoice-${drawerState.selectedInvoice.id.toString().padStart(6, "0")}.pdf`;
+      pdf.save(fileName);
+      toast.success("PDF downloaded successfully!");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF. Please try again.");
+    }
   };
 
   const handleCancelInvoice = async (invoiceId) => {
@@ -695,20 +700,6 @@ function SentInvoice() {
               id="invoice-print"
               className="bg-white p-6 rounded-lg shadow-none"
             >
-<<<<<<< HEAD
-              {/* Header Section */}
-              <div className="flex justify-between items-start mb-8">
-                <div>
-                  Powered by
-                  <div className="flex items-center space-x-3 mb-6">
-                    <img src="/logo.png" alt="Chainvoice" className="h-8" />
-                    <p className="text-3xl font-bold text-green-500">
-                      Cha
-                      <span className="text-3xl font-bold text-gray-600">
-                        in
-                      </span>
-                      voice
-=======
               {/* Header - Enhanced Layout with Bigger Logo */}
               <div className="border-b-2 border-gray-200 pb-6 mb-8">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
@@ -749,40 +740,52 @@ function SentInvoice() {
                     </h2>
                     <p className="text-base text-gray-600 font-semibold mb-3 font-mono">
                       #{drawerState.selectedInvoice.id.toString().padStart(6, "0")}
->>>>>>> 1c49341 (updated-ui-fixed-bug)
                     </p>
-                  </div>
-                </div>
-
-                <div className="text-right">
-                  <h1 className="text-2xl font-bold text-gray-800">INVOICE</h1>
-                  <p className="text-gray-600 text-sm">
-                    #
-                    {drawerState.selectedInvoice.id.toString().padStart(6, "0")}
-                  </p>
-                  <div className="mt-2">
-                    {drawerState.selectedInvoice.isCancelled ? (
-                      <Chip
-                        label="CANCELLED"
-                        color="error"
-                        size="small"
-                        icon={<CancelIcon />}
-                      />
-                    ) : drawerState.selectedInvoice.isPaid ? (
-                      <Chip
-                        label="PAID"
-                        color="success"
-                        size="small"
-                        icon={<PaidIcon />}
-                      />
-                    ) : (
-                      <Chip
-                        label="UNPAID"
-                        color="warning"
-                        size="small"
-                        icon={<UnpaidIcon />}
-                      />
-                    )}
+                    <div>
+                      {drawerState.selectedInvoice.isCancelled ? (
+                        <Chip
+                          label="CANCELLED"
+                          color="error"
+                          size="small"
+                          icon={<CancelIcon />}
+                          sx={{
+                            bgcolor: "#fee2e2",
+                            color: "#dc2626",
+                            border: "1px solid #fecaca",
+                            fontWeight: 600,
+                            fontSize: "0.75rem",
+                          }}
+                        />
+                      ) : drawerState.selectedInvoice.isPaid ? (
+                        <Chip
+                          label="PAID"
+                          color="success"
+                          size="small"
+                          icon={<PaidIcon />}
+                          sx={{
+                            bgcolor: "#dcfce7",
+                            color: "#16a34a",
+                            border: "1px solid #bbf7d0",
+                            fontWeight: 600,
+                            fontSize: "0.75rem",
+                          }}
+                        />
+                      ) : (
+                        <Chip
+                          label="UNPAID"
+                          color="warning"
+                          size="small"
+                          icon={<UnpaidIcon />}
+                          sx={{
+                            bgcolor: "#fef3c7",
+                            color: "#d97706",
+                            border: "1px solid #fde68a",
+                            fontWeight: 600,
+                            fontSize: "0.75rem",
+                          }}
+                        />
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>

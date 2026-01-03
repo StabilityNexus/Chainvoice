@@ -187,7 +187,7 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
       try {
         pdf.setFillColor(255, 255, 255);
         pdf.setDrawColor(...borderGray);
-        pdf.setLineWidth(0.3);
+        pdf.setLineWidth(0.5);
         pdf.rect(logoX, logoY, logoSize, logoSize, "FD");
         pdf.addImage(
           logoDataUrl,
@@ -211,9 +211,9 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
 
   if (!logoAdded) {
     pdf.setFillColor(...greenColor);
-    pdf.setDrawColor(...borderGray);
-    pdf.setLineWidth(0.3);
-    pdf.rect(logoX, logoY, logoSize, logoSize, "FD");
+    pdf.rect(logoX, logoY, logoSize, logoSize, "F");
+    pdf.setDrawColor(...greenColor);
+    pdf.rect(logoX, logoY, logoSize, logoSize, "D");
     pdf.setTextColor(255, 255, 255);
     pdf.setFontSize(16);
     pdf.setFont("helvetica", "bold");
@@ -226,15 +226,15 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   pdf.setFont("helvetica", "bold");
   
   pdf.setTextColor(...greenColor);
-  const chaWidth = pdf.getTextWidth("Cha");
+  const chainWidth = pdf.getTextWidth("Cha");
   pdf.text("Cha", companyNameX, companyNameY);
   
   pdf.setTextColor(...darkGray);
   const inWidth = pdf.getTextWidth("in");
-  pdf.text("in", companyNameX + chaWidth, companyNameY);
+  pdf.text("in", companyNameX + chainWidth, companyNameY);
   
   pdf.setTextColor(...greenColor);
-  pdf.text("voice", companyNameX + chaWidth + inWidth, companyNameY);
+  pdf.text("voice", companyNameX + chainWidth + inWidth, companyNameY);
 
   pdf.setFontSize(9);
   pdf.setFont("helvetica", "normal");
@@ -359,8 +359,6 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   yPos += 30;
 
   pdf.setFillColor(...bgGray);
-  pdf.setDrawColor(...borderGray);
-  pdf.setLineWidth(0.3);
   pdf.rect(20, yPos, 170, 8, "FD");
   pdf.setTextColor(...darkGray);
   pdf.setFontSize(9);
@@ -380,16 +378,6 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
 
   yPos += 12;
 
-  const tableStartY = yPos;
-  
-  pdf.setFillColor(...darkGray);
-  pdf.setDrawColor(...borderGray);
-  pdf.setLineWidth(0.3);
-  pdf.rect(20, yPos, 170, 10, "FD");
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFontSize(9);
-  pdf.setFont("helvetica", "bold");
-
   const colPositions = {
     description: 25,
     qty: 90,
@@ -408,17 +396,28 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
     colPositions.tax, 
     colPositions.amount
   ];
+
+  const rowHeight = 10;
+  const headerHeight = 10;
+  let tableStartY = yPos;
+  let tableEndY = tableStartY + headerHeight;
+
+  pdf.setDrawColor(...borderGray);
+  pdf.setLineWidth(0.5);
+  pdf.rect(20, yPos, 170, headerHeight, "D");
+  
+  pdf.setFillColor(...darkGray);
+  pdf.rect(20, yPos, 170, headerHeight, "F");
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFontSize(9);
+  pdf.setFont("helvetica", "bold");
   
   headers.forEach((header, index) => {
     const align = index === 0 ? "left" : "right";
     pdf.text(header, headerPositions[index], yPos + 7, { align });
   });
-
-  pdf.setDrawColor(...borderGray);
-  pdf.setLineWidth(0.3);
-  pdf.line(20, yPos + 10, 190, yPos + 10);
   
-  yPos += 10;
+  yPos += headerHeight;
 
   pdf.setTextColor(...darkGray);
   pdf.setFont("helvetica", "normal");
@@ -427,12 +426,21 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   if (invoice.items && invoice.items.length > 0) {
     invoice.items.forEach((item, index) => {
       if (yPos > 250) {
+        pdf.setDrawColor(...borderGray);
+        pdf.setLineWidth(0.5);
+        pdf.line(20, yPos, 190, yPos);
+        pdf.line(20, tableStartY, 20, yPos);
+        pdf.line(190, tableStartY, 190, yPos);
+        
         pdf.addPage();
         yPos = 20;
-        pdf.setFillColor(...darkGray);
+        tableStartY = yPos;
+        
         pdf.setDrawColor(...borderGray);
-        pdf.setLineWidth(0.3);
-        pdf.rect(20, yPos, 170, 10, "FD");
+        pdf.setLineWidth(0.5);
+        pdf.rect(20, yPos, 170, headerHeight, "D");
+        pdf.setFillColor(...darkGray);
+        pdf.rect(20, yPos, 170, headerHeight, "F");
         pdf.setTextColor(255, 255, 255);
         pdf.setFontSize(9);
         pdf.setFont("helvetica", "bold");
@@ -440,19 +448,11 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
           const align = idx === 0 ? "left" : "right";
           pdf.text(header, headerPositions[idx], yPos + 7, { align });
         });
-        pdf.setDrawColor(...borderGray);
-        pdf.setLineWidth(0.3);
-        pdf.line(20, yPos + 10, 190, yPos + 10);
-        yPos += 10;
-      }
-
-      if (index % 2 === 1) {
-        pdf.setFillColor(...bgGray);
-        pdf.rect(20, yPos, 170, 10, "F");
+        yPos += headerHeight;
       }
 
       pdf.setDrawColor(...borderGray);
-      pdf.setLineWidth(0.4);
+      pdf.setLineWidth(0.5);
       pdf.line(20, yPos, 190, yPos);
 
       const unitPriceStr = String(item.unitPrice || "");
@@ -476,18 +476,22 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
       );
       pdf.setFont("helvetica", "normal");
       
-      yPos += 10;
+      yPos += rowHeight;
+      tableEndY = yPos;
     });
     
-    const tableEndY = yPos;
     pdf.setDrawColor(...borderGray);
-    pdf.setLineWidth(0.3);
+    pdf.setLineWidth(0.5);
     pdf.line(20, tableEndY, 190, tableEndY);
     pdf.line(20, tableStartY, 20, tableEndY);
     pdf.line(190, tableStartY, 190, tableEndY);
   } else {
-    pdf.text("No items in this invoice", 25, yPos + 5);
-    yPos += 8;
+    pdf.setDrawColor(...borderGray);
+    pdf.setLineWidth(0.5);
+    pdf.rect(20, yPos, 170, rowHeight, "D");
+    pdf.text("No items in this invoice", 25, yPos + 6);
+    yPos += rowHeight;
+    tableEndY = yPos;
   }
 
   yPos += 5;
@@ -516,14 +520,14 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   const networkFee = ethers.formatUnits(fee);
   pdf.text(`${networkFee} ETH`, 185, yPos + 13, { align: "right" });
 
-  pdf.setDrawColor(...borderGray);
-  pdf.setLineWidth(0.3);
+  pdf.setDrawColor(...mediumGray);
+  pdf.setLineWidth(0.5);
   pdf.line(25, yPos + 19, 185, yPos + 19);
 
   pdf.setFillColor(250, 250, 250);
+  pdf.rect(20, yPos + 19, 170, 9, "F");
   pdf.setDrawColor(...borderGray);
-  pdf.setLineWidth(0.3);
-  pdf.rect(20, yPos + 19, 170, 9, "FD");
+  pdf.rect(20, yPos + 19, 170, 9, "D");
 
   pdf.setFontSize(11);
   pdf.setFont("helvetica", "bold");

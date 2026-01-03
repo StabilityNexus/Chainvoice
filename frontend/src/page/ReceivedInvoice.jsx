@@ -13,7 +13,7 @@ import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import { useRef } from "react";
-import html2canvas from "html2canvas";
+import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { decryptToString } from "@lit-protocol/encryption/src/lib/encryption.js";
 import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
@@ -859,21 +859,20 @@ function ReceivedInvoice() {
   };
 
   const handlePrint = async () => {
-    const element = document.getElementById("invoice-print");
-    if (!element) return;
+    if (!drawerState.selectedInvoice) {
+      toast.error("No invoice selected");
+      return;
+    }
 
     try {
-      const canvas = await html2canvas(element, { scale: 2 });
-      const data = canvas.toDataURL("image/png");
-
-      const link = document.createElement("a");
-      link.download = `invoice-${drawerState.selectedInvoice.id}.png`;
-      link.href = data;
-      link.click();
-
-      toast.success("Invoice downloaded successfully!");
+      toast.info("Generating PDF...");
+      const pdf = await generateInvoicePDF(drawerState.selectedInvoice, fee);
+      const fileName = `invoice-${drawerState.selectedInvoice.id.toString().padStart(6, "0")}.pdf`;
+      pdf.save(fileName);
+      toast.success("PDF downloaded successfully!");
     } catch (error) {
-      toast.error("Failed to download invoice. Please try again.");
+      console.error("Error generating PDF:", error);
+      toast.error("Failed to generate PDF. Please try again.");
     }
   };
 
@@ -1575,7 +1574,7 @@ function ReceivedInvoice() {
                       </div>
                       <div className="flex flex-col justify-center">
                         <h1 className="text-3xl sm:text-4xl font-bold mb-1 leading-tight">
-                          <span className="text-green-500">Chain</span>
+                          <span className="text-green-500">Cha</span>
                           <span className="text-gray-600">in</span>
                           <span className="text-green-500">voice</span>
                         </h1>
