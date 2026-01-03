@@ -1,3 +1,36 @@
+// Helper to map chainId to human-friendly network name
+const CHAIN_ID_TO_NAME = {
+  1: "Ethereum Mainnet",
+  5: "Goerli Testnet",
+  11155111: "Sepolia Testnet",
+  137: "Polygon Mainnet",
+  80001: "Polygon Mumbai",
+  56: "BNB Smart Chain",
+  97: "BSC Testnet",
+  8453: "Base Mainnet",
+  84531: "Base Goerli",
+  534352: "Scroll Mainnet",
+  534351: "Scroll Sepolia",
+  42161: "Arbitrum One",
+  421613: "Arbitrum Goerli",
+  10: "Optimism Mainnet",
+  420: "Optimism Goerli",
+  11155420: "Optimism Sepolia",
+  5000: "Mantle Mainnet",
+  5001: "Mantle Testnet",
+  59144: "Linea Mainnet",
+  59140: "Linea Goerli",
+  59141: "Linea Sepolia",
+  1111: "WEMIX3.0 Testnet",
+  1112: "WEMIX3.0 Mainnet",
+  // Add more as needed
+};
+
+function getNetworkName(chainId) {
+  if (!chainId) return "Unknown network";
+  const id = Number(chainId);
+  return CHAIN_ID_TO_NAME[id] || "Unknown network";
+}
 import React from "react";
 import { ethers } from "ethers";
 import { Chip, Typography } from "@mui/material";
@@ -241,8 +274,10 @@ const InvoicePreview = ({
                     {invoice.paymentToken.decimals || 18}
                   </span>
                   <span>
-                    <strong className="text-gray-700">Chain:</strong> Sepolia
-                    Testnet
+                    <strong className="text-gray-700">Chain:</strong>{" "}
+                    {getNetworkName(
+                      invoice.paymentToken?.chainId || invoice.chainId
+                    )}
                   </span>
                 </div>
               )}
@@ -325,7 +360,8 @@ const InvoicePreview = ({
                   let unitPriceDisplay = unitPriceStr;
                   if (symbol) {
                     const trimmed = unitPriceStr.trim();
-                    if (!trimmed.endsWith(symbol)) {
+                    const regex = new RegExp(`\\s*${symbol.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")}$`);
+                    if (!regex.test(trimmed)) {
                       unitPriceDisplay = `${trimmed} ${symbol}`;
                     } else {
                       unitPriceDisplay = unitPriceStr;
