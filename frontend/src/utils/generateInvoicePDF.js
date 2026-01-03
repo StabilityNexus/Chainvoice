@@ -301,7 +301,8 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   const fromAddress = invoice.user?.address || "N/A";
   pdf.text(fromAddress, 25, yPos + 17, { maxWidth: 75 });
   
-  const fromLocation = `${invoice.user?.city || ""}, ${invoice.user?.country || ""}, ${invoice.user?.postalcode || ""}`.trim() || "N/A";
+  const fromLocationParts = [invoice.user?.city, invoice.user?.postalcode, invoice.user?.country].filter(Boolean);
+  const fromLocation = fromLocationParts.join(", ") || "N/A";
   pdf.text(fromLocation, 25, yPos + 22);
   
   const fromEmail = invoice.user?.email || "N/A";
@@ -318,7 +319,8 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   const toAddress = invoice.client?.address || "N/A";
   pdf.text(toAddress, 115, yPos + 17, { maxWidth: 75 });
   
-  const toLocation = `${invoice.client?.city || ""}, ${invoice.client?.country || ""}, ${invoice.client?.postalcode || ""}`.trim() || "N/A";
+  const toLocationParts = [invoice.client?.city, invoice.client?.postalcode, invoice.client?.country].filter(Boolean);
+  const toLocation = toLocationParts.join(", ") || "N/A";
   pdf.text(toLocation, 115, yPos + 22);
   
   const toEmail = invoice.client?.email || "N/A";
@@ -538,10 +540,27 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   pdf.setTextColor(...darkGray);
   pdf.text("TOTAL AMOUNT:", 25, yPos + 25);
 
-  const totalText =
-    tokenSymbol === "ETH"
-      ? `${(parseFloat(invoice.amountDue) + parseFloat(networkFee)).toFixed(6)} ETH`
-      : `${invoice.amountDue} ${tokenSymbol} + ${networkFee} ETH`;
+
+  let totalText;
+  if (tokenSymbol === "ETH") {
+    // Use ethers.BigNumber for precise addition in wei
+    let amountDueWei, networkFeeWei;
+    try {
+      amountDueWei = ethers.parseUnits(invoice.amountDue || "0", 18);
+    } catch {
+      amountDueWei = 0n;
+    }
+    try {
+      networkFeeWei = ethers.parseUnits(networkFee || "0", 18);
+    } catch {
+      networkFeeWei = 0n;
+    }
+    const totalWei = amountDueWei + networkFeeWei;
+    const totalEth = ethers.formatUnits(totalWei, 18);
+    totalText = `${Number(totalEth).toFixed(6)} ETH`;
+  } else {
+    totalText = `${invoice.amountDue} ${tokenSymbol} + ${networkFee} ETH`;
+  }
 
   pdf.setFontSize(11);
   pdf.text(totalText, 185, yPos + 25, { align: "right" });

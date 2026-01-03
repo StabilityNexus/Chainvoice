@@ -427,9 +427,19 @@ const InvoicePreview = ({
                 </span>
                 <span className="text-base sm:text-lg font-bold text-gray-900">
                   {invoice.paymentToken?.symbol === "ETH"
-                    ? `${(
-                        parseFloat(invoice.amountDue) + parseFloat(networkFee)
-                      ).toFixed(6)} ETH`
+                    ? (() => {
+                        // Normalize and validate numeric inputs
+                        let amountDueNum = 0;
+                        let networkFeeNum = 0;
+                        if (invoice.amountDue !== undefined && invoice.amountDue !== null && !isNaN(Number(invoice.amountDue))) {
+                          amountDueNum = Number(invoice.amountDue);
+                        }
+                        if (networkFee !== undefined && networkFee !== null && !isNaN(Number(networkFee))) {
+                          networkFeeNum = Number(networkFee);
+                        }
+                        const total = amountDueNum + networkFeeNum;
+                        return `${total.toFixed(6)} ETH`;
+                      })()
                     : `${invoice.amountDue} ${invoice.paymentToken?.symbol} + ${networkFee} ETH`}
                 </span>
               </div>
