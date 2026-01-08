@@ -34,7 +34,7 @@ import {
   Users,
   Receipt,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, validatePayloadSize } from "@/lib/utils";
 import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
@@ -355,7 +355,6 @@ function CreateInvoicesBatch() {
 
       // Process each invoice - use form data
       for (const [index, row] of validInvoices.entries()) {
-
         const invoicePayload = {
           amountDue: row.totalAmountDue.toString(),
           dueDate,
@@ -392,6 +391,14 @@ function CreateInvoicesBatch() {
             batchType: "user_created",
           },
         };
+
+        // Validate payload size before encryption (8KB per invoice for batch)
+        const payloadValidation = validatePayloadSize(invoicePayload, 8);
+        if (!payloadValidation.isValid) {
+          toast.error(`Invoice #${index + 1}: ${payloadValidation.error || "Payload size exceeds maximum allowed"}`);
+          setLoading(false);
+          return;
+        }
 
         const invoiceString = JSON.stringify(invoicePayload);
 
@@ -670,6 +677,7 @@ function CreateInvoicesBatch() {
                   </Label>
                   <Input
                     placeholder="Your First Name"
+                    maxLength={50}
                     className={cn(
                       "w-full mt-1 border-gray-300 text-black",
                       errors.userFname && "border-red-500"
@@ -684,6 +692,7 @@ function CreateInvoicesBatch() {
                   </Label>
                   <Input
                     placeholder="Your Last Name"
+                    maxLength={50}
                     className={cn(
                       "w-full mt-1 border-gray-300 text-black",
                       errors.userLname && "border-red-500"
@@ -699,6 +708,7 @@ function CreateInvoicesBatch() {
                   <Input
                     type="email"
                     placeholder="your.email@example.com"
+                    maxLength={100}
                     className={cn(
                       "w-full mt-1 border-gray-300 text-black",
                       errors.userEmail && "border-red-500"
@@ -997,6 +1007,7 @@ function CreateInvoicesBatch() {
                           </Label>
                           <Input
                             placeholder="Client First Name"
+                            maxLength={50}
                             className={cn(
                               "w-full mt-1 border-gray-300 text-black",
                               errors.invoiceRows?.[rowIndex]?.clientFname && "border-red-500"
@@ -1015,6 +1026,7 @@ function CreateInvoicesBatch() {
                           </Label>
                           <Input
                             placeholder="Client Last Name"
+                            maxLength={50}
                             className={cn(
                               "w-full mt-1 border-gray-300 text-black",
                               errors.invoiceRows?.[rowIndex]?.clientLname && "border-red-500"
@@ -1034,6 +1046,7 @@ function CreateInvoicesBatch() {
                           <Input
                             type="email"
                             placeholder="client@example.com"
+                            maxLength={100}
                             className={cn(
                               "w-full mt-1 border-gray-300 text-black",
                               errors.invoiceRows?.[rowIndex]?.clientEmail && "border-red-500"
@@ -1099,6 +1112,7 @@ function CreateInvoicesBatch() {
                               </label>
                               <Input
                                 placeholder="Enter Description"
+                                maxLength={200}
                                 className={cn(
                                   "w-full border-gray-300 text-black",
                                   errors.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.description && (touchedFields.invoiceRows?.[rowIndex]?.itemData?.[itemIndex]?.description || isSubmitted) && "border-red-500"

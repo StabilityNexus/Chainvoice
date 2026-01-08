@@ -13,16 +13,18 @@ const ethereumAddressSchema = z
   )
   .transform((address) => address.toLowerCase());
 
-// Email validation schema
+// Email validation schema with length limit
 const emailSchema = z
   .string()
   .min(1, "Email is required")
+  .max(100, "Email address is too long (maximum 100 characters)")
   .email("Please enter a valid email address")
   .toLowerCase();
 
-// Optional email validation
+// Optional email validation with length limit
 const optionalEmailSchema = z
   .string()
+  .max(100, "Email address is too long (maximum 100 characters)")
   .optional()
   .refine(
     (email) => !email || z.string().email().safeParse(email).success,
@@ -33,7 +35,9 @@ const optionalEmailSchema = z
 
 // Invoice item schema
 const invoiceItemSchema = z.object({
-  description: z.string().min(1, "Description is required"),
+  description: z.string()
+    .min(1, "Description is required")
+    .max(200, "Description is too long (maximum 200 characters)"),
   qty: z
     .string()
     .min(1, "Quantity is required")
@@ -79,16 +83,18 @@ export const createInvoiceSchema = z.object({
   userFname: z.string().min(1, "First name is required").max(50, "First name is too long"),
   userLname: z.string().min(1, "Last name is required").max(50, "Last name is too long"),
   userEmail: emailSchema,
-  userCountry: z.string().min(1, "Country is required"),
-  userCity: z.string().min(1, "City is required").max(100, "City name is too long"),
-  userPostalcode: z.string().min(1, "Postal code is required").max(20, "Postal code is too long"),
+  userCountry: z.string()
+    .min(1, "Country is required")
+    .max(100, "Country name is too long (maximum 100 characters)"),
+  userCity: z.string().min(1, "City is required").max(100, "City name is too long (maximum 100 characters)"),
+  userPostalcode: z.string().min(1, "Postal code is required").max(20, "Postal code is too long (maximum 20 characters)"),
   clientAddress: ethereumAddressSchema,
-  clientFname: z.string().min(1, "Client first name is required").max(50, "First name is too long"),
-  clientLname: z.string().min(1, "Client last name is required").max(50, "Last name is too long"),
+  clientFname: z.string().min(1, "Client first name is required").max(50, "First name is too long (maximum 50 characters)"),
+  clientLname: z.string().min(1, "Client last name is required").max(50, "Last name is too long (maximum 50 characters)"),
   clientEmail: optionalEmailSchema,
-  clientCountry: z.string().optional(),
-  clientCity: z.string().max(100, "City name is too long").optional(),
-  clientPostalcode: z.string().max(20, "Postal code is too long").optional(),
+  clientCountry: z.string().max(100, "Country name is too long (maximum 100 characters)").optional(),
+  clientCity: z.string().max(100, "City name is too long (maximum 100 characters)").optional(),
+  clientPostalcode: z.string().max(20, "Postal code is too long (maximum 20 characters)").optional(),
   itemData: z
     .array(invoiceItemSchema)
     .min(1, "At least one invoice item is required")
@@ -111,7 +117,9 @@ export const createInvoiceSchema = z.object({
 
 // Batch Invoice Item Schema (for batch invoices)
 const batchInvoiceItemSchema = z.object({
-  description: z.string().min(1, "Description is required"),
+  description: z.string()
+    .min(1, "Description is required")
+    .max(200, "Description is too long (maximum 200 characters)"),
   qty: z
     .string()
     .min(1, "Quantity is required")
@@ -154,12 +162,12 @@ const batchInvoiceItemSchema = z.object({
 // Batch Invoice Row Schema
 const batchInvoiceRowSchema = z.object({
   clientAddress: ethereumAddressSchema,
-  clientFname: z.string().max(50, "First name is too long").optional(),
-  clientLname: z.string().max(50, "Last name is too long").optional(),
+  clientFname: z.string().max(50, "First name is too long (maximum 50 characters)").optional(),
+  clientLname: z.string().max(50, "Last name is too long (maximum 50 characters)").optional(),
   clientEmail: optionalEmailSchema,
-  clientCountry: z.string().optional(),
-  clientCity: z.string().max(100, "City name is too long").optional(),
-  clientPostalcode: z.string().max(20, "Postal code is too long").optional(),
+  clientCountry: z.string().max(100, "Country name is too long (maximum 100 characters)").optional(),
+  clientCity: z.string().max(100, "City name is too long (maximum 100 characters)").optional(),
+  clientPostalcode: z.string().max(20, "Postal code is too long (maximum 20 characters)").optional(),
   itemData: z
     .array(batchInvoiceItemSchema)
     .min(1, "At least one invoice item is required")
@@ -183,12 +191,14 @@ const batchInvoiceRowSchema = z.object({
 
 // Create Batch Invoices Form Schema
 export const createBatchInvoicesSchema = z.object({
-  userFname: z.string().min(1, "First name is required").max(50, "First name is too long"),
-  userLname: z.string().min(1, "Last name is required").max(50, "Last name is too long"),
+  userFname: z.string().min(1, "First name is required").max(50, "First name is too long (maximum 50 characters)"),
+  userLname: z.string().min(1, "Last name is required").max(50, "Last name is too long (maximum 50 characters)"),
   userEmail: emailSchema,
-  userCountry: z.string().optional(),
-  userCity: z.string().max(100, "City name is too long").optional(),
-  userPostalcode: z.string().max(20, "Postal code is too long").optional(),
+  userCountry: z.string()
+    .max(100, "Country name is too long (maximum 100 characters)")
+    .optional(),
+  userCity: z.string().max(100, "City name is too long (maximum 100 characters)").optional(),
+  userPostalcode: z.string().max(20, "Postal code is too long (maximum 20 characters)").optional(),
   invoiceRows: z
     .array(batchInvoiceRowSchema)
     .min(1, "At least one invoice is required")

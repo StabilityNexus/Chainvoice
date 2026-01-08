@@ -27,12 +27,13 @@ import {
   PlusIcon,
   XCircle,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, validatePayloadSize } from "@/lib/utils";
 import { format } from "date-fns";
 import { Label } from "../components/ui/label";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { createInvoiceSchema } from "@/lib/validationSchemas";
-import { ErrorMessage } from "@/components/ui/errorMessage"; 
+import { ErrorMessage } from "@/components/ui/errorMessage";
+import { toast } from "react-toastify"; 
 
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { encryptString } from "@lit-protocol/encryption/src/lib/encryption.js";
@@ -320,12 +321,21 @@ function CreateInvoice() {
         items: itemData,
       };
 
+      // Validate payload size before encryption
+      const payloadValidation = validatePayloadSize(invoicePayload, 10);
+      if (!payloadValidation.isValid) {
+        toast.error(payloadValidation.error || "Payload size exceeds maximum allowed");
+        setLoading(false);
+        return;
+      }
+
       const invoiceString = JSON.stringify(invoicePayload);
 
       // 2. Setup Lit
       const litNodeClient = litClientRef.current;
       if (!litNodeClient) {
-        alert("Lit client not initialized");
+        toast.error("Encryption service not initialized. Please try again.");
+        setLoading(false);
         return;
       }
       const accessControlConditions = [
@@ -413,10 +423,12 @@ function CreateInvoice() {
       );
 
       const receipt = await tx.wait();
+      toast.success("Invoice created successfully!");
       setTimeout(() => navigate("/dashboard/sent"), 4000);
     } catch (err) {
       console.error("Encryption or transaction failed:", err);
-      alert("Failed to create invoice.");
+      const errorMsg = err.message || err.reason || "Failed to create invoice. Please check your input and try again.";
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -581,6 +593,7 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Your First Name"
+                      maxLength={50}
                       className={cn(
                         "w-full mt-1 border-gray-300 text-black",
                         errors.userFname && "border-red-500"
@@ -596,6 +609,7 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Your Last Name"
+                      maxLength={50}
                       className={cn(
                         "w-full mt-1 border-gray-300 text-black",
                         errors.userLname && "border-red-500"
@@ -614,6 +628,7 @@ function CreateInvoice() {
                     <Input
                       type="email"
                       placeholder="Email"
+                      maxLength={100}
                       className={cn(
                         "w-full mt-1 border-gray-300 text-black",
                         errors.userEmail && "border-red-500"
@@ -653,6 +668,7 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="City"
+                      maxLength={100}
                       className={cn(
                         "w-full mt-1 border-gray-300 text-black",
                         errors.userCity && "border-red-500"
@@ -668,6 +684,7 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Postal Code"
+                      maxLength={20}
                       className={cn(
                         "w-full mt-1 border-gray-300 text-black",
                         errors.userPostalcode && "border-red-500"
@@ -709,6 +726,7 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Client First Name"
+                      maxLength={50}
                       className={cn(
                         "w-full mt-1 border-gray-300 text-black",
                         errors.clientFname && "border-red-500"
@@ -724,6 +742,7 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Client Last Name"
+                      maxLength={50}
                       className={cn(
                         "w-full mt-1 border-gray-300 text-black",
                         errors.clientLname && "border-red-500"
@@ -742,6 +761,7 @@ function CreateInvoice() {
                     <Input
                       type="email"
                       placeholder="Email"
+                      maxLength={100}
                       className={cn(
                         "w-full mt-1 border-gray-300 text-black",
                         errors.clientEmail && "border-red-500"
@@ -781,6 +801,7 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="City"
+                      maxLength={100}
                       className={cn(
                         "w-full mt-1 border-gray-300 text-black",
                         errors.clientCity && "border-red-500"
@@ -796,6 +817,7 @@ function CreateInvoice() {
                     <Input
                       type="text"
                       placeholder="Postal Code"
+                      maxLength={20}
                       className={cn(
                         "w-full mt-1 border-gray-300 text-black",
                         errors.clientPostalcode && "border-red-500"
@@ -1057,6 +1079,7 @@ function CreateInvoice() {
                         <Input
                           type="text"
                           placeholder="Enter Description"
+                          maxLength={200}
                           className={cn(
                             "w-full border-gray-300 text-black",
                             errors.itemData?.[index]?.description && (touchedFields.itemData?.[index]?.description || isSubmitted) && "border-red-500"
@@ -1212,6 +1235,7 @@ function CreateInvoice() {
                         <Input
                           type="text"
                           placeholder="Enter Description"
+                          maxLength={200}
                           className={cn(
                             "w-full border-gray-300 text-black",
                             errors.itemData?.[index]?.description && (touchedFields.itemData?.[index]?.description || isSubmitted) && "border-red-500"
