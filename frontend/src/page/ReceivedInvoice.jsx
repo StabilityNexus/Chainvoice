@@ -1061,11 +1061,9 @@ function ReceivedInvoice() {
                     variant="outlined"
                     size="small"
                     disabled={unpaidInvoices.length === 0}
-                    sx={{ minWidth: { xs: 0, sm: 120 }, flex: { xs: 1, sm: "unset" } }}
-                    fullWidth={true}
+                    sx={{ minWidth: { xs: 0, sm: 120 }, flex: { xs: 1, sm: "unset" }, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                   >
-                    <span className="hidden sm:inline">Select All ({unpaidInvoices.length})</span>
-                    <span className="sm:hidden">Select All</span>
+                    {unpaidInvoices.length > 0 ? `Select All (${unpaidInvoices.length})` : "Select All"}
                   </Button>
                   <Button
                     startIcon={<ClearAllIcon />}
@@ -1073,11 +1071,9 @@ function ReceivedInvoice() {
                     variant="outlined"
                     size="small"
                     disabled={selectedCount === 0}
-                    sx={{ minWidth: { xs: 0, sm: 80 }, flex: { xs: 1, sm: "unset" } }}
-                    fullWidth={true}
+                    sx={{ minWidth: { xs: 0, sm: 80 }, flex: { xs: 1, sm: "unset" }, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                   >
-                    <span className="hidden sm:inline">Clear</span>
-                    <span className="sm:hidden">Clear</span>
+                    Clear
                   </Button>
                 </Box>
               </Box>
