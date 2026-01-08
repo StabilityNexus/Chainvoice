@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import {
@@ -46,6 +46,7 @@ import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
+import { TOKEN_PRESETS } from "@/utils/erc20_token";
 
 function CreateInvoice() {
   const { data: walletClient } = useWalletClient();
@@ -72,7 +73,7 @@ function CreateInvoice() {
 
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
 
-  const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"]; //sepolia based chainvoice test token (CIN)
+  // const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"]; //sepolia based chainvoice test token (CIN)
 
   const [itemData, setItemData] = useState([
     {
@@ -340,11 +341,11 @@ function CreateInvoice() {
       const encryptedStringBase64 = btoa(ciphertext);
 
       const contractAddress = import.meta.env[
-        `VITE_CONTRACT_ADDRESS_${chainId}`
+        `VITE_CONTRACT_ADDRESS_${account.chainId}`
       ];
 
       if (!contractAddress) {
-        throw new Error("Unsupported network");
+        throw new Error("Unsupported network or contract address missing");
       }
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
