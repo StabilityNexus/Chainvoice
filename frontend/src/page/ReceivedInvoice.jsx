@@ -1027,7 +1027,7 @@ function ReceivedInvoice() {
             <Paper
               sx={{
                 mb: 3,
-                p: 2,
+                p: { xs: 1, sm: 2 },
                 bgcolor: "rgba(255,255,255,0.95)",
                 border: "1px solid rgba(0,0,0,0.12)",
               }}
@@ -1035,31 +1035,37 @@ function ReceivedInvoice() {
               <Box
                 sx={{
                   display: "flex",
+                  flexDirection: { xs: "column", sm: "row" },
                   justifyContent: "space-between",
-                  alignItems: "center",
+                  alignItems: { xs: "stretch", sm: "center" },
                   mb: 2,
+                  gap: { xs: 2, sm: 0 },
                 }}
               >
-                <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: { xs: 1, sm: 0 } }}>
                   <PaymentIcon sx={{ color: "success.main" }} />
-                  <Typography variant="h6" sx={{ color: "#1e293b" }}>
+                  <Typography variant="h6" sx={{ color: "#1e293b", fontSize: { xs: "1rem", sm: "1.25rem" } }}>
                     Batch Payment
                   </Typography>
                   <Chip
                     label={`${selectedCount} selected`}
                     color={selectedCount > 0 ? "success" : "default"}
                     size="small"
+                    sx={{ ml: 1 }}
                   />
                 </Box>
-                <Box sx={{ display: "flex", gap: 1 }}>
+                <Box sx={{ display: "flex", gap: 1, flexWrap: { xs: "wrap", sm: "nowrap" } }}>
                   <Button
                     startIcon={<SelectAllIcon />}
                     onClick={handleSelectAll}
                     variant="outlined"
                     size="small"
                     disabled={unpaidInvoices.length === 0}
+                    sx={{ minWidth: { xs: 0, sm: 120 }, flex: { xs: 1, sm: "unset" } }}
+                    fullWidth={true}
                   >
-                    Select All ({unpaidInvoices.length})
+                    <span className="hidden sm:inline">Select All ({unpaidInvoices.length})</span>
+                    <span className="sm:hidden">Select All</span>
                   </Button>
                   <Button
                     startIcon={<ClearAllIcon />}
@@ -1067,8 +1073,11 @@ function ReceivedInvoice() {
                     variant="outlined"
                     size="small"
                     disabled={selectedCount === 0}
+                    sx={{ minWidth: { xs: 0, sm: 80 }, flex: { xs: 1, sm: "unset" } }}
+                    fullWidth={true}
                   >
-                    Clear
+                    <span className="hidden sm:inline">Clear</span>
+                    <span className="sm:hidden">Clear</span>
                   </Button>
                 </Box>
               </Box>
@@ -1078,7 +1087,7 @@ function ReceivedInvoice() {
                   <Divider sx={{ mb: 2 }} />
                   <Typography
                     variant="subtitle1"
-                    sx={{ mb: 2, color: "#1e293b" }}
+                    sx={{ mb: 2, color: "#1e293b", fontSize: { xs: "1rem", sm: "1.1rem" } }}
                   >
                     Payment Summary:
                   </Typography>
@@ -1095,12 +1104,14 @@ function ReceivedInvoice() {
                         key={tokenKey}
                         sx={{
                           display: "flex",
+                          flexDirection: { xs: "column", sm: "row" },
                           justifyContent: "space-between",
-                          alignItems: "center",
+                          alignItems: { xs: "flex-start", sm: "center" },
                           bgcolor: "#f8fafc",
                           p: 1.5,
                           borderRadius: 1,
                           border: "1px solid #e2e8f0",
+                          gap: { xs: 1, sm: 0 },
                         }}
                       >
                         <Box
@@ -1130,7 +1141,7 @@ function ReceivedInvoice() {
                           </Typography>
                         </Box>
                         <Typography
-                          sx={{ color: "success.main", fontWeight: "bold" }}
+                          sx={{ color: "success.main", fontWeight: "bold", mt: { xs: 1, sm: 0 } }}
                         >
                           {group.totalAmount.toFixed(6)} {group.symbol}
                         </Typography>
@@ -1151,6 +1162,7 @@ function ReceivedInvoice() {
                       )
                     }
                     fullWidth
+                    sx={{ fontSize: { xs: "1rem", sm: "1.1rem" }, py: { xs: 1.2, sm: 1.5 } }}
                   >
                     {batchLoading
                       ? "Processing Batch Payment..."
