@@ -18,10 +18,19 @@ const CHAIN_ICONS = {
   8453: <SiCoinbase className="h-5 w-5 text-blue-500" />, // Base
 };
 
+import { useEffect } from "react";
+import toast from "react-hot-toast";
+
 export default function NetworkSwitcher() {
   const chainId = useChainId();
-  const { chains, switchChain, isPending } = useSwitchChain();
+  const { chains, switchChain, isPending, error } = useSwitchChain();
   const { isConnected } = useAccount();
+
+  useEffect(() => {
+    if (error) {
+      toast.error(`Failed to switch network: ${error.message}`);
+    }
+  }, [error]);
 
   if (!isConnected) return null;
 

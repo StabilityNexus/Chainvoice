@@ -8,8 +8,7 @@ const TokenCarousel = () => {
 const {
     tokens,
   } = useTokenList('1');
-  const duplicatedTokens = [...tokens]; 
-  console.log(tokens);
+  const duplicatedTokens = [...tokens];
   useEffect(() => {
     const carousel = carouselRef.current;
     let animationFrame;

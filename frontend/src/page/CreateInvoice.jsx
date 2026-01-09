@@ -46,7 +46,7 @@ import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
-import { TOKEN_PRESETS } from "@/utils/erc20_token";
+import { getTokenPresetsForChain } from "@/utils/erc20_token";
 
 function CreateInvoice() {
   const { data: walletClient } = useWalletClient();
@@ -104,7 +104,8 @@ function CreateInvoice() {
         setCustomTokenAddress(urlTokenAddress);
         verifyToken(urlTokenAddress);
       } else {
-        const preselectedToken = TOKEN_PRESETS.find(
+        const currentChainTokens = getTokenPresetsForChain(account?.chainId || 1);
+        const preselectedToken = currentChainTokens.find(
           (token) =>
             token.address.toLowerCase() === urlTokenAddress.toLowerCase()
         );
