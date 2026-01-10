@@ -222,8 +222,9 @@ function CreateInvoicesBatch() {
   }, [
     dueDate,
     issueDate,
-    userInfo,
-    invoiceRows,
+    // Use JSON.stringify to detect deep changes in nested objects
+    JSON.stringify(userInfo),
+    JSON.stringify(invoiceRows),
     selectedToken,
     customTokenAddress,
     useCustomToken,
