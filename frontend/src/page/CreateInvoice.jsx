@@ -24,6 +24,7 @@ import {
   Loader2,
   PlusIcon,
   XCircle,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -55,7 +56,7 @@ function CreateInvoice() {
   const [dueDate, setDueDate] = useState(new Date());
   const [issueDate, setIssueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
-  const { tokens, loading: loadingTokens } = useTokenList(account?.chainId || 1);
+  const { tokens, loading: loadingTokens, error: tokenListError } = useTokenList(account?.chainId || 1);
   const navigate = useNavigate();
   const litClientRef = useRef(null);
 
@@ -99,34 +100,64 @@ function CreateInvoice() {
       setClientAddress(urlClientAddress);
     }
 
-    if (urlTokenAddress && !loadingTokens) {
-      if (isCustomFromURL) {
-        setUseCustomToken(true);
-        setCustomTokenAddress(urlTokenAddress);
-        verifyToken(urlTokenAddress);
-      } else {
-        const preselectedToken = tokens.find(
-          (token) =>
-            (token.contract_address || token.address).toLowerCase() === urlTokenAddress.toLowerCase()
-        );
-        if (preselectedToken) {
-          setSelectedToken({
-             address: preselectedToken.contract_address || preselectedToken.address,
-             symbol: preselectedToken.symbol,
-             name: preselectedToken.name,
-             logo: preselectedToken.image,
-             decimals: preselectedToken.decimals || 18 
-          });
-          setUseCustomToken(false);
-        } else {
-          // If not found in list, treat as custom or verify
+    const processUrlToken = async () => {
+      if (urlTokenAddress && !loadingTokens) {
+        if (isCustomFromURL) {
           setUseCustomToken(true);
           setCustomTokenAddress(urlTokenAddress);
           verifyToken(urlTokenAddress);
+        } else {
+          const preselectedToken = tokens.find(
+            (token) =>
+              (token.contract_address || token.address).toLowerCase() === urlTokenAddress.toLowerCase()
+          );
+
+          if (preselectedToken) {
+            let decimals = preselectedToken.decimals;
+
+            // If decimals are missing/null, try to fetch them from chain
+            if (decimals === undefined || decimals === null) {
+              try {
+                if (typeof window !== "undefined" && window.ethereum) {
+                   const provider = new BrowserProvider(window.ethereum);
+                   const contract = new ethers.Contract(urlTokenAddress, ERC20_ABI, provider);
+                   // Try to fetch decimals
+                   decimals = await contract.decimals(); 
+                }
+              } catch (err) {
+                console.warn("Failed to fetch decimals for preselected token:", err);
+              }
+            }
+
+            // If we successfully resolved decimals (from list or chain)
+            if (decimals !== undefined && decimals !== null) {
+              setSelectedToken({
+                address: preselectedToken.contract_address || preselectedToken.address,
+                symbol: preselectedToken.symbol,
+                name: preselectedToken.name,
+                logo: preselectedToken.image,
+                decimals: Number(decimals) 
+              });
+              setUseCustomToken(false);
+            } else {
+              // Fallback to manual verification if we can't determine decimals safely
+              console.warn("Could not determine token decimals, falling back to manual verification.");
+              setUseCustomToken(true);
+              setCustomTokenAddress(urlTokenAddress);
+              verifyToken(urlTokenAddress);
+            }
+          } else {
+            // Not in list, treat as custom
+            setUseCustomToken(true);
+            setCustomTokenAddress(urlTokenAddress);
+            verifyToken(urlTokenAddress);
+          }
         }
       }
-    }
-  }, [searchParams, tokens, loadingTokens]);
+    };
+
+    processUrlToken();
+  }, [searchParams, tokens, loadingTokens, account.address]);
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
@@ -347,6 +378,10 @@ function CreateInvoice() {
       });
 
       const encryptedStringBase64 = btoa(ciphertext);
+
+      if (!account?.chainId) {
+        throw new Error("Missing chainId: wallet connected but chain not configured");
+      }
 
       const contractAddress = import.meta.env[
         `VITE_CONTRACT_ADDRESS_${account.chainId}`
@@ -738,6 +773,12 @@ function CreateInvoice() {
                       <Label className="block text-sm font-medium text-gray-700 mb-2">
                         Choose from Available Tokens
                       </Label>
+                      {tokenListError && (
+                        <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" />
+                          <span>{tokenListError}. Using local fallback or custom input recommended.</span>
+                        </div>
+                      )}
                       <TokenPicker
                         selected={selectedToken}
                         onSelect={(token) => {
