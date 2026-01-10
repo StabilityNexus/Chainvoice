@@ -54,6 +54,12 @@ import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
+import {
+  getFromStorage,
+  saveToStorage,
+  clearStorage,
+  StorageKeys,
+} from "@/utils/localStorage";
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
@@ -75,6 +81,7 @@ function CreateInvoicesBatch() {
 
   // UI state for collapsible invoices
   const [expandedInvoice, setExpandedInvoice] = useState(0);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Batch invoice data
   const [invoiceRows, setInvoiceRows] = useState([
@@ -132,6 +139,45 @@ function CreateInvoicesBatch() {
     );
   }, [invoiceRows.map((r) => JSON.stringify(r.itemData)).join(",")]);
 
+  // Load data from localStorage on mount
+  useEffect(() => {
+    const savedData = getFromStorage(StorageKeys.CREATE_INVOICES_BATCH);
+    if (savedData) {
+      // Restore dates
+      if (savedData.dueDate) {
+        setDueDate(new Date(savedData.dueDate));
+      }
+      if (savedData.issueDate) {
+        setIssueDate(new Date(savedData.issueDate));
+      }
+
+      // Restore user info
+      if (savedData.userInfo) {
+        setUserInfo(savedData.userInfo);
+      }
+
+      // Restore invoice rows
+      if (savedData.invoiceRows && savedData.invoiceRows.length > 0) {
+        setInvoiceRows(savedData.invoiceRows);
+      }
+
+      // Restore token selection
+      if (savedData.selectedToken) {
+        setSelectedToken(savedData.selectedToken);
+        setUseCustomToken(false);
+      }
+      if (savedData.useCustomToken && savedData.customTokenAddress) {
+        setUseCustomToken(true);
+        setCustomTokenAddress(savedData.customTokenAddress);
+        if (savedData.verifiedToken) {
+          setVerifiedToken(savedData.verifiedToken);
+          setTokenVerificationState("success");
+        }
+      }
+    }
+    setIsInitialLoad(false);
+  }, []);
+
   // Initialize Lit
   useEffect(() => {
     const initLit = async () => {
@@ -150,6 +196,40 @@ function CreateInvoicesBatch() {
   useEffect(() => {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
+
+  // Save form data to localStorage (debounced)
+  useEffect(() => {
+    if (isInitialLoad) return;
+
+    const saveData = () => {
+      const dataToSave = {
+        dueDate: dueDate?.toISOString(),
+        issueDate: issueDate?.toISOString(),
+        userInfo,
+        invoiceRows,
+        selectedToken,
+        customTokenAddress,
+        useCustomToken,
+        verifiedToken,
+      };
+
+      saveToStorage(StorageKeys.CREATE_INVOICES_BATCH, dataToSave);
+    };
+
+    // Debounce save operations
+    const timeoutId = setTimeout(saveData, 500);
+    return () => clearTimeout(timeoutId);
+  }, [
+    dueDate,
+    issueDate,
+    userInfo,
+    invoiceRows,
+    selectedToken,
+    customTokenAddress,
+    useCustomToken,
+    verifiedToken,
+    isInitialLoad,
+  ]);
 
   // Invoice management
   const addInvoiceRow = () => {
@@ -480,6 +560,7 @@ function CreateInvoicesBatch() {
       toast.info("Submitting batch transaction to blockchain...");
 
       // Send to contract
+      const chainId = account?.chainId;
       const contractAddress = import.meta.env[
         `VITE_CONTRACT_ADDRESS_${chainId}`
       ];
@@ -500,6 +581,9 @@ function CreateInvoicesBatch() {
 
       toast.info("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
+
+      // Clear localStorage on successful submission
+      clearStorage(StorageKeys.CREATE_INVOICES_BATCH);
 
       toast.success(
         `Successfully created ${validInvoices.length} invoices in batch!`
