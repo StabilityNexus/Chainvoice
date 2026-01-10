@@ -355,7 +355,8 @@ function CreateInvoice() {
     customTokenAddress,
     useCustomToken,
     verifiedToken,
-    itemData,
+    // Use JSON.stringify to detect deep changes in itemData
+    JSON.stringify(itemData),
     isInitialLoad,
   ]);
 
