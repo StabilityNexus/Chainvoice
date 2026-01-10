@@ -32,7 +32,22 @@ export const getFromStorage = (key, defaultValue = null) => {
     const item = storage.getItem(key);
     if (!item) return defaultValue;
 
-    const parsed = JSON.parse(item);
+    // Parse JSON with error handling - remove corrupted entries
+    let parsed;
+    try {
+      parsed = JSON.parse(item);
+    } catch (parseError) {
+      // Corrupted JSON - remove it from storage
+      storage.removeItem(key);
+      console.error(`Corrupted JSON in sessionStorage (${key}), removed:`, parseError);
+      return defaultValue;
+    }
+
+    // Treat undefined as missing data
+    if (parsed === undefined) {
+      storage.removeItem(key);
+      return defaultValue;
+    }
 
     // Check if entry has TTL and if it's expired
     if (parsed.expiresAt && parsed.expiresAt < Date.now()) {
@@ -41,8 +56,14 @@ export const getFromStorage = (key, defaultValue = null) => {
       return defaultValue;
     }
 
-    // Return the actual data (without TTL metadata)
-    return parsed.data !== undefined ? parsed.data : parsed;
+    // Return parsed.data if present, otherwise defaultValue
+    // Treat undefined data as missing to prevent false round-trip of undefined
+    if (parsed.data !== undefined) {
+      return parsed.data;
+    }
+    
+    // If parsed.data is undefined, treat as missing
+    return defaultValue;
   } catch (error) {
     console.error(`Error reading from sessionStorage (${key}):`, error);
     return defaultValue;
@@ -50,31 +71,85 @@ export const getFromStorage = (key, defaultValue = null) => {
 };
 
 /**
+ * Check if an error is a quota exceeded error
+ * Handles various browser implementations and error formats
+ */
+const isQuotaExceededError = (error) => {
+  if (!error) return false;
+  
+  // Check error name (standard)
+  if (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+    return true;
+  }
+  
+  // Check error code (some browsers)
+  if (error.code === 22 || error.code === 1014) {
+    return true;
+  }
+  
+  // Check error message (fallback for edge cases)
+  const message = String(error.message || '').toLowerCase();
+  if (message.includes('quota') || message.includes('storage') || message.includes('exceeded')) {
+    return true;
+  }
+  
+  return false;
+};
+
+/**
  * Safe sessionStorage setter with TTL
  * Wraps data with expiry timestamp
  * Session-only: cleared when browser tab closes
+ * Includes retry logic for quota exceeded errors
  */
 export const saveToStorage = (key, value, ttl = DEFAULT_TTL) => {
   try {
     const storage = getStorage();
     if (!storage) return;
 
-    const expiresAt = Date.now() + ttl;
+    // Validate TTL: ensure it's a positive number
+    const validTtl = typeof ttl === 'number' && ttl > 0 && isFinite(ttl) ? ttl : DEFAULT_TTL;
+    
+    const expiresAt = Date.now() + validTtl;
     const dataToStore = {
       data: value,
       expiresAt,
       createdAt: Date.now(),
     };
 
-    storage.setItem(key, JSON.stringify(dataToStore));
+    const serialized = JSON.stringify(dataToStore);
+    storage.setItem(key, serialized);
   } catch (error) {
     console.error(`Error saving to sessionStorage (${key}):`, error);
-    // Handle quota exceeded error
-    if (error.name === 'QuotaExceededError') {
-      console.warn('sessionStorage quota exceeded. Clearing old data...');
+    
+    // Handle quota exceeded error with retry
+    if (isQuotaExceededError(error)) {
+      console.warn('sessionStorage quota exceeded. Clearing old data and retrying...');
+      
+      // Clean up: remove current key and expired entries
       clearStorage(key);
-      // Try to clean up expired entries
       cleanupExpiredEntries();
+      
+      // Retry the write once after cleanup
+      try {
+        const storage = getStorage();
+        if (!storage) return;
+        
+        const validTtl = typeof ttl === 'number' && ttl > 0 && isFinite(ttl) ? ttl : DEFAULT_TTL;
+        const expiresAt = Date.now() + validTtl;
+        const dataToStore = {
+          data: value,
+          expiresAt,
+          createdAt: Date.now(),
+        };
+        
+        const serialized = JSON.stringify(dataToStore);
+        storage.setItem(key, serialized);
+        console.info('Successfully saved to sessionStorage after quota cleanup');
+      } catch (retryError) {
+        // If retry also fails, log but don't throw (graceful degradation)
+        console.error(`Failed to save to sessionStorage after cleanup (${key}):`, retryError);
+      }
     }
   }
 };
@@ -129,8 +204,8 @@ const cleanupExpiredEntries = () => {
 const MAX_PERSISTED_INVOICES = 10;
 
 /**
- * Remove PII (emails, names, addresses, countries) from data object before saving
- * Only keeps essential non-PII data needed for form restoration
+ * Remove *some* PII (emails, names, countries, etc.) from data object before saving.
+ * Note: `clientAddress` is intentionally retained for form restoration.
  */
 export const sanitizeDataForStorage = (data) => {
   if (!data || typeof data !== 'object') return data;
@@ -138,6 +213,7 @@ export const sanitizeDataForStorage = (data) => {
   const sanitized = { ...data };
 
   // Remove top-level PII fields
+  // Note: clientAddress is intentionally retained for form restoration
   delete sanitized.userEmail;
   delete sanitized.clientEmail;
   delete sanitized.userFname;
