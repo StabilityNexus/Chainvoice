@@ -1,13 +1,11 @@
-// Updated Navbar.js
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import React, { useEffect, useState } from "react";
+import NetworkSwitcher from "./NetworkSwitcher";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAccount } from "wagmi";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 import HomeIcon from "@mui/icons-material/Home";
 import DashboardIcon from "@mui/icons-material/Dashboard";
-import FeaturedPlayListIcon from "@mui/icons-material/FeaturedPlayList";
-import DesignServicesIcon from "@mui/icons-material/DesignServices";
 import { motion, AnimatePresence } from "framer-motion";
 import CloseIcon from "@mui/icons-material/Close";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -42,7 +40,7 @@ function Navbar() {
     };
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
-  }, [isConnected, hasConnected, navigate, location.pathname]);
+  }, [isConnected, hasConnected, navigate, location.pathname, address]);
 
   const handleScroll = (sectionId) => {
     if (location.pathname !== "/") {
@@ -204,8 +202,9 @@ function Navbar() {
             <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="ml-4"
+              className="ml-4 flex items-center space-x-4"
             >
+              <NetworkSwitcher />
               <ConnectButton
                 accountStatus="address"
                 chainStatus="full"
