@@ -48,6 +48,12 @@ import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
 import { useTokenList } from "@/hooks/useTokenList";
+import {
+  getFromStorage,
+  saveToStorage,
+  clearStorage,
+  StorageKeys,
+} from "@/utils/localStorage";
 
 function CreateInvoice() {
   const { data: walletClient } = useWalletClient();
@@ -64,6 +70,20 @@ function CreateInvoice() {
   const [clientAddress, setClientAddress] = useState("");
   const [userCountry, setUserCountry] = useState("");
   const [clientCountry, setClientCountry] = useState("");
+
+  // User form fields
+  const [userFname, setUserFname] = useState("");
+  const [userLname, setUserLname] = useState("");
+  const [userEmail, setUserEmail] = useState("");
+  const [userCity, setUserCity] = useState("");
+  const [userPostalcode, setUserPostalcode] = useState("");
+
+  // Client form fields
+  const [clientFname, setClientFname] = useState("");
+  const [clientLname, setClientLname] = useState("");
+  const [clientEmail, setClientEmail] = useState("");
+  const [clientCity, setClientCity] = useState("");
+  const [clientPostalcode, setClientPostalcode] = useState("");
 
   // Token selection state
   const [selectedToken, setSelectedToken] = useState(null);
@@ -89,8 +109,67 @@ function CreateInvoice() {
   ]);
 
   const [totalAmountDue, setTotalAmountDue] = useState(0);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
+  // Load data from localStorage on mount
   useEffect(() => {
+    const savedData = getFromStorage(StorageKeys.CREATE_INVOICE);
+    if (savedData) {
+      // Restore dates
+      if (savedData.dueDate) {
+        setDueDate(new Date(savedData.dueDate));
+      }
+      if (savedData.issueDate) {
+        setIssueDate(new Date(savedData.issueDate));
+      }
+
+      // Restore user info
+      if (savedData.userFname) setUserFname(savedData.userFname);
+      if (savedData.userLname) setUserLname(savedData.userLname);
+      if (savedData.userEmail) setUserEmail(savedData.userEmail);
+      if (savedData.userCountry) setUserCountry(savedData.userCountry);
+      if (savedData.userCity) setUserCity(savedData.userCity);
+      if (savedData.userPostalcode) setUserPostalcode(savedData.userPostalcode);
+
+      // Restore client info (only if no URL params)
+      const urlClientAddress = searchParams.get("clientAddress");
+      if (!urlClientAddress) {
+        if (savedData.clientAddress) setClientAddress(savedData.clientAddress);
+        if (savedData.clientFname) setClientFname(savedData.clientFname);
+        if (savedData.clientLname) setClientLname(savedData.clientLname);
+        if (savedData.clientEmail) setClientEmail(savedData.clientEmail);
+        if (savedData.clientCountry) setClientCountry(savedData.clientCountry);
+        if (savedData.clientCity) setClientCity(savedData.clientCity);
+        if (savedData.clientPostalcode)
+          setClientPostalcode(savedData.clientPostalcode);
+      }
+
+      // Restore token selection
+      if (savedData.selectedToken) {
+        setSelectedToken(savedData.selectedToken);
+        setUseCustomToken(false);
+      }
+      if (savedData.useCustomToken && savedData.customTokenAddress) {
+        setUseCustomToken(true);
+        setCustomTokenAddress(savedData.customTokenAddress);
+        if (savedData.verifiedToken) {
+          setVerifiedToken(savedData.verifiedToken);
+          setTokenVerificationState("success");
+        }
+      }
+
+      // Restore item data
+      if (savedData.itemData && savedData.itemData.length > 0) {
+        setItemData(savedData.itemData);
+      }
+    }
+    setIsInitialLoad(false);
+  }, []);
+
+  // Handle URL params (should override localStorage)
+  useEffect(() => {
+    if (isInitialLoad) return;
+
     console.log("account address : ", account.address);
     const urlClientAddress = searchParams.get("clientAddress");
     const urlTokenAddress = searchParams.get("tokenAddress");
@@ -101,63 +180,93 @@ function CreateInvoice() {
     }
 
     const processUrlToken = async () => {
-      if (urlTokenAddress && !loadingTokens) {
-        if (isCustomFromURL) {
+      if (!urlTokenAddress || loadingTokens) return;
+
+      if (isCustomFromURL) {
+        setUseCustomToken(true);
+        setCustomTokenAddress(urlTokenAddress);
+        verifyToken(urlTokenAddress);
+        return;
+      }
+
+      // Try to find token in saved selection first
+      const savedData = getFromStorage(StorageKeys.CREATE_INVOICE);
+      if (savedData?.selectedToken) {
+        const token = savedData.selectedToken;
+        if (
+          token.address?.toLowerCase() === urlTokenAddress.toLowerCase()
+        ) {
+          setSelectedToken(token);
+          setUseCustomToken(false);
+          return;
+        }
+      }
+
+      // Try to find from tokens list
+      const preselectedToken = tokens.find(
+        (token) =>
+          (token.contract_address || token.address).toLowerCase() ===
+          urlTokenAddress.toLowerCase()
+      );
+
+      if (preselectedToken) {
+        let decimals = preselectedToken.decimals;
+
+        // If decimals are missing/null, try to fetch them from chain
+        if (decimals === undefined || decimals === null) {
+          try {
+            if (typeof window !== "undefined" && window.ethereum) {
+              const provider = new BrowserProvider(window.ethereum);
+              const contract = new ethers.Contract(
+                urlTokenAddress,
+                ERC20_ABI,
+                provider
+              );
+              decimals = await contract.decimals();
+            }
+          } catch (err) {
+            console.warn(
+              "Failed to fetch decimals for preselected token:",
+              err
+            );
+          }
+        }
+
+        if (decimals !== undefined && decimals !== null) {
+          setSelectedToken({
+            address:
+              preselectedToken.contract_address || preselectedToken.address,
+            symbol: preselectedToken.symbol,
+            name: preselectedToken.name,
+            logo: preselectedToken.image,
+            decimals: Number(decimals),
+          });
+          setUseCustomToken(false);
+        } else {
+          // Fallback to manual verification if we can't determine decimals safely
+          console.warn(
+            "Could not determine token decimals, falling back to manual verification."
+          );
           setUseCustomToken(true);
           setCustomTokenAddress(urlTokenAddress);
           verifyToken(urlTokenAddress);
-        } else {
-          const preselectedToken = tokens.find(
-            (token) =>
-              (token.contract_address || token.address).toLowerCase() === urlTokenAddress.toLowerCase()
-          );
-
-          if (preselectedToken) {
-            let decimals = preselectedToken.decimals;
-
-            // If decimals are missing/null, try to fetch them from chain
-            if (decimals === undefined || decimals === null) {
-              try {
-                if (typeof window !== "undefined" && window.ethereum) {
-                   const provider = new BrowserProvider(window.ethereum);
-                   const contract = new ethers.Contract(urlTokenAddress, ERC20_ABI, provider);
-                   // Try to fetch decimals
-                   decimals = await contract.decimals(); 
-                }
-              } catch (err) {
-                console.warn("Failed to fetch decimals for preselected token:", err);
-              }
-            }
-
-            // If we successfully resolved decimals (from list or chain)
-            if (decimals !== undefined && decimals !== null) {
-              setSelectedToken({
-                address: preselectedToken.contract_address || preselectedToken.address,
-                symbol: preselectedToken.symbol,
-                name: preselectedToken.name,
-                logo: preselectedToken.image,
-                decimals: Number(decimals) 
-              });
-              setUseCustomToken(false);
-            } else {
-              // Fallback to manual verification if we can't determine decimals safely
-              console.warn("Could not determine token decimals, falling back to manual verification.");
-              setUseCustomToken(true);
-              setCustomTokenAddress(urlTokenAddress);
-              verifyToken(urlTokenAddress);
-            }
-          } else {
-            // Not in list, treat as custom
-            setUseCustomToken(true);
-            setCustomTokenAddress(urlTokenAddress);
-            verifyToken(urlTokenAddress);
-          }
         }
+      } else {
+        // Not in list, treat as custom
+        setUseCustomToken(true);
+        setCustomTokenAddress(urlTokenAddress);
+        verifyToken(urlTokenAddress);
       }
     };
 
     processUrlToken();
-  }, [searchParams, walletClient, tokens, loadingTokens, account.address]);
+  }, [
+    isInitialLoad,
+    searchParams,
+    tokens,
+    loadingTokens,
+    account.address,
+  ]);
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
@@ -191,6 +300,64 @@ function CreateInvoice() {
   useEffect(() => {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
+
+  // Save form data to localStorage (debounced)
+  useEffect(() => {
+    if (isInitialLoad) return;
+
+    const saveData = () => {
+      const dataToSave = {
+        dueDate: dueDate?.toISOString(),
+        issueDate: issueDate?.toISOString(),
+        clientAddress,
+        userFname,
+        userLname,
+        userEmail,
+        userCountry,
+        userCity,
+        userPostalcode,
+        clientFname,
+        clientLname,
+        clientEmail,
+        clientCountry,
+        clientCity,
+        clientPostalcode,
+        selectedToken,
+        customTokenAddress,
+        useCustomToken,
+        verifiedToken,
+        itemData,
+      };
+
+      saveToStorage(StorageKeys.CREATE_INVOICE, dataToSave);
+    };
+
+    // Debounce save operations
+    const timeoutId = setTimeout(saveData, 500);
+    return () => clearTimeout(timeoutId);
+  }, [
+    dueDate,
+    issueDate,
+    clientAddress,
+    userFname,
+    userLname,
+    userEmail,
+    userCountry,
+    userCity,
+    userPostalcode,
+    clientFname,
+    clientLname,
+    clientEmail,
+    clientCountry,
+    clientCity,
+    clientPostalcode,
+    selectedToken,
+    customTokenAddress,
+    useCustomToken,
+    verifiedToken,
+    itemData,
+    isInitialLoad,
+  ]);
 
   const handleItemData = (e, index) => {
     const { name, value } = e.target;
@@ -416,7 +583,6 @@ const verifyToken = async (address, targetChainId = null) => {
       if (!account?.chainId) {
         throw new Error("Missing chainId: wallet connected but chain not configured");
       }
-
       const contractAddress = import.meta.env[
         `VITE_CONTRACT_ADDRESS_${account.chainId}`
       ];
@@ -436,6 +602,10 @@ const verifyToken = async (address, targetChainId = null) => {
       );
 
       const receipt = await tx.wait();
+      
+      // Clear localStorage on successful submission
+      clearStorage(StorageKeys.CREATE_INVOICE);
+      
       setTimeout(() => navigate("/dashboard/sent"), 4000);
     } catch (err) {
       console.error("Encryption or transaction failed:", err);
@@ -450,20 +620,20 @@ const verifyToken = async (address, targetChainId = null) => {
     const formData = new FormData(e.target);
 
     const data = {
-      userAddress: formData.get("userAddress"),
-      userFname: formData.get("userFname"),
-      userLname: formData.get("userLname"),
-      userEmail: formData.get("userEmail"),
-      userCountry: userCountry || formData.get("userCountry") || "",
-      userCity: formData.get("userCity"),
-      userPostalcode: formData.get("userPostalcode"),
-      clientAddress: formData.get("clientAddress"),
-      clientFname: formData.get("clientFname"),
-      clientLname: formData.get("clientLname"),
-      clientEmail: formData.get("clientEmail"),
-      clientCountry: clientCountry || formData.get("clientCountry") || "",
-      clientCity: formData.get("clientCity"),
-      clientPostalcode: formData.get("clientPostalcode"),
+      userAddress: account?.address?.toString(),
+      userFname,
+      userLname,
+      userEmail,
+      userCountry,
+      userCity,
+      userPostalcode,
+      clientAddress,
+      clientFname,
+      clientLname,
+      clientEmail,
+      clientCountry,
+      clientCity,
+      clientPostalcode,
       itemData,
     };
     await createInvoiceRequest(data);
@@ -595,6 +765,8 @@ const verifyToken = async (address, targetChainId = null) => {
                       placeholder="Your First Name"
                       className="w-full mt-1 border-gray-300 text-black "
                       name="userFname"
+                      value={userFname}
+                      onChange={(e) => setUserFname(e.target.value)}
                     />
                   </div>
                   <div className="flex-1">
@@ -606,6 +778,8 @@ const verifyToken = async (address, targetChainId = null) => {
                       placeholder="Your Last Name"
                       className="w-full mt-1 border-gray-300 text-black"
                       name="userLname"
+                      value={userLname}
+                      onChange={(e) => setUserLname(e.target.value)}
                     />
                   </div>
                 </div>
@@ -620,6 +794,8 @@ const verifyToken = async (address, targetChainId = null) => {
                       placeholder="Email"
                       className="w-full mt-1 border-gray-300 text-black"
                       name="userEmail"
+                      value={userEmail}
+                      onChange={(e) => setUserEmail(e.target.value)}
                     />
                   </div>
                   <div className="flex-1">
@@ -653,6 +829,8 @@ const verifyToken = async (address, targetChainId = null) => {
                       placeholder="City"
                       className="w-full mt-1 border-gray-300 text-black"
                       name="userCity"
+                      value={userCity}
+                      onChange={(e) => setUserCity(e.target.value)}
                     />
                   </div>
                   <div className="flex-1">
@@ -664,6 +842,8 @@ const verifyToken = async (address, targetChainId = null) => {
                       placeholder="Postal Code"
                       className="w-full mt-1 border-gray-300 text-black"
                       name="userPostalcode"
+                      value={userPostalcode}
+                      onChange={(e) => setUserPostalcode(e.target.value)}
                     />
                   </div>
                 </div>
@@ -693,6 +873,8 @@ const verifyToken = async (address, targetChainId = null) => {
                       placeholder="Client First Name"
                       className="w-full mt-1 border-gray-300 text-black"
                       name="clientFname"
+                      value={clientFname}
+                      onChange={(e) => setClientFname(e.target.value)}
                     />
                   </div>
                   <div className="flex-1">
@@ -704,6 +886,8 @@ const verifyToken = async (address, targetChainId = null) => {
                       placeholder="Client Last Name"
                       className="w-full mt-1 border-gray-300 text-black"
                       name="clientLname"
+                      value={clientLname}
+                      onChange={(e) => setClientLname(e.target.value)}
                     />
                   </div>
                 </div>
@@ -718,6 +902,8 @@ const verifyToken = async (address, targetChainId = null) => {
                       placeholder="Email"
                       className="w-full mt-1 border-gray-300 text-black"
                       name="clientEmail"
+                      value={clientEmail}
+                      onChange={(e) => setClientEmail(e.target.value)}
                     />
                   </div>
                   <div className="flex-1">
@@ -751,6 +937,8 @@ const verifyToken = async (address, targetChainId = null) => {
                       placeholder="City"
                       className="w-full mt-1 border-gray-300 text-black"
                       name="clientCity"
+                      value={clientCity}
+                      onChange={(e) => setClientCity(e.target.value)}
                     />
                   </div>
                   <div className="flex-1">
@@ -762,6 +950,8 @@ const verifyToken = async (address, targetChainId = null) => {
                       placeholder="Postal Code"
                       className="w-full mt-1 border-gray-300 text-black"
                       name="clientPostalcode"
+                      value={clientPostalcode}
+                      onChange={(e) => setClientPostalcode(e.target.value)}
                     />
                   </div>
                 </div>
@@ -1025,6 +1215,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="Enter Description"
                           className="w-full border-gray-300 text-black"
                           name="description"
+                          value={itemData[index].description || ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1039,6 +1230,7 @@ const verifyToken = async (address, targetChainId = null) => {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="qty"
+                            value={itemData[index].qty || ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1051,6 +1243,7 @@ const verifyToken = async (address, targetChainId = null) => {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="unitPrice"
+                            value={itemData[index].unitPrice || ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1066,6 +1259,7 @@ const verifyToken = async (address, targetChainId = null) => {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="discount"
+                            value={itemData[index].discount || ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1078,6 +1272,7 @@ const verifyToken = async (address, targetChainId = null) => {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="tax"
+                            value={itemData[index].tax || ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1139,6 +1334,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="Enter Description"
                           className="w-full border-gray-300 text-black"
                           name="description"
+                          value={itemData[index].description || ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1148,6 +1344,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="qty"
+                          value={itemData[index].qty || ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1157,6 +1354,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="unitPrice"
+                          value={itemData[index].unitPrice || ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1166,6 +1364,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="discount"
+                          value={itemData[index].discount || ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1175,6 +1374,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="tax"
+                          value={itemData[index].tax || ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
