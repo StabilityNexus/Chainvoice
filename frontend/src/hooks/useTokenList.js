@@ -6,14 +6,15 @@ const tokenCache = {};
 // Add testnet chain IDs
 const TESTNET_CHAIN_IDS = new Set([11155111, 5]); // Sepolia, Goerli
 
-import { getTokenPresetsForChain } from "../utils/erc20_token";
-
 // Helper function to check if a chain is testnet
 export const isTestnet = (chainId) => TESTNET_CHAIN_IDS.has(chainId);
 
 export const ChainIdToName = {
   1: "ethereum",
-  61:"ethereum-classic",
+  61: "ethereum-classic",
+  137: "polygon-pos",
+  56: "bsc",
+  8453: "base",
   11155111: "sepolia", // For demo purposes
 };
 
@@ -35,19 +36,7 @@ export function useTokenList(chainId) {
       setLoading(true);
       setError(null);
 
-      // Load local presets first
-      const rawPresets = getTokenPresetsForChain(chainId);
-      const presets = (rawPresets || []).map(token => ({
-          ...token,
-          contract_address: token.address,
-          image: token.logo || token.image || "/tokenImages/generic.png"
-      }));
-      
-      if (presets.length > 0) {
-        setTokens(presets);
-      }
-
-      // Check if chain is testnet - use local preset for testnets
+      // Check if chain is testnet
       if (isTestnet(chainId)) {
         setError(`Please manually input the token's contract address instead.`);
         setLoading(false);

@@ -46,7 +46,7 @@ import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
-import { getTokenPresetsForChain } from "@/utils/erc20_token";
+import { useTokenList } from "@/hooks/useTokenList";
 
 function CreateInvoice() {
   const { data: walletClient } = useWalletClient();
@@ -55,6 +55,7 @@ function CreateInvoice() {
   const [dueDate, setDueDate] = useState(new Date());
   const [issueDate, setIssueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
+  const { tokens, loading: loadingTokens } = useTokenList(account?.chainId || 1);
   const navigate = useNavigate();
   const litClientRef = useRef(null);
 
@@ -98,28 +99,34 @@ function CreateInvoice() {
       setClientAddress(urlClientAddress);
     }
 
-    if (urlTokenAddress) {
+    if (urlTokenAddress && !loadingTokens) {
       if (isCustomFromURL) {
         setUseCustomToken(true);
         setCustomTokenAddress(urlTokenAddress);
         verifyToken(urlTokenAddress);
       } else {
-        const currentChainTokens = getTokenPresetsForChain(account?.chainId || 1);
-        const preselectedToken = currentChainTokens.find(
+        const preselectedToken = tokens.find(
           (token) =>
-            token.address.toLowerCase() === urlTokenAddress.toLowerCase()
+            (token.contract_address || token.address).toLowerCase() === urlTokenAddress.toLowerCase()
         );
         if (preselectedToken) {
-          setSelectedToken(preselectedToken);
+          setSelectedToken({
+             address: preselectedToken.contract_address || preselectedToken.address,
+             symbol: preselectedToken.symbol,
+             name: preselectedToken.name,
+             logo: preselectedToken.image,
+             decimals: preselectedToken.decimals || 18 
+          });
           setUseCustomToken(false);
         } else {
+          // If not found in list, treat as custom or verify
           setUseCustomToken(true);
           setCustomTokenAddress(urlTokenAddress);
           verifyToken(urlTokenAddress);
         }
       }
     }
-  }, [searchParams]);
+  }, [searchParams, tokens, loadingTokens]);
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
