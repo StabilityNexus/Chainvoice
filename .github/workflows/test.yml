@@ -42,6 +42,11 @@ jobs:
           fi
         working-directory: ./frontend
 
+      # Lint
+      - name: Lint
+        run: npm run lint
+        working-directory: ./frontend
+
       # Build project
       - name: Build
         run: npm run build
