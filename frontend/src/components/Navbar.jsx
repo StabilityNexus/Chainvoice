@@ -207,7 +207,7 @@ function Navbar() {
               <NetworkSwitcher />
               <ConnectButton
                 accountStatus="address"
-                chainStatus="full"
+                chainStatus="none"
                 showBalance={{
                   smallScreen: false,
                   largeScreen: true,
