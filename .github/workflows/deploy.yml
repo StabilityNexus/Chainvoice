@@ -41,7 +41,6 @@ jobs:
             npm install
           fi
         working-directory: ./frontend
-
       # Build project
       - name: Build
         run: npm run build -- --base=/${{ github.event.repository.name }}/
