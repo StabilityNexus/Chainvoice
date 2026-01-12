@@ -7,7 +7,7 @@ import {
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import * as chains from "wagmi/chains";
-import { mainnet, classic, base, bsc, polygon,sepolia } from 'wagmi/chains';
+import { mainnet, classic, base, bsc, polygon, sepolia } from 'wagmi/chains';
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import Landing from "./page/Landing";
 import Applayout from "./page/Applayout";
@@ -77,7 +77,7 @@ function App() {
             })}
           >
             <div className="font-Montserrat h-screen">
-              <Router>
+              <Router basename={import.meta.env.BASE_URL}>
                 <Routes>
                   <Route path="/" element={<Applayout />}>
                     <Route index element={<Landing />} />
