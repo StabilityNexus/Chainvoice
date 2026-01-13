@@ -35,6 +35,7 @@ import { Toaster } from "react-hot-toast";
 import GenerateLink from "./page/GenerateLink";
 import CreateInvoicesBatch from "./page/CreateInvoicesBatch";
 import BatchPayment from "./page/BatchPayment"; // New import needed
+import NotFound from "./page/NotFound";
 
 function App() {
   return (
@@ -95,6 +96,7 @@ function App() {
                     <Route path="about" element={<About />} />
                     <Route path="working" element={<Working />} />
                     <Route path="treasure" element={<Treasure />} />
+                    <Route path="*" element={<NotFound />} />
                   </Route>
                 </Routes>
               </Router>
