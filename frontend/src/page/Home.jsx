@@ -20,13 +20,13 @@ export default function Home() {
 
   const menuItems = [
     {
-      text: "Create Invoice",
+      text: "Send Invoice",
       icon: <AddCircleOutlineIcon />,
       route: "create",
       color: "#f472b6",
     },
     {
-      text: "Create Multiple Invoices",
+      text: "Send Multiple Invoices",
       icon: <FileStackIcon/>,
       route: "batch-invoice",
       color: "#22c55e",
@@ -38,16 +38,16 @@ export default function Home() {
       color: "#4ade80",
     },
     {
-      text: "Received Invoices",
-      icon: <DraftsIcon />,
-      route: "pending",
-      color: "#60a5fa",
-    },
-    {
       text: "Request Invoices",
       icon: <LinkIcon />,
       route: "generate-link",
       color: "#a78bfa",
+    },
+    {
+      text: "Received Invoices",
+      icon: <DraftsIcon />,
+      route: "pending",
+      color: "#60a5fa",
     },
   ];
 

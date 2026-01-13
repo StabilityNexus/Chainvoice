@@ -6,11 +6,13 @@ import {
 } from "@rainbow-me/rainbowkit";
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-import { chainConfig } from "./utils/chainConfig";
+import * as chains from "wagmi/chains";
+import { mainnet, classic, base, bsc, polygon, sepolia } from 'wagmi/chains';
 import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import Landing from "./page/Landing";
 import Applayout from "./page/Applayout";
 
+import { citreaTestnet } from "./utils/CitreaTestnet";
 import Home from "./page/Home";
 import Feature from "./page/Feature";
 import About from "./page/About";
@@ -19,6 +21,8 @@ import Treasure from "./page/Treasure";
 import CreateInvoice from "./page/CreateInvoice";
 import SentInvoice from "./page/SentInvoice";
 import ReceivedInvoice from "./page/ReceivedInvoice";
+
+const AllChains = [mainnet, classic, base, bsc, polygon, sepolia];
 
 export const config = getDefaultConfig({
   appName: "Chainvoice",
@@ -30,6 +34,8 @@ const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
 import GenerateLink from "./page/GenerateLink";
 import CreateInvoicesBatch from "./page/CreateInvoicesBatch";
+import BatchPayment from "./page/BatchPayment"; // New import needed
+import NotFound from "./page/NotFound";
 
 function App() {
   return (
@@ -72,7 +78,7 @@ function App() {
             })}
           >
             <div className="font-Montserrat h-screen">
-              <Router>
+              <Router basename={import.meta.env.BASE_URL}>
                 <Routes>
                   <Route path="/" element={<Applayout />}>
                     <Route index element={<Landing />} />
@@ -90,6 +96,7 @@ function App() {
                     <Route path="about" element={<About />} />
                     <Route path="working" element={<Working />} />
                     <Route path="treasure" element={<Treasure />} />
+                    <Route path="*" element={<NotFound />} />
                   </Route>
                 </Routes>
               </Router>

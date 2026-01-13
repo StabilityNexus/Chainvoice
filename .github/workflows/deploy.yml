@@ -41,10 +41,9 @@ jobs:
             npm install
           fi
         working-directory: ./frontend
-
       # Build project
       - name: Build
-        run: npm run build
+        run: npm run build -- --base=/${{ github.event.repository.name }}/
         working-directory: ./frontend
         env: 
           VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
