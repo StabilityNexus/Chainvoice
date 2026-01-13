@@ -24,7 +24,7 @@ export const config = getDefaultConfig({
   appName: "Chainvoice",
   projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
   chains: chainConfig,
-  ssr: true,
+  ssr: false,
 });
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
