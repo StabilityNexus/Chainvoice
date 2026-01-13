@@ -139,7 +139,7 @@ const GenerateLink = () => {
             <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
               <Link className="h-4 w-4 sm:h-5 sm:w-5 text-green-400" />
             </div>
-            Generate Prefilled Invoice Link
+            Request Invoices
           </h2>
           <p className="text-gray-300 text-sm">
             Create a shareable link that pre-fills the invoice form with your
@@ -147,6 +147,40 @@ const GenerateLink = () => {
           </p>
         </div>
 
+        {/* Usage Instructions */}
+        <div className="w-full bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200 overflow-hidden">
+          <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
+            <Wallet className="h-4 w-4 text-gray-600" />
+            How it works
+          </h4>
+          <div className="space-y-2 text-xs sm:text-sm text-gray-600">
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-medium text-green-600">1</span>
+              </div>
+              <span>Copy and share the generated link with your service providers</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-medium text-green-600">2</span>
+              </div>
+              <span>
+                Service providers can open the link and see a pre-filled invoice form
+              </span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-medium text-green-600">3</span>
+              </div>
+              <span>
+                They only need to fill in remaining details and connect their
+                wallet to create the invoice
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Details */}
         <div className="bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200">
           <div className="space-y-4 sm:space-y-6">
             <div>
@@ -447,39 +481,6 @@ const GenerateLink = () => {
               details pre-filled. They can access it even without a wallet
               connected initially.
             </p>
-          </div>
-        </div>
-
-        {/* Usage Instructions */}
-        <div className="w-full bg-white rounded-lg p-4 sm:p-6 shadow-sm border border-gray-200 overflow-hidden">
-          <h4 className="text-sm font-medium text-gray-700 mb-3 flex items-center gap-2">
-            <Wallet className="h-4 w-4 text-gray-600" />
-            How it works
-          </h4>
-          <div className="space-y-2 text-xs sm:text-sm text-gray-600">
-            <div className="flex items-start gap-2">
-              <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-xs font-medium text-green-600">1</span>
-              </div>
-              <span>Copy and share the generated link with your clients</span>
-            </div>
-            <div className="flex items-start gap-2">
-              <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-xs font-medium text-green-600">2</span>
-              </div>
-              <span>
-                Clients can open the link and see a pre-filled invoice form
-              </span>
-            </div>
-            <div className="flex items-start gap-2">
-              <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-xs font-medium text-green-600">3</span>
-              </div>
-              <span>
-                They only need to fill in remaining details and connect their
-                wallet to create the invoice
-              </span>
-            </div>
           </div>
         </div>
       </div>
