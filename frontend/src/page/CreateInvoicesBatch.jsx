@@ -549,10 +549,10 @@ function CreateInvoicesBatch() {
         {/* Simple Header */}
         <div className="mb-6 sm:mb-8">
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
-            Create Invoices (Batch)
+            Create Multiple Invoices
           </h2>
           <p className="text-sm sm:text-base text-gray-300">
-            Create multiple invoices in a single transaction and save on gas
+            Create a batch of invoices in a single transaction to save on gas fees
             fees
           </p>
         </div>
