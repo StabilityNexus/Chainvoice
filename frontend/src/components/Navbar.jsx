@@ -147,7 +147,7 @@ function Navbar() {
           </motion.div>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-2">
+          <div className="hidden lg:flex items-center space-x-0 xl:space-x-2">
             {/* {navItems.map((item) => (
               <motion.button
                 key={item.name}
@@ -174,7 +174,7 @@ function Navbar() {
                   {item?.path === "/dashboard" ? (
                     <Link
                       to="/dashboard/create"
-                      className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
+                      className={`flex items-center px-2 xl:px-4 py-2 rounded-lg transition-colors ${
                         isActive(item.path)
                           ? "text-green-400 font-medium"
                           : "text-white hover:text-green-400"
@@ -218,7 +218,7 @@ function Navbar() {
           </div>
 
           {/* Mobile menu button */}
-          <div className="md:hidden flex items-center">
+          <div className="lg:hidden flex items-center">
             {/* <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
@@ -253,7 +253,7 @@ function Navbar() {
               animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               transition={{ duration: 0.3 }}
-              className="md:hidden overflow-hidden"
+              className="lg:hidden overflow-hidden"
             >
               <div className="pt-2 pb-4 space-y-2">
                 {/* Navigation Links */}
