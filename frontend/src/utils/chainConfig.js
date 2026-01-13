@@ -1,3 +1,3 @@
-import { mainnet, classic, polygon, bsc, base } from 'wagmi/chains';
+import { mainnet, classic, polygon, bsc, base, sepolia } from 'wagmi/chains';
 
-export const chainConfig = [mainnet, classic, polygon, bsc, base];
+export const chainConfig = [mainnet, classic, polygon, bsc, base, sepolia];

@@ -27,8 +27,8 @@ const AllChains = [mainnet, classic, base, bsc, polygon, sepolia];
 export const config = getDefaultConfig({
   appName: "Chainvoice",
   projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
-  chains: AllChains,
-  ssr: true,
+  chains: chainConfig,
+  ssr: false,
 });
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";

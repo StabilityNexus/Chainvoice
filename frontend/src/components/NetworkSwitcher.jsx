@@ -16,6 +16,7 @@ const CHAIN_ICONS = {
   137: <SiPolygon className="h-5 w-5 text-purple-500" />, // Polygon
   56: <SiBinance className="h-5 w-5 text-yellow-500" />, // BSC
   8453: <SiCoinbase className="h-5 w-5 text-blue-500" />, // Base
+  11155111: <FaEthereum className="h-5 w-5 text-gray-400" />, // Sepolia
 };
 
 import { useEffect } from "react";
