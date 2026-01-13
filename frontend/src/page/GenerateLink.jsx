@@ -396,9 +396,9 @@ const GenerateLink = () => {
                           <span className="font-medium text-gray-700">
                             Note:
                           </span>{" "}
-                          You need to have sufficient balance of{" "}
+                          You will need to have sufficient balance of{" "}
                           <strong>{verifiedToken.symbol}</strong> to be able to
-                          pay invoice.
+                          pay invoices sent to you.
                         </>
                       ) : customTokenAddress ? (
                         <>
