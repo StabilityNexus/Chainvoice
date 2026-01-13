@@ -158,6 +158,12 @@ const GenerateLink = () => {
               <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                 <span className="text-xs font-medium text-green-600">1</span>
               </div>
+              <span>Fill your details</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                <span className="text-xs font-medium text-green-600">1</span>
+              </div>
               <span>Copy and share the generated link with your service providers</span>
             </div>
             <div className="flex items-start gap-2">
@@ -174,7 +180,7 @@ const GenerateLink = () => {
               </div>
               <span>
                 They only need to fill in remaining details and connect their
-                wallet to create the invoice
+                wallet to create and send the invoice
               </span>
             </div>
           </div>
@@ -477,9 +483,8 @@ const GenerateLink = () => {
           <div className="bg-green-50 border border-green-200 rounded-lg p-3">
             <p className="text-xs text-green-700 flex items-start gap-2">
               <Check className="h-3 w-3 text-green-600 mt-0.5 flex-shrink-0" />
-              Share this link with clients to let them create invoices with your
-              details pre-filled. They can access it even without a wallet
-              connected initially.
+              Share this link with service providers to let them create invoices with your
+              details pre-filled.
             </p>
           </div>
         </div>
