@@ -12,7 +12,6 @@ import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import Landing from "./page/Landing";
 import Applayout from "./page/Applayout";
 
-import { citreaTestnet } from "./utils/CitreaTestnet";
 import Home from "./page/Home";
 import Feature from "./page/Feature";
 import About from "./page/About";
@@ -22,19 +21,16 @@ import CreateInvoice from "./page/CreateInvoice";
 import SentInvoice from "./page/SentInvoice";
 import ReceivedInvoice from "./page/ReceivedInvoice";
 
-const AllChains = [mainnet, classic, base, bsc, polygon, sepolia];
-
 export const config = getDefaultConfig({
   appName: "Chainvoice",
   projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
-  chains: AllChains,
+  chains: chainConfig,
   ssr: true,
 });
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
 import GenerateLink from "./page/GenerateLink";
 import CreateInvoicesBatch from "./page/CreateInvoicesBatch";
-import BatchPayment from "./page/BatchPayment"; // New import needed
 
 function App() {
   return (
