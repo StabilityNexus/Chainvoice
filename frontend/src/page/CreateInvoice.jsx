@@ -466,7 +466,7 @@ function CreateInvoice() {
         )}
 
         <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-white">
-          Create New Invoice Request
+          Create New Invoice
         </h2>
 
         <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8 bg-gray-50 p-4 rounded-lg shadow-sm overflow-hidden">
