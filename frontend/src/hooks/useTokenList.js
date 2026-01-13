@@ -11,7 +11,10 @@ export const isTestnet = (chainId) => TESTNET_CHAIN_IDS.has(chainId);
 
 export const ChainIdToName = {
   1: "ethereum",
-  61:"ethereum-classic",
+  61: "ethereum-classic",
+  137: "polygon-pos",
+  56: "bsc",
+  8453: "base",
   11155111: "sepolia", // For demo purposes
 };
 
@@ -33,7 +36,7 @@ export function useTokenList(chainId) {
       setLoading(true);
       setError(null);
 
-      // Check if chain is testnet - use local preset for testnets
+      // Check if chain is testnet
       if (isTestnet(chainId)) {
         setError(`Please manually input the token's contract address instead.`);
         setLoading(false);
