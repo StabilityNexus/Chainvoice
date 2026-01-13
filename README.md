@@ -142,9 +142,14 @@ npm run dev
 ## Environment Variables
 
 ### Frontend Configuration (`frontend/.env`)  
-VITE_CONTRACT_ADDRESS=your_deployed_contract_address_here  
-VITE_CHAIN_ID=61  
-VITE_RPC_URL=your_etc_rpc_url_here  
+
+#Ethereum Sepolia (11155111)
+VITE_CONTRACT_ADDRESS_11155111=0x54a542dCDC306eE281b5De4613EcEfe6e6ABc562
+# Ethereum Classic (61)
+VITE_CONTRACT_ADDRESS_61=0xD044A85a5daC307217B9bF313A90E8a60AF7DdCe
+# Polygon Mainnet (137)
+VITE_CONTRACT_ADDRESS_137=0xD044A85a5daC307217B9bF313A90E8a60AF7DdCe
+VITE_WALLETCONNECT_PROJECT_ID=Your Project ID can be obtained from [dashboard.reown.com](https://dashboard.reown.com/) 
 
 ### Contracts Configuration (`contracts/.env`)  
 PRIVATE_KEY=your_private_key_here  
