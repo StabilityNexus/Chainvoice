@@ -236,31 +236,65 @@ function CreateInvoice() {
     ]);
   };
 
-  const verifyToken = async (address) => {
-    setTokenVerificationState("verifying");
+  
+const verifyToken = async (address, targetChainId = null) => {
+  setTokenVerificationState("verifying");
+  
+  // Determine which chain to verify on
+  const chainIdToUse = targetChainId || searchParams.get("chain") || account?.chainId;
 
-    try {
-      if (typeof window !== "undefined" && window.ethereum) {
-        const provider = new BrowserProvider(window.ethereum);
-        const contract = new ethers.Contract(address, ERC20_ABI, provider);
+  try {
+    let provider;
+    
 
-        const [symbol, name, decimals] = await Promise.all([
-          contract.symbol().catch(() => "UNKNOWN"),
-          contract.name().catch(() => "Unknown Token"),
-          contract.decimals().catch(() => 18),
-        ]);
-
-        setVerifiedToken({ address, symbol, name, decimals });
-        setTokenVerificationState("success");
-      } else {
-        console.error("No Ethereum provider found");
+    // for UNKNOWN symbol and name unknown update this rpc with some better one
+    const rpcUrls = {
+      1: "https://eth.llamarpc.com",                 // Ethereum (very fast)
+      61: "https://etc.rivet.link",                  // Ethereum Classic
+      137: "https://polygon.llamarpc.com",           // Polygon
+      56: "https://bsc.llamarpc.com",                // BNB Smart Chain
+      8453: "https://base.llamarpc.com",             // Base
+      11155111: "https://rpc.ankr.com/eth_sepolia",  // Sepolia
+    };
+    if (typeof window !== "undefined" && window.ethereum) {
+      // Fallback to wallet provider if no chainId specified
+      provider = new BrowserProvider(walletClient);
+    // If chainId is available, always use public RPC (works without wallet)
+    } else if (chainIdToUse) {
+      const rpcUrl = rpcUrls[chainIdToUse];
+      
+      if (!rpcUrl) {
+        console.error(`Unsupported chain ${chainIdToUse}. Supported chains: Ethereum (1), Ethereum Classic (61), Polygon (137), BNB Smart Chain (56), Base (8453), Sepolia (11155111)`);
         setTokenVerificationState("error");
+        return;
       }
-    } catch (error) {
-      console.error("Verification failed:", error);
-      setTokenVerificationState("error");
+      
+      // Use JsonRpcProvider with timeout for faster response
+      provider = new ethers.JsonRpcProvider(rpcUrl, Number(chainIdToUse));
     }
-  };
+
+    const contract = new ethers.Contract(address, ERC20_ABI, provider);
+    
+    const [symbol, name, decimals] = await Promise.all([
+        contract.symbol().catch(() => "UNKNOWN"),
+        contract.name().catch(() => "Unknown Token"),
+        contract.decimals().catch(() => 18),
+    ]);
+
+    console.log([symbol, name, decimals]);
+    setVerifiedToken({ 
+      address, 
+      symbol, 
+      name, 
+      decimals: Number(decimals),
+      chainId: chainIdToUse 
+    });
+    setTokenVerificationState("success");
+  } catch (error) {
+    console.error("Verification failed:", error);
+    setTokenVerificationState("error");
+  }
+};
 
   const createInvoiceRequest = async (data) => {
     if (!isConnected || !walletClient) {
