@@ -69,7 +69,7 @@ const GenerateLink = () => {
     const tokenToUse = useCustomToken ? verifiedToken : selectedToken;
 
     if (!tokenToUse) {
-      return `${window.location.origin}/dashboard/create?clientAddress=${
+      return `${window.location.origin}/#/dashboard/create?clientAddress=${
         address || ""
       }`;
     }
