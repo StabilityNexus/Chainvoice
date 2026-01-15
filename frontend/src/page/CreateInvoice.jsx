@@ -157,7 +157,7 @@ function CreateInvoice() {
     };
 
     processUrlToken();
-  }, [searchParams, tokens, loadingTokens, account.address]);
+  }, [searchParams, walletClient, tokens, loadingTokens, account.address]);
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
@@ -256,7 +256,7 @@ const verifyToken = async (address, targetChainId = null) => {
       8453: "https://base.llamarpc.com",             // Base
       11155111: "https://rpc.ankr.com/eth_sepolia",  // Sepolia
     };
-    if (typeof window !== "undefined" && window.ethereum) {
+    if (typeof window !== "undefined" && isConnected) {
       // Fallback to wallet provider if no chainId specified
       provider = new BrowserProvider(walletClient);
     // If chainId is available, always use public RPC (works without wallet)
@@ -274,7 +274,7 @@ const verifyToken = async (address, targetChainId = null) => {
     }
 
     const contract = new ethers.Contract(address, ERC20_ABI, provider);
-    
+  
     const [symbol, name, decimals] = await Promise.all([
         contract.symbol().catch(() => "UNKNOWN"),
         contract.name().catch(() => "Unknown Token"),
