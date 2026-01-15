@@ -23,8 +23,7 @@ import { CopyButton } from "@/components/ui/copyButton";
 import { Badge } from "@/components/ui/badge";
 import { BrowserProvider, ethers } from "ethers";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
-import { useTokenList } from "../hooks/useTokenList"; 
-
+import { useTokenList } from "../hooks/useTokenList";
 
 const GenerateLink = () => {
   const { address, isConnected, chainId } = useAccount();
@@ -38,7 +37,7 @@ const GenerateLink = () => {
   const { tokens } = useTokenList(chainId || 1);
 
   // Token selection state
-  const [selectedToken, setSelectedToken] = useState(null); 
+  const [selectedToken, setSelectedToken] = useState(null);
   const [customTokenAddress, setCustomTokenAddress] = useState("");
   const [useCustomToken, setUseCustomToken] = useState(false);
   const [tokenVerificationState, setTokenVerificationState] = useState("idle");
@@ -88,7 +87,7 @@ const GenerateLink = () => {
       params.append("description", description);
     }
 
-    return `${window.location.origin}/dashboard/create?${params.toString()}`;
+    return `${window.location.origin}/#/dashboard/create?${params.toString()}`;
   };
 
   const copyToClipboard = async () => {
@@ -164,14 +163,17 @@ const GenerateLink = () => {
               <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                 <span className="text-xs font-medium text-green-600">1</span>
               </div>
-              <span>Copy and share the generated link with your service providers</span>
+              <span>
+                Copy and share the generated link with your service providers
+              </span>
             </div>
             <div className="flex items-start gap-2">
               <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                 <span className="text-xs font-medium text-green-600">2</span>
               </div>
               <span>
-                Service providers can open the link and see a pre-filled invoice form
+                Service providers can open the link and see a pre-filled invoice
+                form
               </span>
             </div>
             <div className="flex items-start gap-2">
@@ -483,8 +485,8 @@ const GenerateLink = () => {
           <div className="bg-green-50 border border-green-200 rounded-lg p-3">
             <p className="text-xs text-green-700 flex items-start gap-2">
               <Check className="h-3 w-3 text-green-600 mt-0.5 flex-shrink-0" />
-              Share this link with service providers to let them create invoices with your
-              details pre-filled.
+              Share this link with service providers to let them create invoices
+              with your details pre-filled.
             </p>
           </div>
         </div>
