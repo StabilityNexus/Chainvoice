@@ -241,7 +241,7 @@ function About() {
                 rel="noopener noreferrer"
                 className="inline-flex items-center text-green-400 font-semibold hover:text-green-300 transition-colors"
               >
-                View Contracts on GitHub <FiArrowRight className="ml-2" />
+                View Smart Contracts on GitHub <FiArrowRight className="ml-2" />
               </a>
             </div>
 
