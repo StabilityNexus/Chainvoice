@@ -1,31 +1,10 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
-import React, { useEffect } from "react";
 import { motion } from "framer-motion";
-import {
-  FiShield,
-  FiMail,
-  FiCode,
-  FiTrendingUp,
-  FiLock,
-  FiZap,
-} from "react-icons/fi";
+import { FiShield, FiLock, FiZap } from "react-icons/fi";
 import { SiEthereum } from "react-icons/si";
-import { LockIcon } from "lucide-react";
 import TokenCarousel from "@/components/TokenCrousel";
 
 function Landing() {
-  // useEffect(() => {
-  //   // Smooth scroll for anchor links
-  //   document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
-  //     anchor.addEventListener("click", function (e) {
-  //       e.preventDefault();
-  //       document.querySelector(this.getAttribute("href")).scrollIntoView({
-  //         behavior: "smooth",
-  //       });
-  //     });
-  //   });
-  // }, []);
-
   return (
     <div className="bg-[#0F1015] text-white min-h-screen">
       {/* Hero Section */}
