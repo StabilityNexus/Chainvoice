@@ -1,0 +1,23 @@
+# Track all merged PRs from existing contributors
+name: Track Contributor PRs
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main, master, develop]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  update-pr-count:
+    if: github.event.pull_request.merged == true
+    uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-update-pr.yml@main
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      repo_name: ${{ github.repository }}
+      pr_author: ${{ github.event.pull_request.user.login }}
+      pr_title: ${{ github.event.pull_request.title }}
+      lines_changed: ${{ github.event.pull_request.additions + github.event.pull_request.deletions }}
+    secrets:
+      GIST_PAT: ${{ secrets.GIST_PAT }}
