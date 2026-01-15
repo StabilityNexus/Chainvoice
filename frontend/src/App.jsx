@@ -7,8 +7,13 @@ import {
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import * as chains from "wagmi/chains";
+<<<<<<< HEAD
 import { mainnet, classic, base, bsc, polygon, sepolia } from 'wagmi/chains';
 import { HashRouter as Router, Route, Routes } from "react-router-dom";
+=======
+import { mainnet, classic, base, bsc, polygon, sepolia } from "wagmi/chains";
+import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
+>>>>>>> 23c6e33 (test)
 import Landing from "./page/Landing";
 import Applayout from "./page/Applayout";
 
