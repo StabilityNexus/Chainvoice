@@ -9,6 +9,7 @@ import DashboardIcon from "@mui/icons-material/Dashboard";
 import { motion, AnimatePresence } from "framer-motion";
 import CloseIcon from "@mui/icons-material/Close";
 import MenuIcon from "@mui/icons-material/Menu";
+import InfoIcon from "@mui/icons-material/Info";
 
 function Navbar() {
   const { address, isConnected } = useAccount();
@@ -66,24 +67,24 @@ function Navbar() {
   };
 
   // const navItems = [
-    // {
-    //   name: "Home",
-    //   icon: <HomeIcon className="text-current" />,
-    //   action: () => handleScroll("home-section"),
-    //   path: "/",
-    // },
-    // {
-    //   name: "Features",
-    //   icon: <FeaturedPlayListIcon className="text-current" />,
-    //   action: () => handleScroll("feature-section"),
-    //   path: "/#feature-section",
-    // },
-    // {
-    //   name: "Services",
-    //   icon: <DesignServicesIcon className="text-current" />,
-    //   action: () => handleScroll("service-section"),
-    //   path: "/#service-section",
-    // },
+  // {
+  //   name: "Home",
+  //   icon: <HomeIcon className="text-current" />,
+  //   action: () => handleScroll("home-section"),
+  //   path: "/",
+  // },
+  // {
+  //   name: "Features",
+  //   icon: <FeaturedPlayListIcon className="text-current" />,
+  //   action: () => handleScroll("feature-section"),
+  //   path: "/#feature-section",
+  // },
+  // {
+  //   name: "Services",
+  //   icon: <DesignServicesIcon className="text-current" />,
+  //   action: () => handleScroll("service-section"),
+  //   path: "/#service-section",
+  // },
   // ];
 
   const appItems = [
@@ -108,6 +109,15 @@ function Navbar() {
       icon: <AccountBalanceWalletIcon className="text-current" />,
       path: "/treasure",
     },
+
+  ];
+
+  const publicItems = [
+    {
+      name: "About",
+      icon: <InfoIcon className="text-current" />,
+      path: "/about",
+    },
   ];
 
   const toggleMobileMenu = () => {
@@ -123,11 +133,10 @@ function Navbar() {
       initial={{ y: -100 }}
       animate={{ y: 0 }}
       transition={{ duration: 0.5 }}
-      className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${
-        isScrolled
-          ? "bg-[#161920]/85 backdrop-blur-md shadow-xl"
-          : "bg-[#161920]"
-      }`}
+      className={`fixed top-0 left-0 w-full z-50 transition-all duration-300 ${isScrolled
+        ? "bg-[#161920]/85 backdrop-blur-md shadow-xl"
+        : "bg-[#161920]"
+        }`}
     >
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 z-10">
         <div className="flex justify-between items-center h-24">
@@ -174,11 +183,10 @@ function Navbar() {
                   {item?.path === "/dashboard" ? (
                     <Link
                       to="/dashboard/create"
-                      className={`flex items-center px-2 xl:px-4 py-2 rounded-lg transition-colors ${
-                        isActive(item.path)
+                      className={`flex items-center px-2 xl:px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
                           ? "text-green-400 font-medium"
                           : "text-white hover:text-green-400"
-                      }`}
+                        }`}
                     >
                       <span className="mr-2">{item.icon}</span>
                       {item.name}
@@ -186,11 +194,10 @@ function Navbar() {
                   ) : (
                     <Link
                       to={item.path}
-                      className={`flex items-center px-4 py-2 rounded-lg transition-colors ${
-                        isActive(item.path)
+                      className={`flex items-center px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
                           ? "text-green-400 font-medium"
                           : "text-white hover:text-green-400"
-                      }`}
+                        }`}
                     >
                       <span className="mr-2">{item.icon}</span>
                       {item.name}
@@ -198,6 +205,24 @@ function Navbar() {
                   )}
                 </motion.div>
               ))}
+            {publicItems.map((item) => (
+              <motion.div
+                key={item.name}
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                <Link
+                  to={item.path}
+                  className={`flex items-center px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
+                      ? "text-green-400 font-medium"
+                      : "text-white hover:text-green-400"
+                    }`}
+                >
+                  <span className="mr-2">{item.icon}</span>
+                  {item.name}
+                </Link>
+              </motion.div>
+            ))}
 
             <motion.div
               whileHover={{ scale: 1.05 }}
@@ -279,13 +304,16 @@ function Navbar() {
                   appItems.map((item) => (
                     <Link
                       key={`mobile-app-${item.name}`}
-                      to={item.path === "/dashboard" ? "/dashboard/create" : item.path}
+                      to={
+                        item.path === "/dashboard"
+                          ? "/dashboard/create"
+                          : item.path
+                      }
                       onClick={closeMobileMenu}
-                      className={`block w-full text-left px-4 py-3 rounded-lg transition-colors ${
-                        isActive(item.path)
+                      className={`block w-full text-left px-4 py-3 rounded-lg transition-colors ${isActive(item.path)
                           ? "bg-green-900/30 text-green-400 font-medium"
                           : "text-white hover:bg-gray-800"
-                      }`}
+                        }`}
                     >
                       <div className="flex items-center">
                         <span className="mr-3">{item.icon}</span>
@@ -293,6 +321,22 @@ function Navbar() {
                       </div>
                     </Link>
                   ))}
+                {publicItems.map((item) => (
+                  <Link
+                    key={`mobile-public-${item.name}`}
+                    to={item.path}
+                    onClick={closeMobileMenu}
+                    className={`block w-full text-left px-4 py-3 rounded-lg transition-colors ${isActive(item.path)
+                        ? "bg-green-900/30 text-green-400 font-medium"
+                        : "text-white hover:bg-gray-800"
+                      }`}
+                  >
+                    <div className="flex items-center">
+                      <span className="mr-3">{item.icon}</span>
+                      {item.name}
+                    </div>
+                  </Link>
+                ))}
 
                 <div className="px-4 py-2">
                   <ConnectButton
