@@ -143,7 +143,7 @@ function Navbar() {
           <motion.div
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
-            className="flex items-center space-x-2 cursor-pointer"
+            className="flex items-center space-x-1 xl:space-x-2 cursor-pointer"
             onClick={() => {
               navigate("/");
               closeMobileMenu();
@@ -156,7 +156,7 @@ function Navbar() {
           </motion.div>
 
           {/* Desktop Navigation */}
-          <div className="hidden lg:flex items-center space-x-0 xl:space-x-2">
+          <div className="hidden lg:flex items-center relative left-4 space-x-0 xl:space-x-2">
             {/* {navItems.map((item) => (
               <motion.button
                 key={item.name}
@@ -183,7 +183,7 @@ function Navbar() {
                   {item?.path === "/dashboard" ? (
                     <Link
                       to="/dashboard/create"
-                      className={`flex items-center px-2 xl:px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
+                      className={`flex items-center px-1 xl:px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
                           ? "text-green-400 font-medium"
                           : "text-white hover:text-green-400"
                         }`}
@@ -194,7 +194,7 @@ function Navbar() {
                   ) : (
                     <Link
                       to={item.path}
-                      className={`flex items-center px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
+                      className={`flex items-center px-1 xl:px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
                           ? "text-green-400 font-medium"
                           : "text-white hover:text-green-400"
                         }`}
