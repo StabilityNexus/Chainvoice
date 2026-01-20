@@ -1,0 +1,36 @@
+# Track all merged PRs from existing contributors
+name: Track Contributor PRs
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main, master, develop]
+
+permissions:
+  pull-requests: read
+
+jobs:
+  calculate-changes:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      lines_changed: ${{ steps.calc.outputs.lines_changed }}
+    steps:
+      - name: Calculate lines changed
+        id: calc
+        run: |
+          LINES_CHANGED=$(( ${{ github.event.pull_request.additions }} + ${{ github.event.pull_request.deletions }} ))
+          echo "lines_changed=$LINES_CHANGED" >> $GITHUB_OUTPUT
+  
+  update-pr-count:
+    needs: calculate-changes
+    if: github.event.pull_request.merged == true
+    uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-update-pr.yml@main
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      repo_name: ${{ github.repository }}
+      pr_author: ${{ github.event.pull_request.user.login }}
+      pr_title: ${{ github.event.pull_request.title }}
+      lines_changed: ${{ needs.calculate-changes.outputs.lines_changed }}
+    secrets:
+      GIST_PAT: ${{ secrets.GIST_PAT }}

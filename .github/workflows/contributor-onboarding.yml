@@ -1,0 +1,43 @@
+# Contributor Onboarding Workflow for Chainvoice
+name: Contributor Onboarding
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main, master, develop]
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  # Request Discord ID and wallet from first-time contributors
+  request-info:
+    if: |
+      github.event_name == 'pull_request_target' && 
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'first-time-contributor')
+    uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-request-info.yml@main
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      repo_name: ${{ github.repository }}
+      pr_author: ${{ github.event.pull_request.user.login }}
+    secrets:
+      GIST_PAT: ${{ secrets.GIST_PAT }}
+  
+  # Process contributor response with Discord ID and wallet
+  process-response:
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      (contains(github.event.comment.body, 'discord:') || contains(github.event.comment.body, 'Discord:'))
+    uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-process-response.yml@main
+    with:
+      pr_number: ${{ github.event.issue.number }}
+      repo_name: ${{ github.repository }}
+      comment_body: ${{ github.event.comment.body }}
+      commenter: ${{ github.event.comment.user.login }}
+    secrets:
+      GIST_PAT: ${{ secrets.GIST_PAT }}
