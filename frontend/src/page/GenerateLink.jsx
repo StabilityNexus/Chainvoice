@@ -50,6 +50,7 @@ const GenerateLink = () => {
   const [verifiedToken, setVerifiedToken] = useState(null);
   const [loading, setLoading] = useState(false);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  const [savedTokenState, setSavedTokenState] = useState(null);
 
   // Set default token when tokens are loaded
   useEffect(() => {
@@ -79,24 +80,99 @@ const GenerateLink = () => {
       if (savedData.amount) setAmount(savedData.amount);
       if (savedData.description) setDescription(savedData.description);
 
-      if (savedData.selectedToken) {
-        setSelectedToken(savedData.selectedToken);
-        setUseCustomToken(false);
-      }
-
-      if (savedData.useCustomToken && savedData.customTokenAddress) {
-        setUseCustomToken(true);
-        setCustomTokenAddress(savedData.customTokenAddress);
-
-        if (savedData.verifiedToken) {
-          setVerifiedToken(savedData.verifiedToken);
-          setTokenVerificationState("success");
-        }
-      }
+      // Defer token restoration until we can validate against current chain/token list
+      const tokenState = {
+        selectedToken: savedData.selectedToken || null,
+        useCustomToken: !!savedData.useCustomToken,
+        customTokenAddress: savedData.customTokenAddress || "",
+        verifiedToken: savedData.verifiedToken || null,
+        savedChainId: savedData.chainId ?? null,
+      };
+      setSavedTokenState(tokenState);
     }
 
     setIsInitialLoad(false);
   }, []);
+
+  // Validate and restore token state against current chain/token list
+  useEffect(() => {
+    if (!savedTokenState) return;
+
+    const clearTokenState = () => {
+      setSelectedToken(null);
+      setUseCustomToken(false);
+      setCustomTokenAddress("");
+      setVerifiedToken(null);
+      setTokenVerificationState("idle");
+    };
+
+    const currentChainId = chainId || 1;
+    const chainMatches =
+      !savedTokenState.savedChainId ||
+      savedTokenState.savedChainId === currentChainId;
+
+    // If the saved data was for a different chain, do not restore token state
+    if (!chainMatches) {
+      clearTokenState();
+      return;
+    }
+
+    // 1. Try to restore a listed token, but only if it still exists for this chain
+    if (savedTokenState.selectedToken) {
+      const savedAddress =
+        (savedTokenState.selectedToken.address ||
+          savedTokenState.selectedToken.contract_address ||
+          "").toLowerCase();
+
+      const matchingToken = tokens.find((token) => {
+        const tokenAddress =
+          (token.contract_address || token.address || "").toLowerCase();
+        return tokenAddress === savedAddress;
+      });
+
+      if (matchingToken) {
+        setUseCustomToken(false);
+        setSelectedToken({
+          address: matchingToken.contract_address,
+          symbol: matchingToken.symbol,
+          name: matchingToken.name,
+          logo: matchingToken.image,
+          decimals: matchingToken.decimals ?? 18,
+        });
+        return;
+      }
+
+      // Saved selectedToken no longer valid on this chain
+      clearTokenState();
+      return;
+    }
+
+    // 2. Try to restore a custom token if the address is valid
+    if (savedTokenState.useCustomToken && savedTokenState.customTokenAddress) {
+      const addr = savedTokenState.customTokenAddress;
+
+      if (ethers.isAddress(addr)) {
+        setUseCustomToken(true);
+        setCustomTokenAddress(addr);
+
+        if (savedTokenState.verifiedToken) {
+          setVerifiedToken(savedTokenState.verifiedToken);
+          setTokenVerificationState("success");
+        } else {
+          setVerifiedToken(null);
+          setTokenVerificationState("idle");
+        }
+        return;
+      }
+
+      // Invalid custom token address for this chain; clear state
+      clearTokenState();
+      return;
+    }
+
+    // No valid token information to restore
+    clearTokenState();
+  }, [savedTokenState, tokens, chainId]);
 
   // Persist form state to sessionStorage (debounced)
   useEffect(() => {
