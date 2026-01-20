@@ -24,6 +24,12 @@ import { Badge } from "@/components/ui/badge";
 import { BrowserProvider, ethers } from "ethers";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import { useTokenList } from "../hooks/useTokenList";
+import {
+  getFromStorage,
+  saveToStorage,
+  StorageKeys,
+  sanitizeDataForStorage,
+} from "@/utils/sessionStorage";
 
 const GenerateLink = () => {
   const { address, isConnected, chainId } = useAccount();
@@ -43,6 +49,7 @@ const GenerateLink = () => {
   const [tokenVerificationState, setTokenVerificationState] = useState("idle");
   const [verifiedToken, setVerifiedToken] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Set default token when tokens are loaded
   useEffect(() => {
@@ -63,6 +70,64 @@ const GenerateLink = () => {
   useEffect(() => {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
+
+  // Load persisted data from sessionStorage on mount
+  useEffect(() => {
+    const savedData = getFromStorage(StorageKeys.GENERATE_LINK);
+
+    if (savedData) {
+      if (savedData.amount) setAmount(savedData.amount);
+      if (savedData.description) setDescription(savedData.description);
+
+      if (savedData.selectedToken) {
+        setSelectedToken(savedData.selectedToken);
+        setUseCustomToken(false);
+      }
+
+      if (savedData.useCustomToken && savedData.customTokenAddress) {
+        setUseCustomToken(true);
+        setCustomTokenAddress(savedData.customTokenAddress);
+
+        if (savedData.verifiedToken) {
+          setVerifiedToken(savedData.verifiedToken);
+          setTokenVerificationState("success");
+        }
+      }
+    }
+
+    setIsInitialLoad(false);
+  }, []);
+
+  // Persist form state to sessionStorage (debounced)
+  useEffect(() => {
+    if (isInitialLoad) return;
+
+    const saveData = () => {
+      const dataToSave = sanitizeDataForStorage({
+        amount,
+        description,
+        selectedToken,
+        customTokenAddress,
+        useCustomToken,
+        verifiedToken,
+        chainId,
+      });
+
+      saveToStorage(StorageKeys.GENERATE_LINK, dataToSave);
+    };
+
+    const timeoutId = setTimeout(saveData, 500);
+    return () => clearTimeout(timeoutId);
+  }, [
+    amount,
+    description,
+    selectedToken,
+    customTokenAddress,
+    useCustomToken,
+    verifiedToken,
+    chainId,
+    isInitialLoad,
+  ]);
 
   const generateLink = () => {
     const tokenToUse = useCustomToken ? verifiedToken : selectedToken;

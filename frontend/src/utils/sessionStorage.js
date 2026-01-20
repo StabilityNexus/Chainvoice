@@ -6,6 +6,7 @@
 const STORAGE_KEYS = {
   CREATE_INVOICE: 'chainvoice_create_invoice',
   CREATE_INVOICES_BATCH: 'chainvoice_create_invoices_batch',
+  GENERATE_LINK: 'chainvoice_generate_link',
 };
 
 // Default TTL: 24 hours (in milliseconds)
