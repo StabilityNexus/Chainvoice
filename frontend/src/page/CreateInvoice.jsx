@@ -180,93 +180,63 @@ function CreateInvoice() {
     }
 
     const processUrlToken = async () => {
-      if (!urlTokenAddress || loadingTokens) return;
-
-      if (isCustomFromURL) {
-        setUseCustomToken(true);
-        setCustomTokenAddress(urlTokenAddress);
-        verifyToken(urlTokenAddress);
-        return;
-      }
-
-      // Try to find token in saved selection first
-      const savedData = getFromStorage(StorageKeys.CREATE_INVOICE);
-      if (savedData?.selectedToken) {
-        const token = savedData.selectedToken;
-        if (
-          token.address?.toLowerCase() === urlTokenAddress.toLowerCase()
-        ) {
-          setSelectedToken(token);
-          setUseCustomToken(false);
-          return;
-        }
-      }
-
-      // Try to find from tokens list
-      const preselectedToken = tokens.find(
-        (token) =>
-          (token.contract_address || token.address).toLowerCase() ===
-          urlTokenAddress.toLowerCase()
-      );
-
-      if (preselectedToken) {
-        let decimals = preselectedToken.decimals;
-
-        // If decimals are missing/null, try to fetch them from chain
-        if (decimals === undefined || decimals === null) {
-          try {
-            if (typeof window !== "undefined" && window.ethereum) {
-              const provider = new BrowserProvider(window.ethereum);
-              const contract = new ethers.Contract(
-                urlTokenAddress,
-                ERC20_ABI,
-                provider
-              );
-              decimals = await contract.decimals();
-            }
-          } catch (err) {
-            console.warn(
-              "Failed to fetch decimals for preselected token:",
-              err
-            );
-          }
-        }
-
-        if (decimals !== undefined && decimals !== null) {
-          setSelectedToken({
-            address:
-              preselectedToken.contract_address || preselectedToken.address,
-            symbol: preselectedToken.symbol,
-            name: preselectedToken.name,
-            logo: preselectedToken.image,
-            decimals: Number(decimals),
-          });
-          setUseCustomToken(false);
-        } else {
-          // Fallback to manual verification if we can't determine decimals safely
-          console.warn(
-            "Could not determine token decimals, falling back to manual verification."
-          );
+      if (urlTokenAddress && !loadingTokens) {
+        if (isCustomFromURL) {
           setUseCustomToken(true);
           setCustomTokenAddress(urlTokenAddress);
           verifyToken(urlTokenAddress);
+        } else {
+          const preselectedToken = tokens.find(
+            (token) =>
+              (token.contract_address || token.address).toLowerCase() === urlTokenAddress.toLowerCase()
+          );
+
+          if (preselectedToken) {
+            let decimals = preselectedToken.decimals;
+
+            // If decimals are missing/null, try to fetch them from chain
+            if (decimals === undefined || decimals === null) {
+              try {
+                if (typeof window !== "undefined" && window.ethereum) {
+                   const provider = new BrowserProvider(window.ethereum);
+                   const contract = new ethers.Contract(urlTokenAddress, ERC20_ABI, provider);
+                   // Try to fetch decimals
+                   decimals = await contract.decimals(); 
+                }
+              } catch (err) {
+                console.warn("Failed to fetch decimals for preselected token:", err);
+              }
+            }
+
+            // If we successfully resolved decimals (from list or chain)
+            if (decimals !== undefined && decimals !== null) {
+              setSelectedToken({
+                address: preselectedToken.contract_address || preselectedToken.address,
+                symbol: preselectedToken.symbol,
+                name: preselectedToken.name,
+                logo: preselectedToken.image,
+                decimals: Number(decimals) 
+              });
+              setUseCustomToken(false);
+            } else {
+              // Fallback to manual verification if we can't determine decimals safely
+              console.warn("Could not determine token decimals, falling back to manual verification.");
+              setUseCustomToken(true);
+              setCustomTokenAddress(urlTokenAddress);
+              verifyToken(urlTokenAddress);
+            }
+          } else {
+            // Not in list, treat as custom
+            setUseCustomToken(true);
+            setCustomTokenAddress(urlTokenAddress);
+            verifyToken(urlTokenAddress);
+          }
         }
-      } else {
-        // Not in list, treat as custom
-        setUseCustomToken(true);
-        setCustomTokenAddress(urlTokenAddress);
-        verifyToken(urlTokenAddress);
       }
     };
 
     processUrlToken();
-  }, [
-    isInitialLoad,
-    searchParams,
-    tokens,
-    loadingTokens,
-    account.address,
-  ]);
+  }, [searchParams, walletClient, tokens, loadingTokens, account.address, isInitialLoad]);
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
@@ -355,8 +325,7 @@ function CreateInvoice() {
     customTokenAddress,
     useCustomToken,
     verifiedToken,
-    // Use JSON.stringify to detect deep changes in itemData
-    JSON.stringify(itemData),
+    itemData,
     isInitialLoad,
   ]);
 
@@ -584,6 +553,8 @@ const verifyToken = async (address, targetChainId = null) => {
       if (!account?.chainId) {
         throw new Error("Missing chainId: wallet connected but chain not configured");
       }
+
+      const chainId = account?.chainId;
       const contractAddress = import.meta.env[
         `VITE_CONTRACT_ADDRESS_${account.chainId}`
       ];
