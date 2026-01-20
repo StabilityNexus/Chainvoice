@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.13;
+pragma solidity ^0.8.20;
 
-interface IERC20 {
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-    function allowance(address owner, address spender) external view returns (uint256);
-}
+
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
 
 contract Chainvoice {
+    using SafeERC20 for IERC20;
     // Errors
     error MixedTokenBatch();
     error InvalidBatchSize();
@@ -69,16 +69,6 @@ contract Chainvoice {
 
     // Constants
     uint256 public constant MAX_BATCH = 50;
-
-    // Internal utils
-    function _isERC20(address token) internal view returns (bool) {
-        if (token == address(0)) return false;
-        if (token.code.length == 0) return false;
-        (bool success, ) = token.staticcall(
-            abi.encodeWithSignature("balanceOf(address)", address(this))
-        );
-        return success;
-    }
 
     // ========== Single-invoice create ==========
     function createInvoice(
@@ -226,12 +216,11 @@ contract Chainvoice {
 
             accumulatedFees += fee;
 
-            bool transferSuccess = IERC20(invoice.tokenAddress).transferFrom(
+            IERC20(invoice.tokenAddress).safeTransferFrom(
                 msg.sender,
                 invoice.from,
                 invoice.amountDue
             );
-            require(transferSuccess, "Token transfer failed");
         }
 
         emit InvoicePaid(
@@ -304,8 +293,7 @@ contract Chainvoice {
 
             for (uint256 i = 0; i < n; i++) {
                 InvoiceDetails storage inv = invoices[invoiceIds[i]];
-                bool ok = erc20.transferFrom(msg.sender, inv.from, inv.amountDue);
-                require(ok, "Token transfer failed");
+                erc20.safeTransferFrom(msg.sender, inv.from, inv.amountDue);
                 emit InvoicePaid(inv.id, inv.from, inv.to, inv.amountDue, token);
             }
         }
