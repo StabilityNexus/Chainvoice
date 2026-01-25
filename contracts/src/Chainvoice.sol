@@ -407,25 +407,22 @@ contract Chainvoice {
     /// @dev Cancels the pending ownership transfer
     function cancelOwnershipTransfer() external onlyOwner {
         if (pendingOwner == address(0)) revert OwnershipNotPending();
-        
-        address cancelledPending = pendingOwner;
+
+        emit OwnershipTransferCancelled(msg.sender, pendingOwner);
         pendingOwner = address(0);
-        
-        emit OwnershipTransferCancelled(msg.sender, cancelledPending);
     }
 
     // ========== Admin - Fee Management ==========
     function setFeeAmount(uint256 _fee) external onlyOwner {
-        uint256 previousFee = fee;
+        emit FeeUpdated(fee, _fee);
         fee = _fee;
-        emit FeeUpdated(previousFee, _fee);
     }
 
     function setTreasuryAddress(address newTreasury) external onlyOwner {
         require(newTreasury != address(0), "Zero address");
-        address previousTreasury = treasuryAddress;
+
+        emit TreasuryAddressUpdated(treasuryAddress, newTreasury);
         treasuryAddress = newTreasury;
-        emit TreasuryAddressUpdated(previousTreasury, newTreasury);
     }
 
     function withdrawFees() external {
