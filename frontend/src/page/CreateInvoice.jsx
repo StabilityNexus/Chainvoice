@@ -302,6 +302,18 @@ const verifyToken = async (address, targetChainId = null) => {
       return;
     }
 
+    // Validate client address
+    if (!data.clientAddress || !ethers.isAddress(data.clientAddress)) {
+      alert("Please enter a valid client address");
+      return;
+    }
+
+    // Check for self-invoicing
+    if (data.clientAddress.toLowerCase() === account.address.toLowerCase()) {
+      alert("Cannot create invoice to yourself. Please use a different client address.");
+      return;
+    }
+    
     try {
       setLoading(true);
       const provider = new BrowserProvider(walletClient);
