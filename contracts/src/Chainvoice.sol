@@ -210,7 +210,7 @@ contract Chainvoice {
         require(!invoice.isCancelled, "Invoice is cancelled");
 
         // Effects first for CEI (mark paid, bump fees), then interactions
-        invoice.isPaid = true;
+        invoiceStorage.isPaid = true;
 
         if (invoice.tokenAddress == address(0)) {
             require(msg.value == invoice.amountDue + fee, "Incorrect payment amount");
