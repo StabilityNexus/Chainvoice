@@ -74,6 +74,9 @@ function CreateInvoice() {
   const [verifiedToken, setVerifiedToken] = useState(null);
 
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
+  // Holds inline validation error for client wallet address
+// Used instead of browser alerts for better, non blocking UX
+  const [clientAddressError, setClientAddressError] = useState("");
 
   // const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"]; //sepolia based chainvoice test token (CIN)
 
@@ -296,6 +299,35 @@ const verifyToken = async (address, targetChainId = null) => {
   }
 };
 
+const validateClientAddress = (value) => {
+  // Empty input, no error
+  if (!value) {
+    setClientAddressError("");
+    return;
+  }
+
+  // Do not validate until it looks like a full EVM address
+  if (!value.startsWith("0x") || value.length < 42) {
+    setClientAddressError("");
+    return;
+  }
+
+  // Invalid EVM address
+  if (!ethers.isAddress(value)) {
+    setClientAddressError("Please enter a valid wallet address");
+    return;
+  }
+
+  // Self-invoicing check
+  if (value.toLowerCase() === account.address?.toLowerCase()) {
+    setClientAddressError("You cannot create an invoice for your own wallet");
+    return;
+  }
+
+  // Valid other wallet
+  setClientAddressError("");
+};
+
   const createInvoiceRequest = async (data) => {
     if (!isConnected || !walletClient) {
       alert("Please connect your wallet");
@@ -303,15 +335,16 @@ const verifyToken = async (address, targetChainId = null) => {
     }
 // Validate client address
     if (!data.clientAddress || !ethers.isAddress(data.clientAddress)) {
-      alert("Please enter a valid client address");
-      return;
-    }
+  setClientAddressError("Please enter a valid wallet address");
+  return;
+ }
 
     // Check for self-invoicing
     if (data.clientAddress.toLowerCase() === account.address.toLowerCase()) {
-      alert("Cannot create invoice to yourself. Please use a different client address.");
-      return;
-    }
+  setClientAddressError("You cannot create an invoice for your own wallet");
+  return;
+}
+   setClientAddressError("");
     try {
       setLoading(true);
       const provider = new BrowserProvider(walletClient);
@@ -689,9 +722,17 @@ const verifyToken = async (address, targetChainId = null) => {
                 className="w-full mb-4 border-gray-300 text-black"
                 name="clientAddress"
                 value={clientAddress}
-                onChange={(e) => setClientAddress(e.target.value)}
+                onChange={(e) => {const value = e.target.value;
+                         setClientAddress(value);
+                      validateClientAddress(value);
+                     }}
               />
-
+              {clientAddressError && (
+                 <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                    <AlertCircle className="h-4 w-4" />
+                        <span>{clientAddressError}</span>
+                            </div>
+                               )}
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">
