@@ -6,6 +6,7 @@ import {
   Contract,
   ethers,
   formatUnits,
+  JsonRpcProvider,
   parseUnits,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
@@ -49,18 +50,32 @@ import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
 import { useTokenList } from "@/hooks/useTokenList";
 
+/** Public RPC URLs by chain ID for token verification when visitor has no wallet (e.g. opening invoice request link in incognito). */
+const CHAIN_ID_TO_PUBLIC_RPC = {
+  1: "https://eth.llamarpc.com",
+  61: "https://etc.blockscout.com",
+  137: "https://polygon-rpc.com",
+  56: "https://bsc-dataseed.binance.org",
+  8453: "https://mainnet.base.org",
+  11155111: "https://rpc.ankr.com/eth_sepolia",
+};
+
 function CreateInvoice() {
   const { data: walletClient } = useWalletClient();
   const { isConnected } = useAccount();
   const account = useAccount();
+  const [searchParams] = useSearchParams();
+  const urlChainParam = searchParams.get("chain");
+  const chainIdForTokens =
+    urlChainParam && !Number.isNaN(parseInt(urlChainParam, 10))
+      ? parseInt(urlChainParam, 10)
+      : account?.chainId ?? 1;
+  const { tokens, loading: loadingTokens, error: tokenListError } = useTokenList(chainIdForTokens);
   const [dueDate, setDueDate] = useState(new Date());
   const [issueDate, setIssueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
-  const { tokens, loading: loadingTokens, error: tokenListError } = useTokenList(account?.chainId || 1);
   const navigate = useNavigate();
   const litClientRef = useRef(null);
-
-  const [searchParams] = useSearchParams();
   const [clientAddress, setClientAddress] = useState("");
   const [userCountry, setUserCountry] = useState("");
   const [clientCountry, setClientCountry] = useState("");
@@ -91,13 +106,35 @@ function CreateInvoice() {
   const [totalAmountDue, setTotalAmountDue] = useState(0);
 
   useEffect(() => {
-    console.log("account address : ", account.address);
     const urlClientAddress = searchParams.get("clientAddress");
     const urlTokenAddress = searchParams.get("tokenAddress");
     const isCustomFromURL = searchParams.get("customToken") === "true";
+    const urlAmount = searchParams.get("amount");
+    const urlDescription = searchParams.get("description");
 
     if (urlClientAddress) {
       setClientAddress(urlClientAddress);
+    }
+
+    if (urlDescription || urlAmount) {
+      setItemData((prev) => {
+        const first = prev[0] ?? {
+          description: "",
+          qty: "",
+          unitPrice: "",
+          discount: "",
+          tax: "",
+          amount: "",
+        };
+        const isFirstLineEmpty = !first.description && !first.unitPrice;
+        if (!isFirstLineEmpty) return prev;
+        const updatedFirst = {
+          ...first,
+          ...(urlDescription && { description: urlDescription }),
+          ...(urlAmount && { qty: "1", unitPrice: urlAmount }),
+        };
+        return [updatedFirst, ...prev.slice(1)];
+      });
     }
 
     const processUrlToken = async () => {
@@ -105,7 +142,7 @@ function CreateInvoice() {
         if (isCustomFromURL) {
           setUseCustomToken(true);
           setCustomTokenAddress(urlTokenAddress);
-          verifyToken(urlTokenAddress);
+          verifyToken(urlTokenAddress, chainIdForTokens);
         } else {
           const preselectedToken = tokens.find(
             (token) =>
@@ -119,10 +156,9 @@ function CreateInvoice() {
             if (decimals === undefined || decimals === null) {
               try {
                 if (typeof window !== "undefined" && window.ethereum) {
-                   const provider = new BrowserProvider(window.ethereum);
-                   const contract = new ethers.Contract(urlTokenAddress, ERC20_ABI, provider);
-                   // Try to fetch decimals
-                   decimals = await contract.decimals(); 
+                  const provider = new BrowserProvider(window.ethereum);
+                  const contract = new ethers.Contract(urlTokenAddress, ERC20_ABI, provider);
+                  decimals = await contract.decimals();
                 }
               } catch (err) {
                 console.warn("Failed to fetch decimals for preselected token:", err);
@@ -140,24 +176,23 @@ function CreateInvoice() {
               });
               setUseCustomToken(false);
             } else {
-              // Fallback to manual verification if we can't determine decimals safely
-              console.warn("Could not determine token decimals, falling back to manual verification.");
+              // Fallback to manual verification when decimals cannot be determined from list or wallet
               setUseCustomToken(true);
               setCustomTokenAddress(urlTokenAddress);
-              verifyToken(urlTokenAddress);
+              verifyToken(urlTokenAddress, chainIdForTokens);
             }
           } else {
-            // Not in list, treat as custom
+            // Not in list: fetch token info via public RPC (works without wallet) or wallet
             setUseCustomToken(true);
             setCustomTokenAddress(urlTokenAddress);
-            verifyToken(urlTokenAddress);
+            verifyToken(urlTokenAddress, chainIdForTokens);
           }
         }
       }
     };
 
     processUrlToken();
-  }, [searchParams, walletClient, tokens, loadingTokens, account.address]);
+  }, [searchParams, tokens, loadingTokens, account.address, chainIdForTokens]);
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
@@ -236,65 +271,50 @@ function CreateInvoice() {
     ]);
   };
 
-  
-const verifyToken = async (address, targetChainId = null) => {
-  setTokenVerificationState("verifying");
-  
-  // Determine which chain to verify on
-  const chainIdToUse = targetChainId || searchParams.get("chain") || account?.chainId;
+  /**
+   * Fetches ERC-20 token symbol, name, and decimals.
+   * When chainIdForRpc is provided (e.g. from invoice link URL), uses public RPC so it works without a connected wallet.
+   */
+  const verifyToken = async (address, chainIdForRpc) => {
+    setTokenVerificationState("verifying");
 
-  try {
-    let provider;
-    
+    try {
+      const rpcUrl = chainIdForRpc && CHAIN_ID_TO_PUBLIC_RPC[chainIdForRpc];
+      const usePublicRpc = !!rpcUrl;
 
-    // for UNKNOWN symbol and name unknown update this rpc with some better one
-    const rpcUrls = {
-      1: "https://eth.llamarpc.com",                 // Ethereum (very fast)
-      61: "https://etc.rivet.link",                  // Ethereum Classic
-      137: "https://polygon.llamarpc.com",           // Polygon
-      56: "https://bsc.llamarpc.com",                // BNB Smart Chain
-      8453: "https://base.llamarpc.com",             // Base
-      11155111: "https://rpc.ankr.com/eth_sepolia",  // Sepolia
-    };
-    if (typeof window !== "undefined" && isConnected) {
-      // Fallback to wallet provider if no chainId specified
-      provider = new BrowserProvider(walletClient);
-    // If chainId is available, always use public RPC (works without wallet)
-    } else if (chainIdToUse) {
-      const rpcUrl = rpcUrls[chainIdToUse];
-      
-      if (!rpcUrl) {
-        console.error(`Unsupported chain ${chainIdToUse}. Supported chains: Ethereum (1), Ethereum Classic (61), Polygon (137), BNB Smart Chain (56), Base (8453), Sepolia (11155111)`);
+      if (usePublicRpc) {
+        const provider = new JsonRpcProvider(rpcUrl);
+        const contract = new ethers.Contract(address, ERC20_ABI, provider);
+
+        const [symbol, name, decimals] = await Promise.all([
+          contract.symbol().catch(() => "UNKNOWN"),
+          contract.name().catch(() => "Unknown Token"),
+          contract.decimals().catch(() => 18),
+        ]);
+
+        setVerifiedToken({ address, symbol, name, decimals });
+        setTokenVerificationState("success");
+      } else if (typeof window !== "undefined" && window.ethereum) {
+        const provider = new BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(address, ERC20_ABI, provider);
+
+        const [symbol, name, decimals] = await Promise.all([
+          contract.symbol().catch(() => "UNKNOWN"),
+          contract.name().catch(() => "Unknown Token"),
+          contract.decimals().catch(() => 18),
+        ]);
+
+        setVerifiedToken({ address, symbol, name, decimals });
+        setTokenVerificationState("success");
+      } else {
+        console.error("No Ethereum provider found");
         setTokenVerificationState("error");
-        return;
       }
-      
-      // Use JsonRpcProvider with timeout for faster response
-      provider = new ethers.JsonRpcProvider(rpcUrl, Number(chainIdToUse));
+    } catch (error) {
+      console.error("Verification failed:", error);
+      setTokenVerificationState("error");
     }
-
-    const contract = new ethers.Contract(address, ERC20_ABI, provider);
-  
-    const [symbol, name, decimals] = await Promise.all([
-        contract.symbol().catch(() => "UNKNOWN"),
-        contract.name().catch(() => "Unknown Token"),
-        contract.decimals().catch(() => 18),
-    ]);
-
-    console.log([symbol, name, decimals]);
-    setVerifiedToken({ 
-      address, 
-      symbol, 
-      name, 
-      decimals: Number(decimals),
-      chainId: chainIdToUse 
-    });
-    setTokenVerificationState("success");
-  } catch (error) {
-    console.error("Verification failed:", error);
-    setTokenVerificationState("error");
-  }
-};
+  };
 
   const createInvoiceRequest = async (data) => {
     if (!isConnected || !walletClient) {
@@ -824,7 +844,7 @@ const verifyToken = async (address, targetChainId = null) => {
                             decimals: 18,
                           });
                         }}
-                        chainId={account?.chainId || 1}
+                        chainId={chainIdForTokens}
                         disabled={loading}
                         className="w-full"
                         allowCustom={false} // Remove custom token option from picker since we have toggle
