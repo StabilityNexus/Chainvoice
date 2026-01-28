@@ -158,6 +158,7 @@ function CreateInvoice() {
 
     if (urlClientAddress) {
       setClientAddress(urlClientAddress);
+      validateClientAddress(urlClientAddress);
     }
 
     if (urlDescription || urlAmount) {
