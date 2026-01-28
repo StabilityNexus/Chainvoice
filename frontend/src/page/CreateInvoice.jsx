@@ -111,49 +111,35 @@ function CreateInvoice() {
    */
   const verifyToken = useCallback(async (address, chainIdForRpc) => {
     setTokenVerificationState("verifying");
+    setVerifiedToken(null);
 
     try {
+      let provider;
       const rpcUrl = chainIdForRpc && CHAIN_ID_TO_PUBLIC_RPC[chainIdForRpc];
-      const usePublicRpc = !!rpcUrl;
-
-      if (usePublicRpc) {
-        const provider = new JsonRpcProvider(rpcUrl);
-        const contract = new ethers.Contract(address, ERC20_ABI, provider);
-
-        const [symbol, name, decimals] = await Promise.all([
-          contract.symbol().catch(() => "UNKNOWN"),
-          contract.name().catch(() => "Unknown Token"),
-          contract.decimals().catch(() => 18),
-        ]);
-
-        const symbolStr = typeof symbol === "string" ? symbol.trim() : "";
-        if (!symbolStr || symbolStr === "UNKNOWN") {
-          setTokenVerificationState("error");
-          return;
-        }
-        setVerifiedToken({ address, symbol: symbolStr, name, decimals });
-        setTokenVerificationState("success");
+      if (rpcUrl) {
+        provider = new JsonRpcProvider(rpcUrl);
       } else if (typeof window !== "undefined" && window.ethereum) {
-        const provider = new BrowserProvider(window.ethereum);
-        const contract = new ethers.Contract(address, ERC20_ABI, provider);
-
-        const [symbol, name, decimals] = await Promise.all([
-          contract.symbol().catch(() => "UNKNOWN"),
-          contract.name().catch(() => "Unknown Token"),
-          contract.decimals().catch(() => 18),
-        ]);
-
-        const symbolStr = typeof symbol === "string" ? symbol.trim() : "";
-        if (!symbolStr || symbolStr === "UNKNOWN") {
-          setTokenVerificationState("error");
-          return;
-        }
-        setVerifiedToken({ address, symbol: symbolStr, name, decimals });
-        setTokenVerificationState("success");
+        provider = new BrowserProvider(window.ethereum);
       } else {
         console.error("No Ethereum provider found");
         setTokenVerificationState("error");
+        return;
       }
+
+      const contract = new ethers.Contract(address, ERC20_ABI, provider);
+      const [symbol, name, decimals] = await Promise.all([
+        contract.symbol().catch(() => "UNKNOWN"),
+        contract.name().catch(() => "Unknown Token"),
+        contract.decimals().catch(() => 18),
+      ]);
+
+      const symbolStr = typeof symbol === "string" ? symbol.trim() : "";
+      if (!symbolStr || symbolStr === "UNKNOWN") {
+        setTokenVerificationState("error");
+        return;
+      }
+      setVerifiedToken({ address, symbol: symbolStr, name, decimals });
+      setTokenVerificationState("success");
     } catch (error) {
       console.error("Verification failed:", error);
       setTokenVerificationState("error");
@@ -338,6 +324,11 @@ function CreateInvoice() {
       const signer = await provider.getSigner();
 
       const paymentToken = useCustomToken ? verifiedToken : selectedToken;
+      if (!paymentToken?.address) {
+        alert("Please select or verify a payment token.");
+        setLoading(false);
+        return;
+      }
 
       const invoicePayload = {
         amountDue: totalAmountDue.toString(),
