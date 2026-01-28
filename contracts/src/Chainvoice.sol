@@ -203,7 +203,8 @@ contract Chainvoice {
     function payInvoice(uint256 invoiceId) external payable nonReentrant {
         require(invoiceId < invoices.length, "Invalid invoice ID");
 
-        InvoiceDetails storage invoice = invoices[invoiceId];
+        InvoiceDetails storage invoiceStorage = invoices[invoiceId]; //(read once from storage)
+        InvoiceDetails memory invoice = invoiceStorage;   // now read all from this invoice(memory)
         require(msg.sender == invoice.to, "Not authorized");
         require(!invoice.isPaid, "Already paid");
         require(!invoice.isCancelled, "Invoice is cancelled");
