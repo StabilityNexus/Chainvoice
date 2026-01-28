@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import {
@@ -105,6 +105,61 @@ function CreateInvoice() {
 
   const [totalAmountDue, setTotalAmountDue] = useState(0);
 
+  /**
+   * Fetches ERC-20 token symbol, name, and decimals.
+   * When chainIdForRpc is provided (e.g. from invoice link URL), uses public RPC so it works without a connected wallet.
+   */
+  const verifyToken = useCallback(async (address, chainIdForRpc) => {
+    setTokenVerificationState("verifying");
+
+    try {
+      const rpcUrl = chainIdForRpc && CHAIN_ID_TO_PUBLIC_RPC[chainIdForRpc];
+      const usePublicRpc = !!rpcUrl;
+
+      if (usePublicRpc) {
+        const provider = new JsonRpcProvider(rpcUrl);
+        const contract = new ethers.Contract(address, ERC20_ABI, provider);
+
+        const [symbol, name, decimals] = await Promise.all([
+          contract.symbol().catch(() => "UNKNOWN"),
+          contract.name().catch(() => "Unknown Token"),
+          contract.decimals().catch(() => 18),
+        ]);
+
+        const symbolStr = typeof symbol === "string" ? symbol.trim() : "";
+        if (!symbolStr || symbolStr === "UNKNOWN") {
+          setTokenVerificationState("error");
+          return;
+        }
+        setVerifiedToken({ address, symbol: symbolStr, name, decimals });
+        setTokenVerificationState("success");
+      } else if (typeof window !== "undefined" && window.ethereum) {
+        const provider = new BrowserProvider(window.ethereum);
+        const contract = new ethers.Contract(address, ERC20_ABI, provider);
+
+        const [symbol, name, decimals] = await Promise.all([
+          contract.symbol().catch(() => "UNKNOWN"),
+          contract.name().catch(() => "Unknown Token"),
+          contract.decimals().catch(() => 18),
+        ]);
+
+        const symbolStr = typeof symbol === "string" ? symbol.trim() : "";
+        if (!symbolStr || symbolStr === "UNKNOWN") {
+          setTokenVerificationState("error");
+          return;
+        }
+        setVerifiedToken({ address, symbol: symbolStr, name, decimals });
+        setTokenVerificationState("success");
+      } else {
+        console.error("No Ethereum provider found");
+        setTokenVerificationState("error");
+      }
+    } catch (error) {
+      console.error("Verification failed:", error);
+      setTokenVerificationState("error");
+    }
+  }, []);
+
   useEffect(() => {
     const urlClientAddress = searchParams.get("clientAddress");
     const urlTokenAddress = searchParams.get("tokenAddress");
@@ -192,7 +247,7 @@ function CreateInvoice() {
     };
 
     processUrlToken();
-  }, [searchParams, tokens, loadingTokens, account.address, chainIdForTokens]);
+  }, [searchParams, tokens, loadingTokens, account.address, chainIdForTokens, verifyToken]);
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
@@ -269,51 +324,6 @@ function CreateInvoice() {
         amount: "",
       },
     ]);
-  };
-
-  /**
-   * Fetches ERC-20 token symbol, name, and decimals.
-   * When chainIdForRpc is provided (e.g. from invoice link URL), uses public RPC so it works without a connected wallet.
-   */
-  const verifyToken = async (address, chainIdForRpc) => {
-    setTokenVerificationState("verifying");
-
-    try {
-      const rpcUrl = chainIdForRpc && CHAIN_ID_TO_PUBLIC_RPC[chainIdForRpc];
-      const usePublicRpc = !!rpcUrl;
-
-      if (usePublicRpc) {
-        const provider = new JsonRpcProvider(rpcUrl);
-        const contract = new ethers.Contract(address, ERC20_ABI, provider);
-
-        const [symbol, name, decimals] = await Promise.all([
-          contract.symbol().catch(() => "UNKNOWN"),
-          contract.name().catch(() => "Unknown Token"),
-          contract.decimals().catch(() => 18),
-        ]);
-
-        setVerifiedToken({ address, symbol, name, decimals });
-        setTokenVerificationState("success");
-      } else if (typeof window !== "undefined" && window.ethereum) {
-        const provider = new BrowserProvider(window.ethereum);
-        const contract = new ethers.Contract(address, ERC20_ABI, provider);
-
-        const [symbol, name, decimals] = await Promise.all([
-          contract.symbol().catch(() => "UNKNOWN"),
-          contract.name().catch(() => "Unknown Token"),
-          contract.decimals().catch(() => 18),
-        ]);
-
-        setVerifiedToken({ address, symbol, name, decimals });
-        setTokenVerificationState("success");
-      } else {
-        console.error("No Ethereum provider found");
-        setTokenVerificationState("error");
-      }
-    } catch (error) {
-      console.error("Verification failed:", error);
-      setTokenVerificationState("error");
-    }
   };
 
   const createInvoiceRequest = async (data) => {
@@ -1045,6 +1055,7 @@ function CreateInvoice() {
                           placeholder="Enter Description"
                           className="w-full border-gray-300 text-black"
                           name="description"
+                          value={itemData[index]?.description ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1059,6 +1070,7 @@ function CreateInvoice() {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="qty"
+                            value={itemData[index]?.qty ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1071,6 +1083,7 @@ function CreateInvoice() {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="unitPrice"
+                            value={itemData[index]?.unitPrice ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1086,6 +1099,7 @@ function CreateInvoice() {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="discount"
+                            value={itemData[index]?.discount ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1098,6 +1112,7 @@ function CreateInvoice() {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="tax"
+                            value={itemData[index]?.tax ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1113,12 +1128,12 @@ function CreateInvoice() {
                           className="w-full bg-gray-100 border-gray-300 text-gray-700 font-semibold"
                           name="amount"
                           disabled
-                          value={
-                            (parseFloat(itemData[index].qty) || 0) *
-                              (parseFloat(itemData[index].unitPrice) || 0) -
-                            (parseFloat(itemData[index].discount) || 0) +
-                            (parseFloat(itemData[index].tax) || 0)
-                          }
+                          value={String(
+                            (parseFloat(itemData[index]?.qty) || 0) *
+                              (parseFloat(itemData[index]?.unitPrice) || 0) -
+                              (parseFloat(itemData[index]?.discount) || 0) +
+                              (parseFloat(itemData[index]?.tax) || 0)
+                          )}
                         />
                       </div>
 
@@ -1159,6 +1174,7 @@ function CreateInvoice() {
                           placeholder="Enter Description"
                           className="w-full border-gray-300 text-black"
                           name="description"
+                          value={itemData[index]?.description ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1168,6 +1184,7 @@ function CreateInvoice() {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="qty"
+                          value={itemData[index]?.qty ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1177,6 +1194,7 @@ function CreateInvoice() {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="unitPrice"
+                          value={itemData[index]?.unitPrice ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1186,6 +1204,7 @@ function CreateInvoice() {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="discount"
+                          value={itemData[index]?.discount ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1195,6 +1214,7 @@ function CreateInvoice() {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="tax"
+                          value={itemData[index]?.tax ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1205,12 +1225,12 @@ function CreateInvoice() {
                           className="w-full bg-gray-50 border-gray-300 text-gray-700 py-2"
                           name="amount"
                           disabled
-                          value={
-                            (parseFloat(itemData[index].qty) || 0) *
-                              (parseFloat(itemData[index].unitPrice) || 0) -
-                            (parseFloat(itemData[index].discount) || 0) +
-                            (parseFloat(itemData[index].tax) || 0)
-                          }
+                          value={String(
+                            (parseFloat(itemData[index]?.qty) || 0) *
+                              (parseFloat(itemData[index]?.unitPrice) || 0) -
+                              (parseFloat(itemData[index]?.discount) || 0) +
+                              (parseFloat(itemData[index]?.tax) || 0)
+                          )}
                         />
                       </div>
 
