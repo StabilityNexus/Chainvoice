@@ -317,66 +317,8 @@ function CreateInvoice() {
   };
 
   
-const verifyToken = async (address, targetChainId = null) => {
-  setTokenVerificationState("verifying");
-  
-  // Determine which chain to verify on
-  const chainIdToUse = targetChainId || searchParams.get("chain") || account?.chainId;
 
-  try {
-    let provider;
-    
-
-    // for UNKNOWN symbol and name unknown update this rpc with some better one
-    const rpcUrls = {
-      1: "https://eth.llamarpc.com",                 // Ethereum (very fast)
-      61: "https://etc.rivet.link",                  // Ethereum Classic
-      137: "https://polygon.llamarpc.com",           // Polygon
-      56: "https://bsc.llamarpc.com",                // BNB Smart Chain
-      8453: "https://base.llamarpc.com",             // Base
-      11155111: "https://rpc.ankr.com/eth_sepolia",  // Sepolia
-    };
-    if (typeof window !== "undefined" && isConnected) {
-      // Fallback to wallet provider if no chainId specified
-      provider = new BrowserProvider(walletClient);
-    // If chainId is available, always use public RPC (works without wallet)
-    } else if (chainIdToUse) {
-      const rpcUrl = rpcUrls[chainIdToUse];
-      
-      if (!rpcUrl) {
-        console.error(`Unsupported chain ${chainIdToUse}. Supported chains: Ethereum (1), Ethereum Classic (61), Polygon (137), BNB Smart Chain (56), Base (8453), Sepolia (11155111)`);
-        setTokenVerificationState("error");
-        return;
-      }
-      
-      // Use JsonRpcProvider with timeout for faster response
-      provider = new ethers.JsonRpcProvider(rpcUrl, Number(chainIdToUse));
-    }
-
-    const contract = new ethers.Contract(address, ERC20_ABI, provider);
-  
-    const [symbol, name, decimals] = await Promise.all([
-        contract.symbol().catch(() => "UNKNOWN"),
-        contract.name().catch(() => "Unknown Token"),
-        contract.decimals().catch(() => 18),
-    ]);
-
-    console.log([symbol, name, decimals]);
-    setVerifiedToken({ 
-      address, 
-      symbol, 
-      name, 
-      decimals: Number(decimals),
-      chainId: chainIdToUse 
-    });
-    setTokenVerificationState("success");
-  } catch (error) {
-    console.error("Verification failed:", error);
-    setTokenVerificationState("error");
-  }
-};
-
-const validateClientAddress = (value) => {
+const validateClientAddress = useCallback((value) => {
   // Empty input, no error
   if (!value) {
     setClientAddressError("");
@@ -403,25 +345,20 @@ const validateClientAddress = (value) => {
 
   // Valid other wallet
   setClientAddressError("");
-};
+}, [account.address]);
 
   const createInvoiceRequest = async (data) => {
     if (!isConnected || !walletClient) {
       alert("Please connect your wallet");
       return;
     }
-// Validate client address
-    if (!data.clientAddress || !ethers.isAddress(data.clientAddress)) {
-  setClientAddressError("Please enter a valid wallet address");
-  return;
- }
 
-    // Check for self-invoicing
-    if (data.clientAddress.toLowerCase() === account.address.toLowerCase()) {
-  setClientAddressError("You cannot create an invoice for your own wallet");
-  return;
-}
-   setClientAddressError("");
+    validateClientAddress(data.clientAddress);
+    if (clientAddressError) {
+      return;
+    }
+
+    setClientAddressError("");
     try {
       setLoading(true);
       const provider = new BrowserProvider(walletClient);
@@ -808,6 +745,9 @@ const validateClientAddress = (value) => {
                          setClientAddress(value);
                       validateClientAddress(value);
                      }}
+                     onBlur={(e) => {
+    validateClientAddress(e.target.value);
+  }}
               />
               {clientAddressError && (
                  <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
