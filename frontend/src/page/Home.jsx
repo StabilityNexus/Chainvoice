@@ -11,12 +11,26 @@ import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import DraftsIcon from "@mui/icons-material/Drafts";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import LinkIcon from "@mui/icons-material/Link";
+import MenuItem from "@mui/material/MenuItem";
+import FormControl from "@mui/material/FormControl";
+import Select from "@mui/material/Select";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { FileStack, CreditCard, Layers3, PlusCircle, FileStackIcon } from "lucide-react";
 
 export default function Home() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Get current active route for dropdown
+  const getCurrentRoute = () => {
+    const currentPath = location.pathname;
+    const matchedItem = menuItems.find(item => currentPath.includes(item.route));
+    return matchedItem ? matchedItem.route : 'create';
+  };
+
+  const handleDropdownChange = (event) => {
+    navigate(event.target.value);
+  };
 
   const menuItems = [
     {
@@ -53,7 +67,7 @@ export default function Home() {
 
   return (
     <>
-      <div className="px-2 sm:px-4 md:px-10">
+      <div className="px-2 sm:px-4 md:px-6 lg:px-10">
         <header className="mb-2">
           <h1 className="text-xl sm:text-2xl mt-4 text-white">
             Welcome <span className="font-medium text-green-400">Back!</span>
@@ -64,76 +78,71 @@ export default function Home() {
           sx={{
             display: "flex",
             flexDirection: { xs: "column", lg: "row" },
-            minHeight: "calc(100vh - 180px)",
+            minHeight: { xs: "auto", lg: "calc(100vh - 180px)" },
             gap: { xs: "12px", sm: "24px" },
           }}
         >
-          {/* Mobile Horizontal Menu */}
+          {/* Mobile Dropdown Menu */}
           <Box
-            className="lg:hidden overflow-x-auto scrollbar-hide"
+            className="lg:hidden"
             sx={{
               width: "100%",
               flexShrink: 0,
             }}
           >
-            <List
-              sx={{
-                display: "flex",
-                flexDirection: "row",
-                gap: "8px",
-                padding: "8px 0",
-                minWidth: "max-content",
-              }}
-            >
-              {menuItems.map((item) => (
-                <ListItem
-                  key={item.route}
-                  disablePadding
-                  className="text-white"
-                  sx={{ width: "auto" }}
-                >
-                  <ListItemButton
-                    onClick={() => navigate(item.route)}
-                    selected={location.pathname.includes(item.route)}
-                    sx={{
-                      borderRadius: "8px",
-                      transition: "all 0.2s ease",
-                      backgroundColor: location.pathname.includes(item.route)
-                        ? "rgba(255, 255, 255, 0.08)"
-                        : "transparent",
-                      "&:hover": {
-                        backgroundColor: "rgba(255, 255, 255, 0.05)",
+            <FormControl fullWidth>
+              <Select
+                value={getCurrentRoute()}
+                onChange={handleDropdownChange}
+                sx={{
+                  backgroundColor: "rgba(255, 255, 255, 0.05)",
+                  color: "white",
+                  borderRadius: "8px",
+                  "& .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "rgba(255, 255, 255, 0.1)",
+                  },
+                  "&:hover .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "rgba(255, 255, 255, 0.2)",
+                  },
+                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
+                    borderColor: "rgba(255, 255, 255, 0.3)",
+                  },
+                  "& .MuiSvgIcon-root": {
+                    color: "white",
+                  },
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      backgroundColor: "#1f2937",
+                      color: "white",
+                      "& .MuiMenuItem-root": {
+                        "&:hover": {
+                          backgroundColor: "rgba(255, 255, 255, 0.1)",
+                        },
+                        "&.Mui-selected": {
+                          backgroundColor: "rgba(255, 255, 255, 0.15)",
+                          "&:hover": {
+                            backgroundColor: "rgba(255, 255, 255, 0.2)",
+                          },
+                        },
                       },
-                      "&.Mui-selected": {
-                        borderBottom: "3px solid " + item.color,
-                      },
-                      padding: "8px 12px",
-                      minWidth: "fit-content",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    <ListItemIcon
-                      sx={{
-                        minWidth: "28px",
-                        color: item.color,
-                        fontSize: "1.1rem",
-                      }}
-                    >
-                      {item.icon}
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={item.text}
-                      primaryTypographyProps={{
-                        fontSize: "0.875rem",
-                        fontWeight: location.pathname.includes(item.route)
-                          ? 600
-                          : 500,
-                      }}
-                    />
-                  </ListItemButton>
-                </ListItem>
-              ))}
-            </List>
+                    },
+                  },
+                }}
+              >
+                {menuItems.map((item) => (
+                  <MenuItem key={item.route} value={item.route}>
+                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                      <Box sx={{ color: item.color, display: "flex", alignItems: "center" }}>
+                        {item.icon}
+                      </Box>
+                      <span>{item.text}</span>
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
           </Box>
 
           {/* Desktop Vertical Menu */}
@@ -214,8 +223,8 @@ export default function Home() {
             sx={{
               flexGrow: 1,
               px: { xs: 0, sm: 1 },
-              maxHeight: "calc(100vh - 180px)",
-              overflowY: "auto",
+              maxHeight: { xs: "none", lg: "calc(100vh - 180px)" },
+              overflowY: { xs: "visible", lg: "auto" },
               scrollbarWidth: "none",
               "&::-webkit-scrollbar": {
                 display: "none",

@@ -5,6 +5,7 @@ import { SiEthereum } from "react-icons/si";
 import TokenCarousel from "@/components/TokenCrousel";
 
 function Landing() {
+  const year = new Date().getFullYear();
   return (
     <div className="bg-[#0F1015] text-white min-h-screen">
       {/* Hero Section */}
@@ -277,7 +278,7 @@ function Landing() {
             </div>
 
             <p className="text-gray-400 text-lg text-center">
-              © 2025 Stability Nexus. All rights reserved.
+              © {year} Stability Nexus. All rights reserved.
             </p>
 
             <div className="flex items-center gap-9">
