@@ -19,8 +19,8 @@ jobs:
       - name: Calculate lines changed
         id: calc
         run: |
-          LINES_CHANGED=$(( ${{ github.event.pull_request.additions }} + ${{ github.event.pull_request.deletions }} ))
-          echo "lines_changed=$LINES_CHANGED" >> $GITHUB_OUTPUT
+          lines_changed=$(( ${{ github.event.pull_request.additions }} + ${{ github.event.pull_request.deletions }} ))
+          echo "lines_changed=${lines_changed}" >> "$GITHUB_OUTPUT"
   
   update-pr-count:
     needs: calculate-changes
@@ -31,6 +31,6 @@ jobs:
       repo_name: ${{ github.repository }}
       pr_author: ${{ github.event.pull_request.user.login }}
       pr_title: ${{ github.event.pull_request.title }}
-      lines_changed: ${{ needs.calculate-changes.outputs.lines_changed }}
+      lines_changed: "${{ needs.calculate-changes.outputs.lines_changed }}"
     secrets:
       GIST_PAT: ${{ secrets.GIST_PAT }}
