@@ -13,12 +13,12 @@ permissions:
   issues: write
 
 jobs:
-  # Request Discord ID and wallet from first-time contributors
+  # Request Discord ID and wallet from contributors
   request-info:
     if: |
       github.event_name == 'pull_request_target' && 
       github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.labels.*.name, 'first-time-contributor')
+      github.repository_owner == 'StabilityNexus'
     uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-request-info.yml@main
     with:
       pr_number: ${{ github.event.pull_request.number }}
