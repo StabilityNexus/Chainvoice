@@ -113,6 +113,7 @@ contract Chainvoice {
     ) external {
         if (to == address(0)) revert ZeroAddress();
         if (to == msg.sender) revert SelfInvoicing();
+        if (amountDue == 0) revert InvalidAmount();
 
         if (tokenAddress != address(0)) {
             if (tokenAddress.code.length == 0) revert NotContract();
