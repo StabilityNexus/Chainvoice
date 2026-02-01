@@ -49,9 +49,8 @@ contract Chainvoice {
         bool isPaid;
         bool isCancelled;
         string encryptedInvoiceData; // Base64-encoded ciphertext
-        string encryptedHash;
-        // Content hash or integrity ref
-    }
+        string encryptedHash; // Content hash or integrity ref
+     }
 
     InvoiceDetails[] public invoices;
     mapping(address => uint256[]) public sentInvoices;
