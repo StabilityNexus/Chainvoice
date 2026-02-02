@@ -58,6 +58,7 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
   56: "https://bsc-dataseed.binance.org",
   8453: "https://mainnet.base.org",
   11155111: "https://rpc.ankr.com/eth_sepolia",
+  5115: "https://rpc.testnet.citrea.xyz",
 };
 
 function CreateInvoice() {

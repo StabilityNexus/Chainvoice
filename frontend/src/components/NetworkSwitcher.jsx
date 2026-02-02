@@ -9,6 +9,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { FaEthereum } from "react-icons/fa";
 import { SiBinance, SiPolygon, SiCoinbase } from "react-icons/si";
 import { cn } from "@/lib/utils";
+import { FaBitcoin } from "react-icons/fa";
 
 const CHAIN_ICONS = {
   1: <FaEthereum className="h-5 w-5 text-blue-400" />, // Ethereum
@@ -17,6 +18,7 @@ const CHAIN_ICONS = {
   56: <SiBinance className="h-5 w-5 text-yellow-500" />, // BSC
   8453: <SiCoinbase className="h-5 w-5 text-blue-500" />, // Base
   11155111: <FaEthereum className="h-5 w-5 text-gray-400" />, // Sepolia
+  5115: <FaBitcoin className="h-5 w-5 text-orange-500" />, //Citrea Testnet
 };
 
 import { useEffect } from "react";

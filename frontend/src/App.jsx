@@ -23,7 +23,7 @@ import CreateInvoice from "./page/CreateInvoice";
 import SentInvoice from "./page/SentInvoice";
 import ReceivedInvoice from "./page/ReceivedInvoice";
 
-const AllChains = [mainnet, classic, base, bsc, polygon, sepolia];
+const AllChains = [mainnet, classic, base, bsc, polygon, sepolia, citreaTestnet];
 
 export const config = getDefaultConfig({
   appName: "Chainvoice",
@@ -35,7 +35,7 @@ const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
 import GenerateLink from "./page/GenerateLink";
 import CreateInvoicesBatch from "./page/CreateInvoicesBatch";
-import BatchPayment from "./page/BatchPayment"; // New import needed
+import BatchPayment from "./page/BatchPayment";
 import NotFound from "./page/NotFound";
 
 function App() {
@@ -69,7 +69,9 @@ function App() {
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider
             coolMode
-            // initialChain={citreaTestnet}
+            // initialChain={citreaTestnet} 
+            // Keep this commented out or removed. 
+            // If undefined, RainbowKit defaults to the user's current chain (if supported).
             theme={darkTheme({
               accentColor: "#22c55e",
               accentColorForeground: "white",
