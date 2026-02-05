@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import {
@@ -6,6 +6,7 @@ import {
   Contract,
   ethers,
   formatUnits,
+  JsonRpcProvider,
   parseUnits,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
@@ -49,18 +50,32 @@ import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
 import { useTokenList } from "@/hooks/useTokenList";
 
+/** Public RPC URLs by chain ID for token verification when visitor has no wallet (e.g. opening invoice request link in incognito). */
+const CHAIN_ID_TO_PUBLIC_RPC = {
+  1: "https://eth.llamarpc.com",
+  61: "https://etc.blockscout.com",
+  137: "https://polygon-rpc.com",
+  56: "https://bsc-dataseed.binance.org",
+  8453: "https://mainnet.base.org",
+  11155111: "https://rpc.ankr.com/eth_sepolia",
+};
+
 function CreateInvoice() {
   const { data: walletClient } = useWalletClient();
   const { isConnected } = useAccount();
   const account = useAccount();
+  const [searchParams] = useSearchParams();
+  const urlChainParam = searchParams.get("chain");
+  const chainIdForTokens =
+    urlChainParam && !Number.isNaN(parseInt(urlChainParam, 10))
+      ? parseInt(urlChainParam, 10)
+      : account?.chainId ?? 1;
+  const { tokens, loading: loadingTokens, error: tokenListError } = useTokenList(chainIdForTokens);
   const [dueDate, setDueDate] = useState(new Date());
   const [issueDate, setIssueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
-  const { tokens, loading: loadingTokens, error: tokenListError } = useTokenList(account?.chainId || 1);
   const navigate = useNavigate();
   const litClientRef = useRef(null);
-
-  const [searchParams] = useSearchParams();
   const [clientAddress, setClientAddress] = useState("");
   const [userCountry, setUserCountry] = useState("");
   const [clientCountry, setClientCountry] = useState("");
@@ -74,6 +89,9 @@ function CreateInvoice() {
   const [verifiedToken, setVerifiedToken] = useState(null);
 
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
+  // Holds inline validation error for client wallet address
+// Used instead of browser alerts for better, non blocking UX
+  const [clientAddressError, setClientAddressError] = useState("");
 
   // const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"]; //sepolia based chainvoice test token (CIN)
 
@@ -90,14 +108,78 @@ function CreateInvoice() {
 
   const [totalAmountDue, setTotalAmountDue] = useState(0);
 
+  /**
+   * Fetches ERC-20 token symbol, name, and decimals.
+   * When chainIdForRpc is provided (e.g. from invoice link URL), uses public RPC so it works without a connected wallet.
+   */
+  const verifyToken = useCallback(async (address, chainIdForRpc) => {
+    setTokenVerificationState("verifying");
+    setVerifiedToken(null);
+
+    try {
+      let provider;
+      const rpcUrl = chainIdForRpc && CHAIN_ID_TO_PUBLIC_RPC[chainIdForRpc];
+      if (rpcUrl) {
+        provider = new JsonRpcProvider(rpcUrl);
+      } else if (typeof window !== "undefined" && window.ethereum) {
+        provider = new BrowserProvider(window.ethereum);
+      } else {
+        console.error("No Ethereum provider found");
+        setTokenVerificationState("error");
+        return;
+      }
+
+      const contract = new ethers.Contract(address, ERC20_ABI, provider);
+      const [symbol, name, decimals] = await Promise.all([
+        contract.symbol().catch(() => "UNKNOWN"),
+        contract.name().catch(() => "Unknown Token"),
+        contract.decimals().catch(() => 18),
+      ]);
+
+      const symbolStr = typeof symbol === "string" ? symbol.trim() : "";
+      if (!symbolStr || symbolStr === "UNKNOWN") {
+        setTokenVerificationState("error");
+        return;
+      }
+      setVerifiedToken({ address, symbol: symbolStr, name, decimals });
+      setTokenVerificationState("success");
+    } catch (error) {
+      console.error("Verification failed:", error);
+      setTokenVerificationState("error");
+    }
+  }, []);
+
   useEffect(() => {
-    console.log("account address : ", account.address);
     const urlClientAddress = searchParams.get("clientAddress");
     const urlTokenAddress = searchParams.get("tokenAddress");
     const isCustomFromURL = searchParams.get("customToken") === "true";
+    const urlAmount = searchParams.get("amount");
+    const urlDescription = searchParams.get("description");
 
     if (urlClientAddress) {
       setClientAddress(urlClientAddress);
+      validateClientAddress(urlClientAddress);
+    }
+
+    if (urlDescription || urlAmount) {
+      setItemData((prev) => {
+        const first = prev[0] ?? {
+          description: "",
+          qty: "",
+          unitPrice: "",
+          discount: "",
+          tax: "",
+          amount: "",
+        };
+        const isFirstLineEmpty = !first.description && !first.unitPrice;
+        if (!isFirstLineEmpty) return prev;
+        const updatedFirst = {
+          ...first,
+          ...(urlDescription && { description: urlDescription }),
+          ...(urlAmount && { qty: "1", unitPrice: urlAmount }),
+        };
+        return [updatedFirst, ...prev.slice(1)];
+      });
     }
 
     const processUrlToken = async () => {
@@ -105,7 +187,7 @@ function CreateInvoice() {
         if (isCustomFromURL) {
           setUseCustomToken(true);
           setCustomTokenAddress(urlTokenAddress);
-          verifyToken(urlTokenAddress);
+          verifyToken(urlTokenAddress, chainIdForTokens);
         } else {
           const preselectedToken = tokens.find(
             (token) =>
@@ -119,10 +201,9 @@ function CreateInvoice() {
             if (decimals === undefined || decimals === null) {
               try {
                 if (typeof window !== "undefined" && window.ethereum) {
-                   const provider = new BrowserProvider(window.ethereum);
-                   const contract = new ethers.Contract(urlTokenAddress, ERC20_ABI, provider);
-                   // Try to fetch decimals
-                   decimals = await contract.decimals(); 
+                  const provider = new BrowserProvider(window.ethereum);
+                  const contract = new ethers.Contract(urlTokenAddress, ERC20_ABI, provider);
+                  decimals = await contract.decimals();
                 }
               } catch (err) {
                 console.warn("Failed to fetch decimals for preselected token:", err);
@@ -140,24 +221,23 @@ function CreateInvoice() {
               });
               setUseCustomToken(false);
             } else {
-              // Fallback to manual verification if we can't determine decimals safely
-              console.warn("Could not determine token decimals, falling back to manual verification.");
+              // Fallback to manual verification when decimals cannot be determined from list or wallet
               setUseCustomToken(true);
               setCustomTokenAddress(urlTokenAddress);
-              verifyToken(urlTokenAddress);
+              verifyToken(urlTokenAddress, chainIdForTokens);
             }
           } else {
-            // Not in list, treat as custom
+            // Not in list: fetch token info via public RPC (works without wallet) or wallet
             setUseCustomToken(true);
             setCustomTokenAddress(urlTokenAddress);
-            verifyToken(urlTokenAddress);
+            verifyToken(urlTokenAddress, chainIdForTokens);
           }
         }
       }
     };
 
     processUrlToken();
-  }, [searchParams, walletClient, tokens, loadingTokens, account.address]);
+  }, [searchParams, tokens, loadingTokens, account.address, chainIdForTokens, verifyToken]);
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
@@ -237,64 +317,35 @@ function CreateInvoice() {
   };
 
   
-const verifyToken = async (address, targetChainId = null) => {
-  setTokenVerificationState("verifying");
-  
-  // Determine which chain to verify on
-  const chainIdToUse = targetChainId || searchParams.get("chain") || account?.chainId;
 
-  try {
-    let provider;
-    
-
-    // for UNKNOWN symbol and name unknown update this rpc with some better one
-    const rpcUrls = {
-      1: "https://eth.llamarpc.com",                 // Ethereum (very fast)
-      61: "https://etc.rivet.link",                  // Ethereum Classic
-      137: "https://polygon.llamarpc.com",           // Polygon
-      56: "https://bsc.llamarpc.com",                // BNB Smart Chain
-      8453: "https://base.llamarpc.com",             // Base
-      11155111: "https://rpc.ankr.com/eth_sepolia",  // Sepolia
-    };
-    if (typeof window !== "undefined" && isConnected) {
-      // Fallback to wallet provider if no chainId specified
-      provider = new BrowserProvider(walletClient);
-    // If chainId is available, always use public RPC (works without wallet)
-    } else if (chainIdToUse) {
-      const rpcUrl = rpcUrls[chainIdToUse];
-      
-      if (!rpcUrl) {
-        console.error(`Unsupported chain ${chainIdToUse}. Supported chains: Ethereum (1), Ethereum Classic (61), Polygon (137), BNB Smart Chain (56), Base (8453), Sepolia (11155111)`);
-        setTokenVerificationState("error");
-        return;
-      }
-      
-      // Use JsonRpcProvider with timeout for faster response
-      provider = new ethers.JsonRpcProvider(rpcUrl, Number(chainIdToUse));
-    }
-
-    const contract = new ethers.Contract(address, ERC20_ABI, provider);
-  
-    const [symbol, name, decimals] = await Promise.all([
-        contract.symbol().catch(() => "UNKNOWN"),
-        contract.name().catch(() => "Unknown Token"),
-        contract.decimals().catch(() => 18),
-    ]);
-
-    console.log([symbol, name, decimals]);
-    setVerifiedToken({ 
-      address, 
-      symbol, 
-      name, 
-      decimals: Number(decimals),
-      chainId: chainIdToUse 
-    });
-    setTokenVerificationState("success");
-  } catch (error) {
-    console.error("Verification failed:", error);
-    setTokenVerificationState("error");
+const validateClientAddress = useCallback((value) => {
+  // Empty input, no error
+  if (!value) {
+    setClientAddressError("");
+    return;
   }
-};
+
+  // Do not validate until it looks like a full EVM address
+  if (!value.startsWith("0x") || value.length < 42) {
+    setClientAddressError("");
+    return;
+  }
+
+  // Invalid EVM address
+  if (!ethers.isAddress(value)) {
+    setClientAddressError("Please enter a valid wallet address");
+    return;
+  }
+
+  // Self-invoicing check
+  if (value.toLowerCase() === account.address?.toLowerCase()) {
+    setClientAddressError("You cannot create an invoice for your own wallet");
+    return;
+  }
+
+  // Valid other wallet
+  setClientAddressError("");
+}, [account.address]);
 
   const createInvoiceRequest = async (data) => {
     if (!isConnected || !walletClient) {
@@ -302,12 +353,23 @@ const verifyToken = async (address, targetChainId = null) => {
       return;
     }
 
+    validateClientAddress(data.clientAddress);
+    if (clientAddressError) {
+      return;
+    }
+
+    setClientAddressError("");
     try {
       setLoading(true);
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
 
       const paymentToken = useCustomToken ? verifiedToken : selectedToken;
+      if (!paymentToken?.address) {
+        alert("Please select or verify a payment token.");
+        setLoading(false);
+        return;
+      }
 
       const invoicePayload = {
         amountDue: totalAmountDue.toString(),
@@ -679,9 +741,20 @@ const verifyToken = async (address, targetChainId = null) => {
                 className="w-full mb-4 border-gray-300 text-black"
                 name="clientAddress"
                 value={clientAddress}
-                onChange={(e) => setClientAddress(e.target.value)}
+                onChange={(e) => {const value = e.target.value;
+                         setClientAddress(value);
+                      validateClientAddress(value);
+                     }}
+                     onBlur={(e) => {
+    validateClientAddress(e.target.value);
+  }}
               />
-
+              {clientAddressError && (
+                 <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                    <AlertCircle className="h-4 w-4" />
+                        <span>{clientAddressError}</span>
+                            </div>
+                               )}
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">
@@ -824,7 +897,7 @@ const verifyToken = async (address, targetChainId = null) => {
                             decimals: 18,
                           });
                         }}
-                        chainId={account?.chainId || 1}
+                        chainId={chainIdForTokens}
                         disabled={loading}
                         className="w-full"
                         allowCustom={false} // Remove custom token option from picker since we have toggle
@@ -1025,6 +1098,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="Enter Description"
                           className="w-full border-gray-300 text-black"
                           name="description"
+                          value={itemData[index]?.description ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1039,6 +1113,7 @@ const verifyToken = async (address, targetChainId = null) => {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="qty"
+                            value={itemData[index]?.qty ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1051,6 +1126,7 @@ const verifyToken = async (address, targetChainId = null) => {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="unitPrice"
+                            value={itemData[index]?.unitPrice ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1066,6 +1142,7 @@ const verifyToken = async (address, targetChainId = null) => {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="discount"
+                            value={itemData[index]?.discount ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1078,6 +1155,7 @@ const verifyToken = async (address, targetChainId = null) => {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="tax"
+                            value={itemData[index]?.tax ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
                         </div>
@@ -1093,12 +1171,12 @@ const verifyToken = async (address, targetChainId = null) => {
                           className="w-full bg-gray-100 border-gray-300 text-gray-700 font-semibold"
                           name="amount"
                           disabled
-                          value={
-                            (parseFloat(itemData[index].qty) || 0) *
-                              (parseFloat(itemData[index].unitPrice) || 0) -
-                            (parseFloat(itemData[index].discount) || 0) +
-                            (parseFloat(itemData[index].tax) || 0)
-                          }
+                          value={String(
+                            (parseFloat(itemData[index]?.qty) || 0) *
+                              (parseFloat(itemData[index]?.unitPrice) || 0) -
+                              (parseFloat(itemData[index]?.discount) || 0) +
+                              (parseFloat(itemData[index]?.tax) || 0)
+                          )}
                         />
                       </div>
 
@@ -1139,6 +1217,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="Enter Description"
                           className="w-full border-gray-300 text-black"
                           name="description"
+                          value={itemData[index]?.description ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1148,6 +1227,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="qty"
+                          value={itemData[index]?.qty ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1157,6 +1237,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="unitPrice"
+                          value={itemData[index]?.unitPrice ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1166,6 +1247,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="discount"
+                          value={itemData[index]?.discount ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1175,6 +1257,7 @@ const verifyToken = async (address, targetChainId = null) => {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="tax"
+                          value={itemData[index]?.tax ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
@@ -1185,12 +1268,12 @@ const verifyToken = async (address, targetChainId = null) => {
                           className="w-full bg-gray-50 border-gray-300 text-gray-700 py-2"
                           name="amount"
                           disabled
-                          value={
-                            (parseFloat(itemData[index].qty) || 0) *
-                              (parseFloat(itemData[index].unitPrice) || 0) -
-                            (parseFloat(itemData[index].discount) || 0) +
-                            (parseFloat(itemData[index].tax) || 0)
-                          }
+                          value={String(
+                            (parseFloat(itemData[index]?.qty) || 0) *
+                              (parseFloat(itemData[index]?.unitPrice) || 0) -
+                              (parseFloat(itemData[index]?.discount) || 0) +
+                              (parseFloat(itemData[index]?.tax) || 0)
+                          )}
                         />
                       </div>
 
