@@ -18,7 +18,7 @@ jobs:
       github.event_name == 'pull_request_target' &&
       github.event.action == 'opened' &&
       github.repository_owner == 'StabilityNexus'
-    uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-request-info.yml@main
+    uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-request-info.yml@test
     with:
       pr_number: ${{ github.event.pull_request.number }}
       repo_name: ${{ github.repository }}
@@ -51,7 +51,7 @@ jobs:
       github.event.action == 'closed' &&
       github.event.pull_request.merged == true &&
       github.repository_owner == 'StabilityNexus'
-    uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-process-response.yml@main
+    uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-process-response.yml@test
     with:
       pr_number: ${{ github.event.pull_request.number }}
       repo_name: ${{ github.repository }}
