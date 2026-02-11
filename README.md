@@ -169,6 +169,7 @@ Join our community for support, updates, and discussions:
 
 We welcome contributions! Please read our contributing guidelines and submit pull requests for any improvements.
 
+Before making or updating any smart contract changes, please review the [Smart Contract Contribution Guidelines](https://github.com/StabilityNexus/Chainvoice/blob/main/CONTRIBUTING.md) to ensure compliance with testing, design, and review requirements.
 
 <p align="center">
   <strong>Built with ❤️ by Stability Nexus.</strong>
