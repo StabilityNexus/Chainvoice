@@ -31,6 +31,6 @@ jobs:
       repo_name: ${{ github.repository }}
       pr_author: ${{ github.event.pull_request.user.login }}
       pr_title: ${{ github.event.pull_request.title }}
-      lines_changed: "${{ needs.calculate-changes.outputs.lines_changed }}"
+      lines_changed: ${{ needs.calculate-changes.outputs.lines_changed }}
     secrets:
       GIST_PAT: ${{ secrets.GIST_PAT }}

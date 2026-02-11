@@ -3,22 +3,21 @@ name: Contributor Onboarding
 
 on:
   pull_request_target:
-    types: [closed]
+    types: [opened, closed]
     branches: [main, master, develop, test]
-  issue_comment:
-    types: [created]
 
 permissions:
   pull-requests: write
   issues: write
+  contents: write
 
 jobs:
-  # Request Discord ID and wallet from first-time contributors
+  # Request Discord ID and wallet from contributors (on PR open)
   request-info:
     if: |
-      github.event_name == 'pull_request_target' && 
-      github.event.pull_request.merged == true &&
-      contains(github.event.pull_request.labels.*.name, 'first-time-contributor')
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'opened' &&
+      github.repository_owner == 'StabilityNexus'
     uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-request-info.yml@main
     with:
       pr_number: ${{ github.event.pull_request.number }}
@@ -27,17 +26,37 @@ jobs:
     secrets:
       GIST_PAT: ${{ secrets.GIST_PAT }}
   
-  # Process contributor response with Discord ID and wallet
-  process-response:
+  # Calculate lines changed for merged PRs
+  calculate-changes:
     if: |
-      github.event_name == 'issue_comment' &&
-      github.event.issue.pull_request != null &&
-      (contains(github.event.comment.body, 'discord:') || contains(github.event.comment.body, 'Discord:'))
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      github.repository_owner == 'StabilityNexus'
+    runs-on: ubuntu-latest
+    outputs:
+      lines_changed: ${{ steps.calc.outputs.lines_changed }}
+    steps:
+      - name: Calculate lines changed
+        id: calc
+        run: |
+          lines_changed=$(( ${{ github.event.pull_request.additions }} + ${{ github.event.pull_request.deletions }} ))
+          echo "lines_changed=${lines_changed}" >> "$GITHUB_OUTPUT"
+  
+  # Process contributor info from all PR comments (on PR merge)
+  process-response:
+    needs: calculate-changes
+    if: |
+      github.event_name == 'pull_request_target' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.merged == true &&
+      github.repository_owner == 'StabilityNexus'
     uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-process-response.yml@main
     with:
-      pr_number: ${{ github.event.issue.number }}
+      pr_number: ${{ github.event.pull_request.number }}
       repo_name: ${{ github.repository }}
-      comment_body: ${{ github.event.comment.body }}
-      commenter: ${{ github.event.comment.user.login }}
+      pr_author: ${{ github.event.pull_request.user.login }}
+      pr_title: ${{ github.event.pull_request.title }}
+      lines_changed: ${{ needs.calculate-changes.outputs.lines_changed }}
     secrets:
       GIST_PAT: ${{ secrets.GIST_PAT }}
