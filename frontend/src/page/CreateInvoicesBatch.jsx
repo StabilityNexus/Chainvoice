@@ -57,7 +57,7 @@ import CountryPicker from "@/components/CountryPicker";
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
-  const { isConnected } = useAccount();
+  const { isConnected, chainId } = useAccount();
   const account = useAccount();
   const [dueDate, setDueDate] = useState(new Date());
   const [issueDate, setIssueDate] = useState(new Date());
