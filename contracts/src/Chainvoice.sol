@@ -8,15 +8,38 @@ interface IERC20 {
 }
 
 contract Chainvoice {
-    // Errors
+    // ========== Errors ==========
+    // Existing
     error MixedTokenBatch();
     error InvalidBatchSize();
     error AlreadySettled();
     error NotAuthorizedPayer();
     error IncorrectNativeValue();
     error InsufficientAllowance();
+    
+    // New Custom Errors (Replacing Strings)
+    error Unauthorized();
+    error Reentrancy();
+    error ZeroAddress();
+    error SelfInvoicing();
+    error NotContract();
+    error InvalidToken();
+    error ArrayLengthMismatch();
+    error InvalidAmount();
+    error InvalidInvoiceId();
+    error NotInvoiceCreator();
+    error InvoiceNotCancellable();
+    error InvoiceAlreadyPaid();
+    error InvoiceCancelledError();
+    error IncorrectPaymentAmount();
+    error NativeTransferFailed();
+    error FeeMustBeNative();
+    error TokenTransferFailed();
+    error TreasuryNotSet();
+    error NoFeesAvailable();
+    error WithdrawFailed();
 
-    // Storage
+    // ========== Storage ==========
     struct InvoiceDetails {
         uint256 id;
         address from;
@@ -26,8 +49,8 @@ contract Chainvoice {
         bool isPaid;
         bool isCancelled;
         string encryptedInvoiceData; // Base64-encoded ciphertext
-        string encryptedHash;        // Content hash or integrity ref
-    }
+        string encryptedHash; // Content hash or integrity ref
+     }
 
     InvoiceDetails[] public invoices;
     mapping(address => uint256[]) public sentInvoices;
@@ -35,33 +58,32 @@ contract Chainvoice {
 
     address public owner;
     address public treasuryAddress;
-    uint256 public fee;                // native fee per invoice
-    uint256 public accumulatedFees;    // native fees accrued (for withdraw)
+    uint256 public fee; // native fee per invoice
+    uint256 public accumulatedFees; // native fees accrued (for withdraw)
 
-    // Events
+    // ========== Events ==========
     event InvoiceCreated(uint256 indexed id, address indexed from, address indexed to, address tokenAddress);
     event InvoicePaid(uint256 indexed id, address indexed from, address indexed to, uint256 amount, address tokenAddress);
     event InvoiceCancelled(uint256 indexed id, address indexed from, address indexed to, address tokenAddress);
-
     event InvoiceBatchCreated(address indexed creator, address indexed token, uint256 count, uint256[] ids);
     event InvoiceBatchPaid(address indexed payer, address indexed token, uint256 count, uint256 totalAmount, uint256[] ids);
 
-    // Constructor
+    // ========== Constructor ==========
     constructor() {
         owner = msg.sender;
         fee = 0.0005 ether;
     }
 
-    // Modifiers
+    // ========== Modifiers ==========
     modifier onlyOwner() {
-        require(msg.sender == owner, "Only owner can call");
+        if (msg.sender != owner) revert Unauthorized();
         _;
     }
 
     // Simple non-reentrancy guard
     bool private _entered;
     modifier nonReentrant() {
-        require(!_entered, "Reentrancy");
+        if (_entered) revert Reentrancy();
         _entered = true;
         _;
         _entered = false;
@@ -70,7 +92,7 @@ contract Chainvoice {
     // Constants
     uint256 public constant MAX_BATCH = 50;
 
-    // Internal utils
+    // ========== Internal Utils ==========
     function _isERC20(address token) internal view returns (bool) {
         if (token == address(0)) return false;
         if (token.code.length == 0) return false;
@@ -88,19 +110,19 @@ contract Chainvoice {
         string memory encryptedInvoiceData,
         string memory encryptedHash
     ) external {
-        require(to != address(0), "Recipient address is zero");
-        require(to != msg.sender, "Self-invoicing not allowed");
+        if (to == address(0)) revert ZeroAddress();
+        if (to == msg.sender) revert SelfInvoicing();
+        if (amountDue == 0) revert InvalidAmount();
 
         if (tokenAddress != address(0)) {
-            require(tokenAddress.code.length > 0, "Not a contract address");
+            if (tokenAddress.code.length == 0) revert NotContract();
             (bool success, ) = tokenAddress.staticcall(
                 abi.encodeWithSignature("balanceOf(address)", address(this))
             );
-            require(success, "Not an ERC20 token");
+            if (!success) revert InvalidToken();
         }
 
         uint256 invoiceId = invoices.length;
-
         invoices.push(
             InvoiceDetails({
                 id: invoiceId,
@@ -114,7 +136,6 @@ contract Chainvoice {
                 encryptedHash: encryptedHash
             })
         );
-
         sentInvoices[msg.sender].push(invoiceId);
         receivedInvoices[to].push(invoiceId);
 
@@ -131,29 +152,28 @@ contract Chainvoice {
     ) external {
         uint256 n = tos.length;
         if (n == 0 || n > MAX_BATCH) revert InvalidBatchSize();
-        require(
-            n == amountsDue.length &&
-            n == encryptedPayloads.length &&
-            n == encryptedHashes.length,
-            "Array length mismatch"
-        );
+        
+        if (
+            n != amountsDue.length ||
+            n != encryptedPayloads.length ||
+            n != encryptedHashes.length
+        ) revert ArrayLengthMismatch();
 
         if (tokenAddress != address(0)) {
-            require(tokenAddress.code.length > 0, "Not a contract address");
+             if (tokenAddress.code.length == 0) revert NotContract();
             (bool ok, ) = tokenAddress.staticcall(
                 abi.encodeWithSignature("balanceOf(address)", address(this))
             );
-            require(ok, "Not an ERC20 token");
+            if (!ok) revert InvalidToken();
         }
 
         uint256[] memory ids = new uint256[](n);
-
         for (uint256 i = 0; i < n; i++) {
             address to = tos[i];
-            require(to != address(0), "Recipient zero");
-            require(to != msg.sender, "Self-invoicing");
+            if (to == address(0)) revert ZeroAddress();
+            if (to == msg.sender) revert SelfInvoicing();
             uint256 amt = amountsDue[i];
-            require(amt > 0, "Amount zero");
+            if (amt == 0) revert InvalidAmount();
 
             uint256 invoiceId = invoices.length;
 
@@ -170,7 +190,6 @@ contract Chainvoice {
                     encryptedHash: encryptedHashes[i]
                 })
             );
-
             sentInvoices[msg.sender].push(invoiceId);
             receivedInvoices[to].push(invoiceId);
 
@@ -183,12 +202,12 @@ contract Chainvoice {
 
     // ========== Cancel single invoice ==========
     function cancelInvoice(uint256 invoiceId) external {
-        require(invoiceId < invoices.length, "Invalid invoice ID");
+        if (invoiceId >= invoices.length) revert InvalidInvoiceId();
         InvoiceDetails storage invoice = invoices[invoiceId];
 
-        require(msg.sender == invoice.from, "Only invoice creator can cancel");
-        require(!invoice.isPaid && !invoice.isCancelled, "Invoice not cancellable");
-
+        if (msg.sender != invoice.from) revert NotInvoiceCreator();
+        if (invoice.isPaid || invoice.isCancelled) revert InvoiceNotCancellable();
+        
         invoice.isCancelled = true;
 
         emit InvoiceCancelled(
@@ -201,29 +220,26 @@ contract Chainvoice {
 
     // ========== Pay single invoice ==========
     function payInvoice(uint256 invoiceId) external payable nonReentrant {
-        require(invoiceId < invoices.length, "Invalid invoice ID");
-
+        if (invoiceId >= invoices.length) revert InvalidInvoiceId();
         InvoiceDetails storage invoice = invoices[invoiceId];
-        require(msg.sender == invoice.to, "Not authorized");
-        require(!invoice.isPaid, "Already paid");
-        require(!invoice.isCancelled, "Invoice is cancelled");
+        
+        if (msg.sender != invoice.to) revert NotAuthorizedPayer();
+        if (invoice.isPaid) revert InvoiceAlreadyPaid();
+        if (invoice.isCancelled) revert InvoiceCancelledError();
 
         // Effects first for CEI (mark paid, bump fees), then interactions
         invoice.isPaid = true;
-
         if (invoice.tokenAddress == address(0)) {
-            require(msg.value == invoice.amountDue + fee, "Incorrect payment amount");
+            if (msg.value != invoice.amountDue + fee) revert IncorrectPaymentAmount();
             accumulatedFees += fee;
 
             (bool sent, ) = payable(invoice.from).call{value: invoice.amountDue}("");
-            require(sent, "Transfer failed");
+            if (!sent) revert NativeTransferFailed();
         } else {
-            require(msg.value == fee, "Must pay fee in native token");
-            require(
-                IERC20(invoice.tokenAddress).allowance(msg.sender, address(this)) >= invoice.amountDue,
-                "Insufficient allowance"
-            );
-
+            if (msg.value != fee) revert FeeMustBeNative();
+            if (IERC20(invoice.tokenAddress).allowance(msg.sender, address(this)) < invoice.amountDue) {
+                revert InsufficientAllowance();
+            }
             accumulatedFees += fee;
 
             bool transferSuccess = IERC20(invoice.tokenAddress).transferFrom(
@@ -231,7 +247,7 @@ contract Chainvoice {
                 invoice.from,
                 invoice.amountDue
             );
-            require(transferSuccess, "Token transfer failed");
+            if (!transferSuccess) revert TokenTransferFailed();
         }
 
         emit InvoicePaid(
@@ -247,24 +263,22 @@ contract Chainvoice {
     function payInvoicesBatch(uint256[] calldata invoiceIds) external payable nonReentrant {
         uint256 n = invoiceIds.length;
         if (n == 0 || n > MAX_BATCH) revert InvalidBatchSize();
-
         // Establish token for batch & initial checks
-        uint256 firstId = invoiceIds[0];                // FIX: index into the array
-        require(firstId < invoices.length, "Invalid id");
-
+        uint256 firstId = invoiceIds[0];
+        
+        if (firstId >= invoices.length) revert InvalidInvoiceId();
+        
         InvoiceDetails storage inv0 = invoices[firstId];
         if (msg.sender != inv0.to) revert NotAuthorizedPayer();
         if (inv0.isPaid || inv0.isCancelled) revert AlreadySettled();
-
         address token = inv0.tokenAddress;
 
         uint256 totalAmounts = 0;
         uint256 totalNativeFee = fee * n;
-
         // Validate and sum
         for (uint256 i = 0; i < n; i++) {
             uint256 id = invoiceIds[i];
-            require(id < invoices.length, "Invalid id");
+            if (id >= invoices.length) revert InvalidInvoiceId();
 
             InvoiceDetails storage inv = invoices[id];
 
@@ -280,23 +294,20 @@ contract Chainvoice {
             invoices[invoiceIds[i]].isPaid = true;
         }
         accumulatedFees += totalNativeFee;
-
         // Interactions
         if (token == address(0)) {
             // Native: must include amounts + total fee
             if (msg.value != (totalAmounts + totalNativeFee)) revert IncorrectNativeValue();
-
             // Pay each issuer
             for (uint256 i = 0; i < n; i++) {
                 InvoiceDetails storage inv = invoices[invoiceIds[i]];
                 (bool sent, ) = payable(inv.from).call{value: inv.amountDue}("");
-                require(sent, "Native transfer failed");
+                if (!sent) revert NativeTransferFailed();
                 emit InvoicePaid(inv.id, inv.from, inv.to, inv.amountDue, address(0));
             }
         } else {
             // ERC-20: fee in native, token from allowance
             if (msg.value != totalNativeFee) revert IncorrectNativeValue();
-
             IERC20 erc20 = IERC20(token);
             if (erc20.allowance(msg.sender, address(this)) < totalAmounts) {
                 revert InsufficientAllowance();
@@ -305,7 +316,7 @@ contract Chainvoice {
             for (uint256 i = 0; i < n; i++) {
                 InvoiceDetails storage inv = invoices[invoiceIds[i]];
                 bool ok = erc20.transferFrom(msg.sender, inv.from, inv.amountDue);
-                require(ok, "Token transfer failed");
+                if (!ok) revert TokenTransferFailed();
                 emit InvoicePaid(inv.id, inv.from, inv.to, inv.amountDue, token);
             }
         }
@@ -326,7 +337,7 @@ contract Chainvoice {
         view
         returns (bool canPay, uint256 payerBalance, uint256 allowanceAmount)
     {
-        require(invoiceId < invoices.length, "Invalid invoice ID");
+        if (invoiceId >= invoices.length) revert InvalidInvoiceId();
         InvoiceDetails memory invoice = invoices[invoiceId];
 
         if (invoice.isCancelled) {
@@ -368,7 +379,7 @@ contract Chainvoice {
     }
 
     function getInvoice(uint256 invoiceId) external view returns (InvoiceDetails memory) {
-        require(invoiceId < invoices.length, "Invalid ID");
+        if (invoiceId >= invoices.length) revert InvalidInvoiceId();
         return invoices[invoiceId];
     }
 
@@ -378,18 +389,18 @@ contract Chainvoice {
     }
 
     function setTreasuryAddress(address newTreasury) external onlyOwner {
-        require(newTreasury != address(0), "Zero address");
+        if (newTreasury == address(0)) revert ZeroAddress();
         treasuryAddress = newTreasury;
     }
 
     function withdrawFees() external {
-        require(treasuryAddress != address(0), "Treasury not set");
-        require(accumulatedFees > 0, "No fees available");
+        if (treasuryAddress == address(0)) revert TreasuryNotSet();
+        if (accumulatedFees == 0) revert NoFeesAvailable();
 
         uint256 amount = accumulatedFees;
         accumulatedFees = 0;
 
         (bool success, ) = payable(treasuryAddress).call{value: amount}("");
-        require(success, "Withdraw failed");
+        if (!success) revert WithdrawFailed();
     }
 }
