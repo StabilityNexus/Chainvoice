@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: Unlicense
+/* SPDX-License-Identifier: Unlicense */
 pragma solidity ^0.8.13;
 
 import {Test} from "forge-std/Test.sol";
@@ -13,8 +13,8 @@ contract ChainvoiceTest is Test {
 
     function setUp() public {
         chainvoice = new Chainvoice();
-        vm.deal(alice, 10 ether);
-        vm.deal(bob, 10 ether);
+        vm.deal(alice, 100 ether);
+        vm.deal(bob, 100 ether);
     }
 
     /* ------------------------------------------------------------ */
@@ -112,5 +112,127 @@ contract ChainvoiceTest is Test {
         vm.expectRevert("Incorrect payment amount");
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether}(0);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                       BATCH OPERATIONS                       */
+    /* ------------------------------------------------------------ */
+
+    function testBatchTooLarge() public {
+        uint256 batchSize = 51;
+        address[] memory tos = new address[](batchSize);
+        uint256[] memory amounts = new uint256[](batchSize);
+        string[] memory payloads = new string[](batchSize);
+        string[] memory hashes = new string[](batchSize);
+
+        for (uint256 i = 0; i < batchSize; i++) {
+            tos[i] = bob;
+            amounts[i] = 1 ether;
+            payloads[i] = "";
+            hashes[i] = "";
+        }
+
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.InvalidBatchSize.selector);
+        chainvoice.createInvoicesBatch(tos, amounts, address(0), payloads, hashes);
+    }
+
+    function testCreateInvoicesBatch() public {
+        uint256 batchSize = 3;
+        address[] memory tos = new address[](batchSize);
+        uint256[] memory amounts = new uint256[](batchSize);
+        string[] memory payloads = new string[](batchSize);
+        string[] memory hashes = new string[](batchSize);
+
+        for (uint256 i = 0; i < batchSize; i++) {
+            tos[i] = bob;
+            amounts[i] = 1 ether;
+            payloads[i] = "batchData";
+            hashes[i] = "batchHash";
+        }
+
+        vm.prank(alice);
+        chainvoice.createInvoicesBatch(tos, amounts, address(0), payloads, hashes);
+
+        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(alice);
+        Chainvoice.InvoiceDetails[] memory received = chainvoice.getReceivedInvoices(bob);
+
+        assertEq(sent.length, 3);
+        assertEq(received.length, 3);
+        assertEq(sent[2].amountDue, 1 ether);
+    }
+
+    function testPayInvoicesBatch() public {
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), "", "");
+        chainvoice.createInvoice(bob, 2 ether, address(0), "", "");
+        vm.stopPrank();
+
+        uint256 fee = chainvoice.fee();
+        uint256 totalFee = fee * 2;
+        uint256 totalPrincipal = 3 ether;
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        uint256 bobStart = bob.balance;
+        uint256 aliceStart = alice.balance;
+
+        vm.prank(bob);
+        chainvoice.payInvoicesBatch{value: totalPrincipal + totalFee}(ids);
+
+        Chainvoice.InvoiceDetails memory inv0 = chainvoice.getInvoice(0);
+        Chainvoice.InvoiceDetails memory inv1 = chainvoice.getInvoice(1);
+
+        assertTrue(inv0.isPaid);
+        assertTrue(inv1.isPaid);
+
+        assertEq(chainvoice.accumulatedFees(), totalFee);
+        assertEq(bob.balance, bobStart - (totalPrincipal + totalFee));
+        assertEq(alice.balance, aliceStart + totalPrincipal);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                       FUZZ TESTING                           */
+    /* ------------------------------------------------------------ */
+
+    function testFuzz_CreateInvoice(address recipient, uint256 amount) public {
+        vm.assume(recipient != address(0));
+        vm.assume(recipient != alice);
+        vm.assume(amount < 1000000 ether);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(recipient, amount, address(0), "fuzz", "hash");
+
+        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(alice);
+        Chainvoice.InvoiceDetails memory latest = sent[sent.length - 1];
+
+        assertEq(latest.to, recipient);
+        assertEq(latest.amountDue, amount);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                       ADMIN / FEES                           */
+    /* ------------------------------------------------------------ */
+
+    function testWithdrawFees() public {
+        address treasury = address(0x999);
+
+        chainvoice.setTreasuryAddress(treasury);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), "", "");
+
+        uint256 fee = chainvoice.fee();
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+
+        assertEq(chainvoice.accumulatedFees(), fee);
+
+        chainvoice.withdrawFees();
+
+        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(treasury.balance, fee);
     }
 }
