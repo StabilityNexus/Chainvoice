@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: chainvoice-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    env_file:
+      - ./frontend/.env
+    restart: unless-stopped
+    networks:
+      - chainvoice-network
+
+  blockchain:
+    image: ghcr.io/foundry-rs/foundry:latest
+    container_name: chainvoice-blockchain
+    command: anvil --host 0.0.0.0 --chain-id 31337 --accounts 10 --balance 10000
+    ports:
+      - "8545:8545"
+    restart: unless-stopped
+    networks:
+      - chainvoice-network
+
+networks:
+  chainvoice-network:
+    driver: bridge
