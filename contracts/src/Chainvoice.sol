@@ -382,7 +382,7 @@ contract Chainvoice {
         treasuryAddress = newTreasury;
     }
 
-    function withdrawFees() external {
+    function withdrawFees() external onlyOwner {
         require(treasuryAddress != address(0), "Treasury not set");
         require(accumulatedFees > 0, "No fees available");
 
