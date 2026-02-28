@@ -34,6 +34,7 @@ contract Chainvoice {
     mapping(address => uint256[]) public receivedInvoices;
 
     address public owner;
+    address public pendingOwner;
     address public treasuryAddress;
     uint256 public fee;                // native fee per invoice
     uint256 public accumulatedFees;    // native fees accrued (for withdraw)
@@ -45,6 +46,10 @@ contract Chainvoice {
 
     event InvoiceBatchCreated(address indexed creator, address indexed token, uint256 count, uint256[] ids);
     event InvoiceBatchPaid(address indexed payer, address indexed token, uint256 count, uint256 totalAmount, uint256[] ids);
+    event OwnershipTransferStarted(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event FeeUpdated(uint256 oldFee, uint256 newFee);
+    event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
 
     // Constructor
     constructor() {
@@ -372,14 +377,19 @@ contract Chainvoice {
         return invoices[invoiceId];
     }
 
-    // ========== Admin ==========
+// ========== Admin ==========
+    
     function setFeeAmount(uint256 _fee) external onlyOwner {
+        uint256 oldFee = fee;
         fee = _fee;
+        emit FeeUpdated(oldFee, _fee);
     }
 
     function setTreasuryAddress(address newTreasury) external onlyOwner {
         require(newTreasury != address(0), "Zero address");
+        address oldTreasury = treasuryAddress;
         treasuryAddress = newTreasury;
+        emit TreasuryUpdated(oldTreasury, newTreasury);
     }
 
     function withdrawFees() external {
@@ -391,5 +401,38 @@ contract Chainvoice {
 
         (bool success, ) = payable(treasuryAddress).call{value: amount}("");
         require(success, "Withdraw failed");
+    }
+
+    // ========== Governance (Two-Step Ownership) ==========
+
+    /**
+     * @dev Starts the ownership transfer of the contract to a new account. Replaces the pending transfer if there is one.
+     * Can only be called by the current owner.
+     */
+    function transferOwnership(address newOwner) external onlyOwner {
+        pendingOwner = newOwner;
+        emit OwnershipTransferStarted(owner, newOwner);
+    }
+
+    /**
+     * @dev The new owner accepts the ownership transfer.
+     */
+    function acceptOwnership() external {
+        require(msg.sender == pendingOwner, "Caller is not the pending owner");
+        address oldOwner = owner;
+        owner = pendingOwner;
+        pendingOwner = address(0);
+        emit OwnershipTransferred(oldOwner, owner);
+    }
+
+    /**
+     * @dev Leaves the contract without owner. It will not be possible to call `onlyOwner` functions.
+     * Can only be called by the current owner.
+     */
+    function renounceOwnership() external onlyOwner {
+        address oldOwner = owner;
+        owner = address(0);
+        pendingOwner = address(0);
+        emit OwnershipTransferred(oldOwner, address(0));
     }
 }
