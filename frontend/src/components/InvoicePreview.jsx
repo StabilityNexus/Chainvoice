@@ -38,7 +38,7 @@ import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
-import React, { useState } from "react";
+import { useState } from "react";
 
 const InvoicePreview = ({
   invoice,
