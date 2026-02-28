@@ -297,6 +297,7 @@ const InvoicePreview = ({
                   year: "numeric",
                   month: "short",
                   day: "numeric",
+                  timeZone: "UTC", // Fix: Forces the date to render in absolute UTC
                 })}
               </span>
             </div>
@@ -309,6 +310,7 @@ const InvoicePreview = ({
                   year: "numeric",
                   month: "short",
                   day: "numeric",
+                  timeZone: "UTC", // Fix: Forces the date to render in absolute UTC
                 })}
               </span>
             </div>
