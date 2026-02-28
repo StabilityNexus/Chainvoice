@@ -38,6 +38,7 @@ import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
+import { useState } from "react";
 
 const InvoicePreview = ({
   invoice,
@@ -55,6 +56,7 @@ const InvoicePreview = ({
   };
 
   const networkFee = formatFee(fee);
+  const [logoError, setLogoError] = useState(false);
 
   return (
     <div className="flex flex-col h-full">
@@ -62,28 +64,25 @@ const InvoicePreview = ({
         id="invoice-print"
         className="bg-white p-5 sm:p-6 lg:p-8 rounded-lg shadow-sm border border-gray-200 max-w-4xl mx-auto w-full my-4 sm:my-6"
       >
-        {/* Header - Enhanced Layout with Bigger Logo */}
+{/* Header - Enhanced Layout with Bigger Logo */}
         <div className="border-b-2 border-gray-200 pb-5 mb-6">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center space-x-4">
               <div className="bg-white p-3.5 rounded-xl border-2 border-gray-200 shadow-lg flex-shrink-0 hover:shadow-xl transition-shadow duration-200">
-                <img
-                  src="/logo.png"
-                  alt="Chainvoice"
-                  className="h-14 w-14 sm:h-16 sm:w-16 md:h-20 md:w-20 object-contain"
-                  onError={(e) => {
-                    e.target.style.display = "none";
-                    const fallback = e.target.parentElement.querySelector(
-                      ".logo-fallback"
-                    );
-                    if (fallback) fallback.style.display = "flex";
-                  }}
-                />
-                <div className="logo-fallback hidden h-14 w-14 sm:h-16 sm:w-16 md:h-20 md:w-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl items-center justify-center shadow-sm">
-                  <span className="text-white font-bold text-xl sm:text-2xl md:text-3xl">
-                    CV
-                  </span>
-                </div>
+                {!logoError ? (
+                  <img
+                    src="/logo.png"
+                    alt="Chainvoice"
+                    className="h-14 w-14 sm:h-16 sm:w-16 md:h-20 md:w-20 object-contain"
+                    onError={() => setLogoError(true)}
+                  />
+                ) : (
+                  <div className="h-14 w-14 sm:h-16 sm:w-16 md:h-20 md:w-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-sm">
+                    <span className="text-white font-bold text-xl sm:text-2xl md:text-3xl">
+                      CV
+                    </span>
+                  </div>
+                )}
               </div>
               <div className="flex flex-col justify-center">
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1 leading-tight">
