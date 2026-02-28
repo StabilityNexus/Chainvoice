@@ -167,7 +167,8 @@ function SentInvoice() {
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
         
-        const res = await contract.getSentInvoices(address);
+        // Fetching the first 100 invoices (Offset: 0, Limit: 100)
+const res = await contract.getSentInvoices(address, 0, 100);
         console.log("Raw invoices data:", res);
 
         if (!res || !Array.isArray(res) || res.length === 0) {

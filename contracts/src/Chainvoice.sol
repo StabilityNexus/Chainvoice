@@ -351,19 +351,48 @@ contract Chainvoice {
         }
     }
 
-    function getSentInvoices(address user) external view returns (InvoiceDetails[] memory) {
-        return _getInvoices(sentInvoices[user]);
+function getSentInvoices(
+        address user,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (InvoiceDetails[] memory) {
+        return _getInvoicesPaginated(sentInvoices[user], offset, limit);
     }
 
-    function getReceivedInvoices(address user) external view returns (InvoiceDetails[] memory) {
-        return _getInvoices(receivedInvoices[user]);
+    function getReceivedInvoices(
+        address user,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (InvoiceDetails[] memory) {
+        return _getInvoicesPaginated(receivedInvoices[user], offset, limit);
     }
 
-    function _getInvoices(uint256[] storage ids) internal view returns (InvoiceDetails[] memory) {
-        InvoiceDetails[] memory result = new InvoiceDetails[](ids.length);
-        for (uint256 i = 0; i < ids.length; i++) {
-            result[i] = invoices[ids[i]];
+    function _getInvoicesPaginated(
+        uint256[] storage ids,
+        uint256 offset,
+        uint256 limit
+    ) internal view returns (InvoiceDetails[] memory) {
+        uint256 total = ids.length;
+        
+        // If the offset is beyond the array size, return an empty array
+        if (offset >= total) {
+            return new InvoiceDetails[](0);
         }
+
+        // Calculate the actual limit (prevent out-of-bounds)
+        uint256 end = offset + limit;
+        if (end > total) {
+            end = total;
+        }
+
+        uint256 size = end - offset;
+        InvoiceDetails[] memory result = new InvoiceDetails[](size);
+        
+        // Only loop through the requested chunk
+        for (uint256 i = 0; i < size; i++) {
+            result[i] = invoices[ids[offset + i]];
+        }
+        
         return result;
     }
 
