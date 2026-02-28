@@ -67,6 +67,27 @@ contract Chainvoice {
         _entered = false;
     }
 
+    modifier validInvoice(uint256 invoiceId) {
+        require(invoiceId < invoices.length, "Invalid invoice ID");
+        _;
+    }
+
+    modifier onlyCreator(uint256 invoiceId) {
+        require(msg.sender == invoices[invoiceId].from, "Only invoice creator can cancel");
+        _;
+    }
+
+    modifier onlyPayer(uint256 invoiceId) {
+        require(msg.sender == invoices[invoiceId].to, "Not authorized");
+        _;
+    }
+
+    modifier invoiceActive(uint256 invoiceId) {
+        require(!invoices[invoiceId].isPaid, "Already paid");
+        require(!invoices[invoiceId].isCancelled, "Invoice is cancelled");
+        _;
+    }
+
     // Constants
     uint256 public constant MAX_BATCH = 50;
 
@@ -182,13 +203,9 @@ contract Chainvoice {
     }
 
     // ========== Cancel single invoice ==========
-    function cancelInvoice(uint256 invoiceId) external {
-        require(invoiceId < invoices.length, "Invalid invoice ID");
+    function cancelInvoice(uint256 invoiceId) external validInvoice(invoiceId) onlyCreator(invoiceId) invoiceActive(invoiceId) {
         InvoiceDetails storage invoice = invoices[invoiceId];
-
-        require(msg.sender == invoice.from, "Only invoice creator can cancel");
-        require(!invoice.isPaid && !invoice.isCancelled, "Invoice not cancellable");
-
+        
         invoice.isCancelled = true;
 
         emit InvoiceCancelled(
@@ -200,14 +217,9 @@ contract Chainvoice {
     }
 
     // ========== Pay single invoice ==========
-    function payInvoice(uint256 invoiceId) external payable nonReentrant {
-        require(invoiceId < invoices.length, "Invalid invoice ID");
-
+    function payInvoice(uint256 invoiceId) external payable nonReentrant validInvoice(invoiceId) onlyPayer(invoiceId) invoiceActive(invoiceId) {
         InvoiceDetails storage invoice = invoices[invoiceId];
-        require(msg.sender == invoice.to, "Not authorized");
-        require(!invoice.isPaid, "Already paid");
-        require(!invoice.isCancelled, "Invoice is cancelled");
-
+        
         // Effects first for CEI (mark paid, bump fees), then interactions
         invoice.isPaid = true;
 
@@ -223,7 +235,6 @@ contract Chainvoice {
                 IERC20(invoice.tokenAddress).allowance(msg.sender, address(this)) >= invoice.amountDue,
                 "Insufficient allowance"
             );
-
             accumulatedFees += fee;
 
             bool transferSuccess = IERC20(invoice.tokenAddress).transferFrom(
@@ -242,7 +253,6 @@ contract Chainvoice {
             invoice.tokenAddress
         );
     }
-
     // ========== Batch pay (all-or-nothing) ==========
     function payInvoicesBatch(uint256[] calldata invoiceIds) external payable nonReentrant {
         uint256 n = invoiceIds.length;
@@ -324,9 +334,9 @@ contract Chainvoice {
     )
         external
         view
+        validInvoice(invoiceId)
         returns (bool canPay, uint256 payerBalance, uint256 allowanceAmount)
     {
-        require(invoiceId < invoices.length, "Invalid invoice ID");
         InvoiceDetails memory invoice = invoices[invoiceId];
 
         if (invoice.isCancelled) {
@@ -367,8 +377,7 @@ contract Chainvoice {
         return result;
     }
 
-    function getInvoice(uint256 invoiceId) external view returns (InvoiceDetails memory) {
-        require(invoiceId < invoices.length, "Invalid ID");
+    function getInvoice(uint256 invoiceId) external view validInvoice(invoiceId) returns (InvoiceDetails memory) {
         return invoices[invoiceId];
     }
 
