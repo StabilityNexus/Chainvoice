@@ -233,20 +233,26 @@ function ReceivedInvoice() {
     return suggestions;
   };
 
-  // UNIFORM BALANCE CHECK
+// UNIFORM BALANCE CHECK
   const checkBalance = async (tokenAddress, amount, symbol, signer) => {
     const userAddress = await signer.getAddress();
+    
+    // Add a reasonable buffer for gas fees (e.g., 0.002 ETH). 
+    // You can adjust this value depending on the typical network gas costs you expect.
+    const gasBuffer = ethers.parseEther("0.002"); 
 
     if (tokenAddress === ethers.ZeroAddress) {
       const balance = await signer.provider.getBalance(userAddress);
+      
+      // Include gas buffer in the total required ETH calculation
       const totalRequired =
-        ethers.parseUnits(amount.toString(), 18) + BigInt(fee);
+        ethers.parseUnits(amount.toString(), 18) + BigInt(fee) + gasBuffer;
 
       if (balance < totalRequired) {
         const requiredEth = ethers.formatEther(totalRequired);
         const availableEth = ethers.formatEther(balance);
         throw new Error(
-          `Insufficient ETH balance. Required: ${requiredEth} ETH, Available: ${availableEth} ETH`
+          `Insufficient ETH balance. Required: ~${Number(requiredEth).toFixed(4)} ETH (including gas), Available: ${Number(availableEth).toFixed(4)} ETH`
         );
       }
     } else {
@@ -263,11 +269,15 @@ function ReceivedInvoice() {
       }
 
       const ethBalance = await signer.provider.getBalance(userAddress);
-      if (ethBalance < BigInt(fee)) {
-        const requiredEthFee = ethers.formatEther(fee);
+      
+      // Add gas buffer for ERC20 payments as well (to cover approval/payment gas + network fee)
+      const totalEthRequired = BigInt(fee) + gasBuffer;
+      
+      if (ethBalance < totalEthRequired) {
+        const requiredEthFee = ethers.formatEther(totalEthRequired);
         const availableEth = ethers.formatEther(ethBalance);
         throw new Error(
-          `Insufficient ETH for fees. Required: ${requiredEthFee} ETH, Available: ${availableEth} ETH`
+          `Insufficient ETH for fees and gas. Required: ~${Number(requiredEthFee).toFixed(4)} ETH, Available: ${Number(availableEth).toFixed(4)} ETH`
         );
       }
     }
