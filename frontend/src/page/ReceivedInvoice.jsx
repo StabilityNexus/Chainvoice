@@ -233,8 +233,8 @@ function ReceivedInvoice() {
     return suggestions;
   };
 
-// UNIFORM BALANCE CHECK
-  const checkBalance = async (tokenAddress, amount, symbol, signer) => {
+  // UNIFORM BALANCE CHECK
+  const checkBalance = async (tokenAddress, amount, symbol, signer, invoiceCount = 1) => {
     const userAddress = await signer.getAddress();
     
     // Add a reasonable buffer for gas fees (e.g., 0.002 ETH). 
@@ -246,7 +246,7 @@ function ReceivedInvoice() {
       
       // Include gas buffer in the total required ETH calculation
       const totalRequired =
-        ethers.parseUnits(amount.toString(), 18) + BigInt(fee) + gasBuffer;
+        ethers.parseUnits(amount.toString(), 18) + (BigInt(fee) * BigInt(invoiceCount)) + gasBuffer;
 
       if (balance < totalRequired) {
         const requiredEth = ethers.formatEther(totalRequired);
@@ -271,7 +271,7 @@ function ReceivedInvoice() {
       const ethBalance = await signer.provider.getBalance(userAddress);
       
       // Add gas buffer for ERC20 payments as well (to cover approval/payment gas + network fee)
-      const totalEthRequired = BigInt(fee) + gasBuffer;
+      const totalEthRequired = (BigInt(fee) * BigInt(invoiceCount)) + gasBuffer;
       
       if (ethBalance < totalEthRequired) {
         const requiredEthFee = ethers.formatEther(totalEthRequired);
@@ -525,7 +525,8 @@ function ReceivedInvoice() {
             group.tokenAddress,
             group.totalAmount,
             group.symbol,
-            signer
+            signer,
+            group.invoices.length
           );
         } catch (error) {
           setPaymentError(error.message);
