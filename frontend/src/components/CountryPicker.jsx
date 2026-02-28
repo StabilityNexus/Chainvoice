@@ -16,6 +16,12 @@ const CountryPicker = ({
   const [searchQuery, setSearchQuery] = useState("");
   const inputRef = useRef(null);
   const searchInputRef = useRef(null);
+  const [failedFlags, setFailedFlags] = useState({});
+
+
+  const handleImageError = (code) => {
+    setFailedFlags((prev) => ({ ...prev, [code]: true }));
+  };
 
   // Find selected country
   const selectedCountry = countriesData.find(
@@ -54,7 +60,7 @@ const CountryPicker = ({
     return `https://flagcdn.com/w40/${code.toLowerCase()}.png`;
   };
 
-  return (
+return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
@@ -70,14 +76,14 @@ const CountryPicker = ({
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {selectedCountry ? (
               <>
-                <img
-                  src={getFlagUrl(selectedCountry.code)}
-                  alt={selectedCountry.name}
-                  className="w-5 h-4 object-cover rounded-sm flex-shrink-0"
-                  onError={(e) => {
-                    e.target.style.display = "none";
-                  }}
-                />
+                {!failedFlags[selectedCountry.code] && (
+                  <img
+                    src={getFlagUrl(selectedCountry.code)}
+                    alt={selectedCountry.name}
+                    className="w-5 h-4 object-cover rounded-sm flex-shrink-0"
+                    onError={() => handleImageError(selectedCountry.code)}
+                  />
+                )}
                 <span className="truncate text-left">{selectedCountry.name}</span>
               </>
             ) : (
@@ -121,14 +127,14 @@ const CountryPicker = ({
                     selectedCountry?.code === country.code && "bg-accent"
                   )}
                 >
-                  <img
-                    src={getFlagUrl(country.code)}
-                    alt={country.name}
-                    className="w-5 h-4 object-cover rounded-sm flex-shrink-0"
-                    onError={(e) => {
-                      e.target.style.display = "none";
-                    }}
-                  />
+                  {!failedFlags[country.code] && (
+                    <img
+                      src={getFlagUrl(country.code)}
+                      alt={country.name}
+                      className="w-5 h-4 object-cover rounded-sm flex-shrink-0"
+                      onError={() => handleImageError(country.code)}
+                    />
+                  )}
                   <span className="text-left">{country.name}</span>
                 </button>
               ))}

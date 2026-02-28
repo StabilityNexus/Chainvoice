@@ -98,6 +98,8 @@ function ReceivedInvoice() {
     selectedInvoice: null,
   });
 
+  const [logoError, setLogoError] = useState(false);
+
   const { tokens } = useTokenList(chainId || 1);
 
   const handleChangePage = (event, newPage) => {
@@ -1562,23 +1564,20 @@ function ReceivedInvoice() {
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
                     <div className="flex items-center space-x-4">
                       <div className="bg-white p-3.5 rounded-xl border-2 border-gray-200 shadow-lg flex-shrink-0">
-                        <img
-                          src="/logo.png"
-                          alt="Chainvoice"
-                          className="h-16 w-16 object-contain"
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                            const fallback = e.target.parentElement.querySelector(
-                              ".logo-fallback"
-                            );
-                            if (fallback) fallback.style.display = "flex";
-                          }}
-                        />
-                        <div className="logo-fallback hidden h-16 w-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl items-center justify-center shadow-sm">
-                          <span className="text-white font-bold text-2xl">
-                            CV
-                          </span>
-                        </div>
+                        {!logoError ? (
+                          <img
+                            src="/logo.png"
+                            alt="Chainvoice"
+                            className="h-16 w-16 object-contain"
+                            onError={() => setLogoError(true)}
+                          />
+                        ) : (
+                          <div className="h-16 w-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-sm">
+                            <span className="text-white font-bold text-2xl">
+                              CV
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="flex flex-col justify-center">
                         <h1 className="text-3xl sm:text-4xl font-bold mb-1 leading-tight">
