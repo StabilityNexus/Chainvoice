@@ -100,7 +100,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
         uint256 fee = chainvoice.fee();
-        vm.expectRevert(Chainvoice.NotAuthorizedPayer.selector);
+        vm.expectRevert("Not authorized");
         vm.prank(alice);
         chainvoice.payInvoice{value: 1 ether + fee}(0);
     }
@@ -109,7 +109,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
 
-        vm.expectRevert(Chainvoice.IncorrectPaymentAmount.selector);
+        vm.expectRevert("Incorrect payment amount");
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether}(0);
     }
