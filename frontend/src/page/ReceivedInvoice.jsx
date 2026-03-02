@@ -234,22 +234,40 @@ function ReceivedInvoice() {
   };
 
   // UNIFORM BALANCE CHECK
+// UNIFORM BALANCE CHECK (includes gas estimation)
   const checkBalance = async (tokenAddress, amount, symbol, signer) => {
     const userAddress = await signer.getAddress();
+    const provider = signer.provider;
+
+    // Estimate gas price
+    const feeData = await provider.getFeeData();
+    const gasPrice = feeData.gasPrice || feeData.maxFeePerGas;
+
+    if (!gasPrice) {
+      throw new Error("Unable to fetch gas price");
+    }
+
+    // Rough gas limit estimation (safe buffer)
+    const estimatedGasLimit = BigInt(300000); // adjust if needed
+    const estimatedGasCost = gasPrice * estimatedGasLimit;
 
     if (tokenAddress === ethers.ZeroAddress) {
-      const balance = await signer.provider.getBalance(userAddress);
+      const balance = await provider.getBalance(userAddress);
+
+      const invoiceAmount = ethers.parseUnits(amount.toString(), 18);
       const totalRequired =
-        ethers.parseUnits(amount.toString(), 18) + BigInt(fee);
+        invoiceAmount + BigInt(fee) + estimatedGasCost;
 
       if (balance < totalRequired) {
         const requiredEth = ethers.formatEther(totalRequired);
         const availableEth = ethers.formatEther(balance);
+
         throw new Error(
-          `Insufficient ETH balance. Required: ${requiredEth} ETH, Available: ${availableEth} ETH`
+          `Insufficient ETH balance. Required (including gas): ${requiredEth} ETH, Available: ${availableEth} ETH`
         );
       }
     } else {
+      // ERC20 Balance Check
       const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
       const balance = await tokenContract.balanceOf(userAddress);
       const decimals = await tokenContract.decimals();
@@ -262,16 +280,21 @@ function ReceivedInvoice() {
         );
       }
 
-      const ethBalance = await signer.provider.getBalance(userAddress);
-      if (ethBalance < BigInt(fee)) {
-        const requiredEthFee = ethers.formatEther(fee);
+      // ETH required for fee + gas
+      const ethBalance = await provider.getBalance(userAddress);
+      const totalEthRequired = BigInt(fee) + estimatedGasCost;
+
+      if (ethBalance < totalEthRequired) {
+        const requiredEth = ethers.formatEther(totalEthRequired);
         const availableEth = ethers.formatEther(ethBalance);
+
         throw new Error(
-          `Insufficient ETH for fees. Required: ${requiredEthFee} ETH, Available: ${availableEth} ETH`
+          `Insufficient ETH for fees and gas. Required: ${requiredEth} ETH, Available: ${availableEth} ETH`
         );
       }
     }
   };
+
 
   const getGroupedInvoices = () => {
     const grouped = new Map();
