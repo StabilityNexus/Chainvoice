@@ -1,4 +1,5 @@
 import Paper from "@mui/material/Paper";
+import { getWagmiChainInfo } from "@/utils/wagmiChainHelpers";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -14,6 +15,9 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import { useRef } from "react";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
+import { downloadInvoiceCSV } from "@/utils/generateInvoiceCSV";
+import { downloadInvoiceJSON } from "@/utils/generateInvoiceJSON";
+import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { decryptToString } from "@lit-protocol/encryption/src/lib/encryption.js";
 import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
@@ -42,10 +46,17 @@ import {
   Alert,
   FormControlLabel,
   Snackbar,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
 } from "@mui/material";
 import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
 import DownloadIcon from "@mui/icons-material/Download";
+import TableChartIcon from "@mui/icons-material/TableChart";
+import DataObjectIcon from "@mui/icons-material/DataObject";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import SelectAllIcon from "@mui/icons-material/SelectAll";
 import ClearAllIcon from "@mui/icons-material/ClearAll";
@@ -73,6 +84,9 @@ function ReceivedInvoice() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId } = useAccount();
+
+  const [anchorEl, setAnchorEl] = useState(null);
+  const openExportMenu = Boolean(anchorEl);
   const [loading, setLoading] = useState(true);
   const [receivedInvoices, setReceivedInvoice] = useState([]);
   const [fee, setFee] = useState(0);
@@ -204,9 +218,8 @@ function ReceivedInvoice() {
       .filter((inv) => !inv.isPaid && !inv.isCancelled)
       .reduce((acc, inv) => {
         const issueDate = new Date(inv.issueDate).toDateString();
-        const key = `${inv.user?.address}_${
-          inv.paymentToken?.address || "ETH"
-        }_${issueDate}`;
+        const key = `${inv.user?.address}_${inv.paymentToken?.address || "ETH"
+          }_${issueDate}`;
         if (!acc[key]) acc[key] = [];
         acc[key].push(inv);
         return acc;
@@ -279,9 +292,8 @@ function ReceivedInvoice() {
       if (!selectedInvoices.has(invoice.id)) return;
 
       const tokenAddress = invoice.paymentToken?.address || ethers.ZeroAddress;
-      const tokenKey = `${tokenAddress}_${
-        invoice.paymentToken?.symbol || "ETH"
-      }`;
+      const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"
+        }`;
 
       if (!grouped.has(tokenKey)) {
         grouped.set(tokenKey, {
@@ -656,7 +668,7 @@ function ReceivedInvoice() {
         setError(null);
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
-      
+
         const litNodeClient = litClientRef.current;
         if (!litNodeClient) {
           setError("Lit client not initialized. Please refresh the page.");
@@ -835,7 +847,7 @@ function ReceivedInvoice() {
         setError(
           "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
         );
-        
+
       } finally {
         setLoading(false);
       }
@@ -852,10 +864,19 @@ function ReceivedInvoice() {
     ) {
       return;
     }
+    setAnchorEl(null);
     setDrawerState({
       open: !drawerState.open,
       selectedInvoice: invoice || null,
     });
+  };
+
+  const handleExportClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleExportClose = () => {
+    setAnchorEl(null);
   };
 
   const handlePrint = async () => {
@@ -874,6 +895,36 @@ function ReceivedInvoice() {
       console.error("Error generating PDF:", error);
       toast.error("Failed to generate PDF. Please try again.");
     }
+  };
+
+  const handleExportCSV = () => {
+    if (!drawerState.selectedInvoice) {
+      toast.error("No invoice selected");
+      return;
+    }
+    try {
+      downloadInvoiceCSV(drawerState.selectedInvoice, fee);
+      toast.success("CSV downloaded successfully!");
+    } catch (error) {
+      console.error("Error generating CSV:", error);
+      toast.error("Failed to generate CSV. Please try again.");
+    }
+    handleExportClose();
+  };
+
+  const handleExportJSON = () => {
+    if (!drawerState.selectedInvoice) {
+      toast.error("No invoice selected");
+      return;
+    }
+    try {
+      downloadInvoiceJSON(drawerState.selectedInvoice, fee);
+      toast.success("JSON downloaded successfully!");
+    } catch (error) {
+      console.error("Error generating JSON:", error);
+      toast.error("Failed to generate JSON. Please try again.");
+    }
+    handleExportClose();
   };
 
 
@@ -1327,9 +1378,8 @@ function ReceivedInvoice() {
                                         icon={<LayersIcon />}
                                         label={`Batch #${invoice.batchInfo.batchId.slice(
                                           -4
-                                        )} (${invoice.batchInfo.index + 1}/${
-                                          invoice.batchInfo.batchSize
-                                        })`}
+                                        )} (${invoice.batchInfo.index + 1}/${invoice.batchInfo.batchSize
+                                          })`}
                                         size="small"
                                         variant="outlined"
                                         color="secondary"
@@ -1461,7 +1511,7 @@ function ReceivedInvoice() {
                                         invoice.id,
                                         invoice.amountDue,
                                         invoice.paymentToken?.address ??
-                                          ethers.ZeroAddress
+                                        ethers.ZeroAddress
                                       )
                                     }
                                     disabled={paymentLoading[invoice.id]}
@@ -1757,11 +1807,11 @@ function ReceivedInvoice() {
                       <p className="text-xs text-gray-600">
                         {drawerState.selectedInvoice.paymentToken?.address
                           ? `${drawerState.selectedInvoice.paymentToken.address.substring(
-                              0,
-                              10
-                            )}......${drawerState.selectedInvoice.paymentToken.address.substring(
-                              33
-                            )}`
+                            0,
+                            10
+                          )}......${drawerState.selectedInvoice.paymentToken.address.substring(
+                            33
+                          )}`
                           : "Native Currency"}
                       </p>
                     </div>
@@ -1846,15 +1896,7 @@ function ReceivedInvoice() {
                   <div className="flex justify-between pt-2 border-t border-gray-200">
                     <span className="font-medium">Total Amount:</span>
                     <span className="font-bold text-lg">
-                      {drawerState.selectedInvoice.paymentToken?.symbol ===
-                      "ETH"
-                        ? `${(
-                            parseFloat(drawerState.selectedInvoice.amountDue) +
-                            parseFloat(ethers.formatUnits(fee))
-                          ).toFixed(6)} ETH`
-                        : `${drawerState.selectedInvoice.amountDue} ${
-                            drawerState.selectedInvoice.paymentToken?.symbol
-                          } + ${ethers.formatUnits(fee)} ETH`}
+                      {formatInvoiceTotal(drawerState.selectedInvoice, fee, chainId)}
                     </span>
                   </div>
                 </div>
@@ -1866,14 +1908,53 @@ function ReceivedInvoice() {
                   >
                     Close
                   </Button>
-                  <Button
-                    onClick={handlePrint}
-                    variant="contained"
-                    startIcon={<DownloadIcon />}
-                    sx={{ px: 3, py: 1 }}
-                  >
-                    Download Invoice
-                  </Button>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={handleExportClick}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
+                      aria-haspopup="true"
+                      aria-expanded={openExportMenu}
+                    >
+                      <DownloadIcon className="mr-2" fontSize="small" />
+                      Export Invoice
+                    </button>
+                    <Menu
+                      anchorEl={anchorEl}
+                      open={openExportMenu}
+                      onClose={handleExportClose}
+                      anchorOrigin={{
+                        vertical: "top",
+                        horizontal: "right",
+                      }}
+                      transformOrigin={{
+                        vertical: "bottom",
+                        horizontal: "right",
+                      }}
+                      PaperProps={{
+                        sx: { mb: 1, width: 200 }
+                      }}
+                    >
+                      <MenuItem onClick={() => { handlePrint(); handleExportClose(); }}>
+                        <ListItemIcon>
+                          <PictureAsPdfIcon fontSize="small" sx={{ color: "#ef4444" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as PDF</ListItemText>
+                      </MenuItem>
+                      <MenuItem onClick={handleExportCSV}>
+                        <ListItemIcon>
+                          <TableChartIcon fontSize="small" sx={{ color: "#16a34a" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as CSV</ListItemText>
+                      </MenuItem>
+                      <MenuItem onClick={handleExportJSON}>
+                        <ListItemIcon>
+                          <DataObjectIcon fontSize="small" sx={{ color: "#3b82f6" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as JSON</ListItemText>
+                      </MenuItem>
+                    </Menu>
+                  </div>
                 </div>
               </div>
             </>
