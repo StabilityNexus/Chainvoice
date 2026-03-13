@@ -49,6 +49,7 @@ import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
 import { useTokenList } from "@/hooks/useTokenList";
+import toast from "react-hot-toast";
 
 /** Public RPC URLs by chain ID for token verification when visitor has no wallet (e.g. opening invoice request link in incognito). */
 const CHAIN_ID_TO_PUBLIC_RPC = {
@@ -349,7 +350,7 @@ const validateClientAddress = useCallback((value) => {
 
   const createInvoiceRequest = async (data) => {
     if (!isConnected || !walletClient) {
-      alert("Please connect your wallet");
+      toast.error("Please connect your wallet");
       return;
     }
 
@@ -366,7 +367,7 @@ const validateClientAddress = useCallback((value) => {
 
       const paymentToken = useCustomToken ? verifiedToken : selectedToken;
       if (!paymentToken?.address) {
-        alert("Please select or verify a payment token.");
+        toast.error("Please select or verify a payment token.");
         setLoading(false);
         return;
       }
@@ -406,7 +407,7 @@ const validateClientAddress = useCallback((value) => {
       // 2. Setup Lit
       const litNodeClient = litClientRef.current;
       if (!litNodeClient) {
-        alert("Lit client not initialized");
+        toast.error("Lit client not initialized");
         return;
       }
       const accessControlConditions = [
@@ -501,7 +502,7 @@ const validateClientAddress = useCallback((value) => {
       setTimeout(() => navigate("/dashboard/sent"), 4000);
     } catch (err) {
       console.error("Encryption or transaction failed:", err);
-      alert("Failed to create invoice.");
+      toast.error("Failed to create invoice.");
     } finally {
       setLoading(false);
     }
