@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import "../src/Chainvoice.sol";
 
+
 contract ChainvoiceTest is Test {
     Chainvoice chainvoice;
 
@@ -51,6 +52,7 @@ contract ChainvoiceTest is Test {
         assertFalse(inv.isCancelled);
     }
 
+
     /* ------------------------------------------------------------ */
     /*                       PAY INVOICE                            */
     /* ------------------------------------------------------------ */
@@ -93,24 +95,89 @@ contract ChainvoiceTest is Test {
     }
 
     /* ------------------------------------------------------------ */
-    /*                       FAILURE CASES                          */
+    /*                       FAILURE CASES - CREATE INVOICE         */
     /* ------------------------------------------------------------ */
 
-    function testPayInvoice_RevertIfWrongPayer() public {
+    function testCreateInvoiceRevertIfInvalidAddress() public{
+        vm.prank(alice);
+        vm.expectRevert("Recipient address is zero");
+        chainvoice.createInvoice(address(0), 1 ether, address(0), "data", "hash");
+    }
+
+    function testCreateInvoiceRevertIfSelfInvoicing() public{
+        vm.prank(alice);
+        vm.expectRevert("Self-invoicing not allowed");
+        chainvoice.createInvoice(alice, 1 ether, address(0), "data", "hash");
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                       FAILURE CASES - PAY INVOICE            */
+    /* ------------------------------------------------------------ */
+
+    modifier createInvoice(){
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
+        _;
+    }
+
+    function testPayInvoice_RevertIfWrongPayer() public createInvoice {
         uint256 fee = chainvoice.fee();
         vm.expectRevert("Not authorized");
         vm.prank(alice);
         chainvoice.payInvoice{value: 1 ether + fee}(0);
     }
 
-    function testPayInvoice_RevertIfIncorrectValue() public {
-        vm.prank(alice);
-        chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
-
+    function testPayInvoice_RevertIfIncorrectValue() public createInvoice {
         vm.expectRevert("Incorrect payment amount");
         vm.prank(bob);
-        chainvoice.payInvoice{value: 1 ether}(0);
+        chainvoice.payInvoice{value: 2 ether}(0);
+    }
+
+    function testPayInvoice_RevertIfInvalidInvoiceId() public createInvoice{
+        uint256 fee = chainvoice.fee();
+
+        vm.expectRevert("Invalid invoice ID");
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(1);
+    }
+
+    function testPayInvoice_RevertIfInvoiceAlreadyPaid() public createInvoice{
+        uint256 fee = chainvoice.fee();
+
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+
+        vm.expectRevert("Already paid");
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                       FAILURE CASES - CANCEL INVOICE         */
+    /* ------------------------------------------------------------ */
+
+    function testCancelInvoiceRevertIfNotTheOwner() public createInvoice{
+        vm.expectRevert("Only invoice creator can cancel");
+        vm.prank(bob);
+        chainvoice.cancelInvoice(0);
+    }
+
+    function testCancelInvoiceRevertIfItIsAlreadyPaid() public createInvoice{
+        uint256 fee = chainvoice.fee();
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+
+        vm.expectRevert("Invoice not cancellable");
+        vm.prank(alice);
+        chainvoice.cancelInvoice(0);
+    }
+
+    function testCancelInvoiceRevertIfItIsAlreadyCancelled() public createInvoice{
+        vm.prank(alice);
+        chainvoice.cancelInvoice(0);
+
+        vm.expectRevert("Invoice not cancellable");
+        vm.prank(alice);
+        chainvoice.cancelInvoice(0);
     }
 }
