@@ -128,9 +128,10 @@ contract ChainvoiceTest is Test {
     }
 
     function testPayInvoice_RevertIfIncorrectValue() public createInvoice {
+        uint256 fee = chanvoice.fee();
         vm.expectRevert("Incorrect payment amount");
         vm.prank(bob);
-        chainvoice.payInvoice{value: 2 ether}(0);
+        chainvoice.payInvoice{value: 1 ether + fee + 1}(0);
     }
 
     function testPayInvoice_RevertIfInvalidInvoiceId() public createInvoice{
