@@ -138,7 +138,7 @@ contract ChainvoiceTest is Test {
 
         vm.expectRevert("Invalid invoice ID");
         vm.prank(bob);
-        chainvoice.payInvoice{value: 1 ether + fee}(1);
+        chainvoice.payInvoice{value: 1 ether + fee}(type(uint256).max);
     }
 
     function testPayInvoice_RevertIfInvoiceAlreadyPaid() public createInvoice{
