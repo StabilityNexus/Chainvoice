@@ -11,7 +11,6 @@ on:
 permissions:
   pull-requests: write
   issues: write
-  contents: write
 
 jobs:
   # Request Discord ID and wallet from first-time contributors
@@ -56,6 +55,10 @@ jobs:
   
   # Process contributor response with Discord ID and wallet
   process-response:
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
     needs: fetch-pr-meta
     if: |
       github.event_name == 'issue_comment' &&
