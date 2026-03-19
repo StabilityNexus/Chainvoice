@@ -11,7 +11,8 @@ on:
 permissions:
   pull-requests: write
   issues: write
-
+  contents: write
+  
 jobs:
   # Request Discord ID and wallet from first-time contributors
   request-info:
