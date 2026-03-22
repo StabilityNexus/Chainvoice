@@ -1182,7 +1182,7 @@ function BatchPayment() {
                             )}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600">
-                            {formatDateTime(invoice.issueDate)}
+                            {formatInvoiceDate(invoice.issueDate)}
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex space-x-2">
