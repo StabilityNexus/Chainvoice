@@ -10,7 +10,23 @@ permissions:
   pull-requests: read
 
 jobs:
+  calculate-changes:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    outputs:
+      lines_changed: ${{ steps.calc.outputs.result }}
+    steps:
+      - name: Calculate lines changed
+        id: calc
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const additions = context.payload.pull_request.additions || 0;
+            const deletions = context.payload.pull_request.deletions || 0;
+            return additions + deletions;
+  
   update-pr-count:
+    needs: calculate-changes
     if: github.event.pull_request.merged == true
     uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-update-pr.yml@main
     with:
@@ -18,6 +34,6 @@ jobs:
       repo_name: ${{ github.repository }}
       pr_author: ${{ github.event.pull_request.user.login }}
       pr_title: ${{ github.event.pull_request.title }}
-      lines_changed: ${{ github.event.pull_request.additions + github.event.pull_request.deletions }}
+      lines_changed: ${{ fromJSON(needs.calculate-changes.outputs.lines_changed) }}
     secrets:
       GIST_PAT: ${{ secrets.GIST_PAT }}
