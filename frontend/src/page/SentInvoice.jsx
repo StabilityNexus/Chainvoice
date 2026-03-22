@@ -609,7 +609,7 @@ function SentInvoice() {
                             {/* Date Column */}
                             <TableCell>
                               <span className="text-sm text-gray-600">
-                                {formatDateTime(invoice.issueDate)}
+                                {formatInvoiceDate(invoice.issueDate)}
                               </span>
                             </TableCell>
 
