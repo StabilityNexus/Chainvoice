@@ -15,15 +15,17 @@ function getUTCOffset() {
  * Output: "Feb 20, 2026 (UTC+5:30)"
  *
  * Why: new Date(isoString).toLocaleDateString() silently shifts the date
- * across midnight for users in negative UTC offsets. Showing the offset
- * makes the displayed date unambiguous for financial documents.
+ * across midnight for users in negative UTC offsets. Rendering the calendar
+ * date only keeps financial document dates stable across viewers.
  *
  * @param {string|Date} dateStr
  * @returns {string}
-*/
-  // Strip time component to avoid UTC→local midnight shift.
++ */
+export function formatInvoiceDate(dateStr) {
+  if (!dateStr) return "N/A";
+  // Strip time component to avoid UTC→local midnight shift
   // "2026-02-20T..." or "2026-02-20" → ["2026","02","20"]
-  const parts = dateStr.split("T")[0].split("-");
+  const parts = String(dateStr).split("T")[0].split("-");
   if (parts.length === 3) {
     const [year, month, day] = parts.map(Number);
     const date = new Date(year, month - 1, day); // local date, no TZ conversion
@@ -43,23 +45,24 @@ function getUTCOffset() {
     day: "numeric",
   });
 
-/**
- * Formats a full timestamp (date + time) for table rows.
- * Output: "Feb 20, 2026, 3:45 PM (UTC+5:30)"
- *
- * @param {string|Date} dateStr
- * @returns {string}
- */
-export function formatDateTime(dateStr) {
-  if (!dateStr) return "N/A";
-  const date = new Date(dateStr);
-  if (isNaN(date.getTime())) return "Invalid date";
-  const formatted = date.toLocaleString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return `${formatted} (${getUTCOffset()})`;
+  /**
+   * Formats a full timestamp (date + time) for table rows.
+   * * Output: "Feb 20, 2026"
+   *
+   * @param {string|Date} dateStr
+   * @returns {string}
+   */
+  export function formatDateTime(dateStr) {
+    if (!dateStr) return "N/A";
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) return "Invalid date";
+    const formatted = date.toLocaleString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    return `${formatted} (${getUTCOffset()})`;
+  }
 }
