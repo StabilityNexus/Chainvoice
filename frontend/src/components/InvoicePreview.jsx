@@ -57,6 +57,7 @@ const InvoicePreview = ({
 
   const networkFee = formatFee(fee);
   const [logoError, setLogoError] = useState(false);
+  const [tokenLogoError, setTokenLogoError] = useState(false);
 
   return (
     <div className="flex flex-col h-full">
@@ -235,15 +236,13 @@ const InvoicePreview = ({
             Payment Currency
           </h3>
           <div className="flex items-center">
-            {invoice.paymentToken?.logo ? (
+            {invoice.paymentToken?.logo && !tokenLogoError ? (
               <div className="bg-white p-1.5 rounded-lg border border-gray-200 mr-3">
                 <img
                   src={invoice.paymentToken.logo}
                   alt={invoice.paymentToken.symbol}
                   className="w-7 h-7 sm:w-8 sm:h-8 object-contain"
-                  onError={(e) => {
-                    e.target.src = "/tokenImages/generic.png";
-                  }}
+                  onError={() => setTokenLogoError(true)}
                 />
               </div>
             ) : (
@@ -452,4 +451,3 @@ const InvoicePreview = ({
 };
 
 export default InvoicePreview;
-
