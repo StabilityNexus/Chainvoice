@@ -15,6 +15,8 @@ contract Chainvoice {
     error NotAuthorizedPayer();
     error IncorrectNativeValue();
     error InsufficientAllowance();
+    error InvalidNewOwner();
+    error OwnershipNotPending();
 
     // Storage
     struct InvoiceDetails {
@@ -38,6 +40,7 @@ contract Chainvoice {
     address public treasuryAddress;
     uint256 public fee;                // native fee per invoice
     uint256 public accumulatedFees;    // native fees accrued (for withdraw)
+    address public pendingOwner;  // Two-step ownership transfer
 
     // Events
     event InvoiceCreated(uint256 indexed id, address indexed from, address indexed to, address tokenAddress);
@@ -50,6 +53,12 @@ contract Chainvoice {
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event FeeUpdated(uint256 oldFee, uint256 newFee);
     event TreasuryUpdated(address indexed oldTreasury, address indexed newTreasury);
+
+    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
+    event OwnershipTransferInitiated(address indexed currentOwner, address indexed pendingOwner);
+    event OwnershipTransferCancelled(address indexed owner, address indexed cancelledPendingOwner);
+    event FeeUpdated(uint256 indexed previousFee, uint256 indexed newFee);
+    event TreasuryAddressUpdated(address indexed previousTreasury, address indexed newTreasury);
 
     // Constructor
     constructor() {
@@ -377,10 +386,40 @@ contract Chainvoice {
         return invoices[invoiceId];
     }
 
-// ========== Admin ==========
-    
+    // ========== Admin - Ownership ==========
+    /// @dev Initiates a two-step ownership transfer process
+    /// @param newOwner Address of the new owner (must not be zero address)
+    function initiateOwnershipTransfer(address newOwner) external onlyOwner {
+        if (newOwner == address(0)) revert InvalidNewOwner();
+        if (newOwner == owner) revert InvalidNewOwner();
+        
+        pendingOwner = newOwner;
+        emit OwnershipTransferInitiated(owner, newOwner);
+    }
+
+    /// @dev Completes the ownership transfer process
+    /// @dev Only the pending owner can call this function
+    function acceptOwnership() external {
+        if (msg.sender != pendingOwner) revert OwnershipNotPending();
+        
+        address previousOwner = owner;
+        owner = msg.sender;
+        pendingOwner = address(0);
+        
+        emit OwnershipTransferred(previousOwner, msg.sender);
+    }
+
+    /// @dev Cancels the pending ownership transfer
+    function cancelOwnershipTransfer() external onlyOwner {
+        if (pendingOwner == address(0)) revert OwnershipNotPending();
+
+        emit OwnershipTransferCancelled(msg.sender, pendingOwner);
+        pendingOwner = address(0);
+    }
+
+    // ========== Admin - Fee Management ==========
     function setFeeAmount(uint256 _fee) external onlyOwner {
-        uint256 oldFee = fee;
+        emit FeeUpdated(fee, _fee);
         fee = _fee;
         emit FeeUpdated(oldFee, _fee);
     }
@@ -388,6 +427,8 @@ contract Chainvoice {
     function setTreasuryAddress(address newTreasury) external onlyOwner {
         require(newTreasury != address(0), "Zero address");
         address oldTreasury = treasuryAddress;
+
+        emit TreasuryAddressUpdated(treasuryAddress, newTreasury);
         treasuryAddress = newTreasury;
         emit TreasuryUpdated(oldTreasury, newTreasury);
     }
