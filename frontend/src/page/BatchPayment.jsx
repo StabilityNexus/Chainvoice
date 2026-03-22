@@ -823,11 +823,6 @@ function BatchPayment() {
     )}`;
   };
 
-  const formatDate = (issueDate) => {
-    const date = new Date(issueDate);
-    return date.toLocaleString();
-  };
-
   const unpaidInvoices = receivedInvoices.filter(
     (inv) => !inv.isPaid && !inv.isCancelled
   );

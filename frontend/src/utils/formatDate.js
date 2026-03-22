@@ -20,18 +20,28 @@ function getUTCOffset() {
  *
  * @param {string|Date} dateStr
  * @returns {string}
- */
-export function formatInvoiceDate(dateStr) {
-  if (!dateStr) return "N/A";
+*/
+  // Strip time component to avoid UTC→local midnight shift.
+  // "2026-02-20T..." or "2026-02-20" → ["2026","02","20"]
+  const parts = dateStr.split("T")[0].split("-");
+  if (parts.length === 3) {
+    const [year, month, day] = parts.map(Number);
+    const date = new Date(year, month - 1, day); // local date, no TZ conversion
+    if (isNaN(date.getTime())) return "Invalid date";
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }
+  // Fallback for non-ISO formats
   const date = new Date(dateStr);
   if (isNaN(date.getTime())) return "Invalid date";
-  const formatted = date.toLocaleDateString("en-US", {
+  return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
   });
-  return `${formatted} (${getUTCOffset()})`;
-}
 
 /**
  * Formats a full timestamp (date + time) for table rows.

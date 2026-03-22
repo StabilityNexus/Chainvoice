@@ -418,11 +418,6 @@ function SentInvoice() {
     )}`;
   };
 
-  const formatDate = (issueDate) => {
-    const date = new Date(issueDate);
-    return date.toLocaleString();
-  };
-
   return (
     <>
       <div className="flex justify-center">
