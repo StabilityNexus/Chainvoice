@@ -113,4 +113,75 @@ contract ChainvoiceTest is Test {
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether}(0);
     }
+
+    /* ------------------------------------------------------------ */
+    /*                    OWNERSHIP MANAGEMENT                      */
+    /* ------------------------------------------------------------ */
+
+    function testInitiateOwnershipTransfer() public {
+        address newOwner = address(0xC0FFEE);
+        
+        vm.prank(alice); // alice is not the owner
+        vm.expectRevert("Only owner can call");
+        chainvoice.initiateOwnershipTransfer(newOwner);
+
+        vm.prank(address(this)); // this is the owner (from setUp)
+        chainvoice.initiateOwnershipTransfer(newOwner);
+        
+        assertEq(chainvoice.pendingOwner(), newOwner);
+    }
+
+    function testInitiateOwnershipTransferInvalidAddress() public {
+        vm.expectRevert(Chainvoice.InvalidNewOwner.selector);
+        chainvoice.initiateOwnershipTransfer(address(0));
+
+        // Try to transfer to self
+        vm.expectRevert(Chainvoice.InvalidNewOwner.selector);
+        chainvoice.initiateOwnershipTransfer(address(this));
+    }
+
+    function testAcceptOwnership() public {
+        address newOwner = address(0xC0FFEE);
+        
+        chainvoice.initiateOwnershipTransfer(newOwner);
+        
+        vm.prank(newOwner);
+        chainvoice.acceptOwnership();
+        
+        assertEq(chainvoice.owner(), newOwner);
+        assertEq(chainvoice.pendingOwner(), address(0));
+    }
+
+    function testAcceptOwnershipNotPending() public {
+        vm.prank(address(0xDEADBEEF));
+        vm.expectRevert(Chainvoice.OwnershipNotPending.selector);
+        chainvoice.acceptOwnership();
+    }
+
+    function testCancelOwnershipTransfer() public {
+        address newOwner = address(0xC0FFEE);
+        
+        chainvoice.initiateOwnershipTransfer(newOwner);
+        assertEq(chainvoice.pendingOwner(), newOwner);
+        
+        chainvoice.cancelOwnershipTransfer();
+        assertEq(chainvoice.pendingOwner(), address(0));
+    }
+
+    function testCancelOwnershipTransferNoPending() public {
+        vm.expectRevert(Chainvoice.OwnershipNotPending.selector);
+        chainvoice.cancelOwnershipTransfer();
+    }
+
+    function testFeeUpdateEvent() public {
+        uint256 newFee = 0.001 ether;
+        chainvoice.setFeeAmount(newFee);
+        assertEq(chainvoice.fee(), newFee);
+    }
+
+    function testTreasuryAddressUpdateEvent() public {
+        address newTreasury = address(0xdead);
+        chainvoice.setTreasuryAddress(newTreasury);
+        assertEq(chainvoice.treasuryAddress(), newTreasury);
+    }
 }
