@@ -4,7 +4,7 @@ name: Track Contributor PRs
 on:
   pull_request_target:
     types: [closed]
-    branches: [main, master, develop]
+    branches: [main, master, develop, test]
 
 permissions:
   pull-requests: read

@@ -4,7 +4,7 @@ name: Contributor Onboarding
 on:
   pull_request_target:
     types: [closed]
-    branches: [main, master, develop]
+    branches: [main, master, develop, test]
   issue_comment:
     types: [created]
 
