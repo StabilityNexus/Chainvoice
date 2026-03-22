@@ -127,10 +127,15 @@ contract Chainvoice {
 
         if (tokenAddress != address(0)) {
             if (tokenAddress.code.length == 0) revert NotContract();
-            (bool success, ) = tokenAddress.staticcall(
-                abi.encodeWithSignature("balanceOf(address)", address(this))
+            (bool balOk, bytes memory balData) = tokenAddress.staticcall(
+                abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
             );
-            if (!success) revert InvalidToken();
+            (bool allowanceOk, bytes memory allowanceData) = tokenAddress.staticcall(
+                abi.encodeWithSelector(IERC20.allowance.selector, address(this), address(this))
+            );
+            if (!balOk || balData.length < 32 || !allowanceOk || allowanceData.length < 32) {
+                revert InvalidToken();
+            }
         }
 
         uint256 invoiceId = invoices.length;
@@ -432,7 +437,7 @@ contract Chainvoice {
     }
 
     function setTreasuryAddress(address newTreasury) external onlyOwner {
-        require(newTreasury != address(0), "Zero address");
+        if (newTreasury == address(0)) revert ZeroAddress();
 
         emit TreasuryAddressUpdated(treasuryAddress, newTreasury);
         treasuryAddress = newTreasury;
