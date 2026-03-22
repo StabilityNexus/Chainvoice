@@ -57,6 +57,7 @@ import CloseIcon from "@mui/icons-material/Close";
 import ErrorIcon from "@mui/icons-material/Error";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
+import { formatInvoiceDate, formatDateTime } from "@/utils/formatDate";
 
 const columns = [
   { id: "select", label: "", minWidth: 50 },
@@ -883,11 +884,6 @@ function ReceivedInvoice() {
     )}`;
   };
 
-  const formatDate = (issueDate) => {
-    const date = new Date(issueDate);
-    return date.toLocaleString();
-  };
-
   const unpaidInvoices = receivedInvoices.filter(
     (inv) => !inv.isPaid && !inv.isCancelled
   );
@@ -1404,7 +1400,7 @@ function ReceivedInvoice() {
                             </TableCell>
                             <TableCell>
                               <span className="text-sm text-gray-600">
-                                {formatDate(invoice.issueDate)}
+                                {formatDateTime(invoice.issueDate)}
                               </span>
                             </TableCell>
 
@@ -1780,16 +1776,10 @@ function ReceivedInvoice() {
                 <div className="mb-6">
                   <div className="flex justify-between text-sm text-gray-500 mb-2">
                     <span>
-                      Issued:{" "}
-                      {new Date(
-                        drawerState.selectedInvoice.issueDate
-                      ).toLocaleDateString()}
+                      Issued: {formatInvoiceDate(drawerState.selectedInvoice.issueDate)}
                     </span>
                     <span>
-                      Due:{" "}
-                      {new Date(
-                        drawerState.selectedInvoice.dueDate
-                      ).toLocaleDateString()}
+                        Due: {formatInvoiceDate(drawerState.selectedInvoice.dueDate)}
                     </span>
                   </div>
                 </div>

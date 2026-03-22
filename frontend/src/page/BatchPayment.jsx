@@ -8,6 +8,7 @@ import html2canvas from "html2canvas";
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { decryptToString } from "@lit-protocol/encryption/src/lib/encryption.js";
 import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
+import { formatInvoiceDate, formatDateTime } from "../utils/formatDate";
 import {
   createSiweMessageWithRecaps,
   generateAuthSig,
@@ -1186,7 +1187,7 @@ function BatchPayment() {
                             )}
                           </td>
                           <td className="px-6 py-4 text-sm text-gray-600">
-                            {formatDate(invoice.issueDate)}
+                            {formatDateTime(invoice.issueDate)}
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex space-x-2">
@@ -1482,16 +1483,10 @@ function BatchPayment() {
                 <div className="mb-6">
                   <div className="flex justify-between text-sm text-gray-500 mb-2">
                     <span>
-                      Issued:{" "}
-                      {new Date(
-                        drawerState.selectedInvoice.issueDate
-                      ).toLocaleDateString()}
+                        Issued: {formatInvoiceDate(drawerState.selectedInvoice.issueDate)}
                     </span>
                     <span>
-                      Due:{" "}
-                      {new Date(
-                        drawerState.selectedInvoice.dueDate
-                      ).toLocaleDateString()}
+                      Due: {formatInvoiceDate(drawerState.selectedInvoice.dueDate)}
                     </span>
                   </div>
                 </div>

@@ -1,6 +1,8 @@
 import jsPDF from "jspdf";
 import { ethers } from "ethers";
 import { getWagmiChainName, getWagmiChainInfo } from "./wagmiChainHelpers";
+import { formatInvoiceDate } from "./formatDate";
+
 
 /**
  * Load logo image with multiple fallback methods
@@ -369,16 +371,8 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   pdf.setTextColor(...darkGray);
   pdf.setFontSize(9);
   pdf.setFont("helvetica", "normal");
-  const issueDate = new Date(invoice.issueDate).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-  const dueDate = new Date(invoice.dueDate).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const issueDate = formatInvoiceDate(invoice.issueDate);
+  const dueDate = formatInvoiceDate(invoice.dueDate);
   pdf.text(`Issued: ${issueDate}`, 25, yPos + 5.5);
   pdf.text(`Due: ${dueDate}`, 160, yPos + 5.5);
 

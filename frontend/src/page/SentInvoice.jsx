@@ -47,6 +47,7 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
+import { formatInvoiceDate, formatDateTime } from "@/utils/formatDate";
 
 const columns = [
   { id: "fname", label: "Client", minWidth: 120 },
@@ -613,7 +614,7 @@ function SentInvoice() {
                             {/* Date Column */}
                             <TableCell>
                               <span className="text-sm text-gray-600">
-                                {formatDate(invoice.issueDate)}
+                                {formatDateTime(invoice.issueDate)}
                               </span>
                             </TableCell>
 
@@ -922,16 +923,10 @@ function SentInvoice() {
               <div className="mb-6">
                 <div className="flex justify-between text-sm text-gray-500 mb-2">
                   <span>
-                    Issued:{" "}
-                    {new Date(
-                      drawerState.selectedInvoice.issueDate
-                    ).toLocaleDateString()}
+                    Issued: {formatInvoiceDate(drawerState.selectedInvoice.issueDate)}
                   </span>
                   <span>
-                    Due:{" "}
-                    {new Date(
-                      drawerState.selectedInvoice.dueDate
-                    ).toLocaleDateString()}
+                      Due: {formatInvoiceDate(drawerState.selectedInvoice.dueDate)}
                   </span>
                 </div>
               </div>
