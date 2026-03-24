@@ -7,7 +7,6 @@ import {
   Contract,
   ethers,
   formatUnits,
-  parseUnits,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
@@ -54,6 +53,11 @@ import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
+import {
+  getLineAmountDetails,
+  getSafeLineAmountDisplay,
+  INVOICE_DECIMALS,
+} from "@/utils/invoiceCalculations";
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
@@ -115,18 +119,16 @@ function CreateInvoicesBatch() {
     setInvoiceRows((prev) =>
       prev.map((row) => {
         const total = row.itemData.reduce((sum, item) => {
-          const qty = parseUnits(item.qty || "0", 18);
-          const unitPrice = parseUnits(item.unitPrice || "0", 18);
-          const discount = parseUnits(item.discount || "0", 18);
-          const tax = parseUnits(item.tax || "0", 18);
-          const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-          const adjusted = lineTotal - discount + tax;
+          const { valid, amountWei } = getLineAmountDetails(item);
+          if (!valid) return sum;
+          let adjusted = amountWei;
+          if (adjusted < 0n) adjusted = 0n;
           return sum + adjusted;
         }, 0n);
 
         return {
           ...row,
-          totalAmountDue: formatUnits(total, 18),
+          totalAmountDue: formatUnits(total, INVOICE_DECIMALS),
         };
       })
     );
@@ -213,15 +215,12 @@ function CreateInvoicesBatch() {
                 name === "discount" ||
                 name === "tax"
               ) {
-                const qty = parseUnits(updatedItem.qty || "0", 18);
-                const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
-                const discount = parseUnits(updatedItem.discount || "0", 18);
-                const tax = parseUnits(updatedItem.tax || "0", 18);
-
-                const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-                const finalAmount = lineTotal - discount + tax;
-
-                updatedItem.amount = formatUnits(finalAmount, 18);
+                const { valid, amountWei } = getLineAmountDetails(updatedItem);
+                if (!valid) {
+                  updatedItem.amount = "";
+                } else {
+                  updatedItem.amount = getSafeLineAmountDisplay(updatedItem);
+                }
               }
               return updatedItem;
             }
@@ -306,6 +305,25 @@ function CreateInvoicesBatch() {
     }
   };
 
+  const getClientAddressError = (value, options = {}) => {
+    const { required = false } = options;
+    const trimmed = (value || "").trim();
+
+    if (!trimmed) {
+      return required ? "Please enter a client wallet address" : "";
+    }
+
+    if (!trimmed.startsWith("0x") || trimmed.length !== 42 || !ethers.isAddress(trimmed)) {
+      return "Please enter a valid wallet address";
+    }
+
+    if (trimmed.toLowerCase() === account.address?.toLowerCase()) {
+      return "You cannot create an invoice for your own wallet";
+    }
+
+    return "";
+  };
+
   // Create batch invoices
   const createInvoicesRequest = async () => {
     if (!isConnected || !walletClient) {
@@ -327,8 +345,63 @@ function CreateInvoicesBatch() {
         return;
       }
 
+      const tokenDecimals = Number(paymentToken?.decimals);
+      if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0) {
+        toast.error("Selected token has invalid decimals");
+        return;
+      }
+
+      const normalizedRows = invoiceRows.map((row) => ({
+        ...row,
+        clientAddress: (row.clientAddress || "").trim(),
+      }));
+
+      const firstInvalidAddressRowIndex = normalizedRows.findIndex((row) => {
+        const hasMeaningfulInput =
+          row.clientAddress || parseFloat(row.totalAmountDue) > 0;
+        if (!hasMeaningfulInput) return false;
+        return Boolean(getClientAddressError(row.clientAddress, { required: true }));
+      });
+
+      if (firstInvalidAddressRowIndex !== -1) {
+        const addressError = getClientAddressError(
+          normalizedRows[firstInvalidAddressRowIndex].clientAddress,
+          { required: true }
+        );
+        toast.error(`Invoice #${firstInvalidAddressRowIndex + 1}: ${addressError}`);
+        return;
+      }
+
+      const firstInvalidRowIndex = normalizedRows.findIndex((row) =>
+        row.itemData.some((item) => {
+          const {
+            valid,
+            amountWei,
+            qtyWei,
+            unitPriceWei,
+            discountWei,
+            taxRateWei,
+          } = getLineAmountDetails(item);
+          return (
+            !valid ||
+            qtyWei < 0n ||
+            unitPriceWei < 0n ||
+            discountWei < 0n ||
+            taxRateWei < 0n ||
+            amountWei < 0n
+          );
+        })
+      );
+
+      if (firstInvalidRowIndex !== -1) {
+        toast.error(
+          `Invoice #${firstInvalidRowIndex + 1} has invalid or negative line items`
+        );
+        return;
+      }
+
       // Validate invoices
-      const validInvoices = invoiceRows.filter(
+      const validInvoices = normalizedRows.filter(
         (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
       );
 
@@ -366,7 +439,7 @@ function CreateInvoicesBatch() {
           paymentToken: {
             address: paymentToken.address,
             symbol: paymentToken.symbol,
-            decimals: Number(paymentToken.decimals),
+            decimals: tokenDecimals,
           },
           user: {
             address: account?.address.toString(),
@@ -386,7 +459,10 @@ function CreateInvoicesBatch() {
             city: row.clientCity,
             postalcode: row.clientPostalcode,
           },
-          items: row.itemData,
+          items: row.itemData.map((item) => ({
+            ...item,
+            amount: getSafeLineAmountDisplay(item),
+          })),
           // Add batch metadata
           batchInfo: {
             batchId: `batch_${Date.now()}`,
@@ -466,12 +542,20 @@ function CreateInvoicesBatch() {
 
         // Add to batch arrays
         tos.push(row.clientAddress);
-        amounts.push(
-          ethers.parseUnits(
+        let amountForContract;
+        try {
+          amountForContract = ethers.parseUnits(
             row.totalAmountDue.toString(),
-            paymentToken.decimals
-          )
-        );
+            tokenDecimals
+          );
+        } catch {
+          toast.error(
+            `Invoice #${index + 1} total exceeds ${tokenDecimals} decimals for ${paymentToken.symbol || "selected token"}`
+          );
+          return;
+        }
+
+        amounts.push(amountForContract);
         encryptedPayloads.push(encryptedStringBase64);
         encryptedHashes.push(dataToEncryptHash);
       }
@@ -1088,7 +1172,7 @@ function CreateInvoicesBatch() {
                         <div className="col-span-4">DESCRIPTION</div>
                         <div className="col-span-1">QTY</div>
                         <div className="col-span-2">UNIT PRICE</div>
-                        <div className="col-span-1">DISCOUNT</div>
+                        <div className="col-span-1">DISCOUNT (AMOUNT)</div>
                         <div className="col-span-1">TAX(%)</div>
                         <div className="col-span-2">AMOUNT</div>
                         <div className="col-span-1">ACTION</div>
@@ -1149,11 +1233,11 @@ function CreateInvoicesBatch() {
                             <div className="grid grid-cols-2 gap-2 md:contents">
                               <div className="md:col-span-1">
                                 <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
-                                  Discount
+                                  Discount (Amount)
                                 </label>
                                 <Input
                                   type="text"
-                                  placeholder="0"
+                                  placeholder="Flat amount"
                                   className="w-full border-gray-300 text-black"
                                   name="discount"
                                   value={item.discount}
@@ -1184,12 +1268,7 @@ function CreateInvoicesBatch() {
                                   Amount
                                 </label>
                                 <div className="bg-gray-100 px-3 py-2 rounded border text-gray-700 font-mono text-sm">
-                                  {(
-                                    (parseFloat(item.qty) || 0) *
-                                      (parseFloat(item.unitPrice) || 0) -
-                                    (parseFloat(item.discount) || 0) +
-                                    (parseFloat(item.tax) || 0)
-                                  ).toFixed(4)}
+                                  {item.amount === "" ? "-" : (Number(item.amount) || 0).toFixed(4)}
                                 </div>
                               </div>
                               <div className="md:col-span-1 flex justify-center md:justify-center">
