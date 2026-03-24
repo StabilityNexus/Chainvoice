@@ -163,7 +163,7 @@ VITE_WALLETCONNECT_PROJECT_ID=Your Project ID can be obtained from https://dashb
 - Polygon Mainnet (137)
 ```0xD044A85a5daC307217B9bF313A90E8a60AF7DdCe```
 
-Release: https://github.com/kumawatkaran523/Chainvoice/releases/tag/v1
+Release: [release v1](https://github.com/StabilityNexus/Chainvoice/releases/tag/v1)
 
 ## Community and Support
 
