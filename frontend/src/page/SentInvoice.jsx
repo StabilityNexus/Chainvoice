@@ -14,6 +14,8 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import { useRef } from "react";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
+import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
+import { useInvoiceExport } from "@/hooks/useInvoiceExport";
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { decryptToString } from "@lit-protocol/encryption/src/lib/encryption.js";
 import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
@@ -31,7 +33,6 @@ import {
   Avatar,
   Tooltip,
   IconButton,
-  Typography,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -39,10 +40,18 @@ import {
   DialogActions,
   Button,
   Alert,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Typography,
 } from "@mui/material";
 import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
 import DownloadIcon from "@mui/icons-material/Download";
+import TableChartIcon from "@mui/icons-material/TableChart";
+import DataObjectIcon from "@mui/icons-material/DataObject";
+import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import { useTokenList } from "@/hooks/useTokenList";
@@ -62,6 +71,9 @@ function SentInvoice() {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId } = useAccount();
+
+  const [anchorEl, setAnchorEl] = useState(null);
+  const openExportMenu = Boolean(anchorEl);
 
   const [loading, setLoading] = useState(true);
   const [sentInvoices, setSentInvoices] = useState([]);
@@ -156,7 +168,6 @@ function SentInvoice() {
           toast.error("Lit client not initialized");
           return;
         }
-        console.log("chainid",chainId)
         const contractAddress = import.meta.env[
           `VITE_CONTRACT_ADDRESS_${chainId}`
         ];
@@ -166,7 +177,7 @@ function SentInvoice() {
         }
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
-        
+
         const res = await contract.getSentInvoices(address);
         console.log("Raw invoices data:", res);
 
@@ -331,7 +342,7 @@ function SentInvoice() {
         setError(
           "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
         );
-        
+
       } finally {
         console.log(sentInvoices);
         setLoading(false);
@@ -354,10 +365,19 @@ function SentInvoice() {
     ) {
       return;
     }
+    setAnchorEl(null);
     setDrawerState({
       open: !drawerState.open,
       selectedInvoice: invoice || null,
     });
+  };
+
+  const handleExportClick = (event) => {
+    setAnchorEl(event.currentTarget);
+  };
+
+  const handleExportClose = () => {
+    setAnchorEl(null);
   };
 
   const handlePrint = async () => {
@@ -377,6 +397,12 @@ function SentInvoice() {
       toast.error("Failed to generate PDF. Please try again.");
     }
   };
+
+  const { handleExportCSV, handleExportJSON } = useInvoiceExport(
+    drawerState.selectedInvoice,
+    fee,
+    handleExportClose
+  );
 
   const handleCancelInvoice = async (invoiceId) => {
     try {
@@ -902,11 +928,11 @@ function SentInvoice() {
                     <p className="text-xs text-gray-600">
                       {drawerState.selectedInvoice.paymentToken?.address
                         ? `${drawerState.selectedInvoice.paymentToken.address.substring(
-                            0,
-                            10
-                          )}......${drawerState.selectedInvoice.paymentToken.address.substring(
-                            33
-                          )}`
+                          0,
+                          10
+                        )}......${drawerState.selectedInvoice.paymentToken.address.substring(
+                          33
+                        )}`
                         : "Native Currency"}
                     </p>
                   </div>
@@ -990,32 +1016,66 @@ function SentInvoice() {
                 <div className="flex justify-between pt-2 border-t border-gray-200">
                   <span className="font-medium">Total Amount:</span>
                   <span className="font-bold text-lg">
-                    {drawerState.selectedInvoice.paymentToken?.symbol === "ETH"
-                      ? `${(
-                          parseFloat(drawerState.selectedInvoice.amountDue) +
-                          parseFloat(ethers.formatUnits(fee))
-                        ).toFixed(6)} ETH`
-                      : `${drawerState.selectedInvoice.amountDue} ${
-                          drawerState.selectedInvoice.paymentToken?.symbol
-                        } + ${ethers.formatUnits(fee)} ETH`}
+                    {formatInvoiceTotal(drawerState.selectedInvoice, fee, chainId)}
                   </span>
                 </div>
               </div>
 
               <div className="mt-8 flex justify-between items-center">
                 <button
+                  type="button"
                   onClick={toggleDrawer(null)}
                   className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Close
                 </button>
-                <button
-                  onClick={handlePrint}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
-                >
-                  <DownloadIcon className="mr-2" fontSize="small" />
-                  Download Invoice
-                </button>
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={handleExportClick}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
+                    aria-haspopup="true"
+                    aria-expanded={openExportMenu}
+                  >
+                    <DownloadIcon className="mr-2" fontSize="small" />
+                    Export Invoice
+                  </button>
+                  <Menu
+                    anchorEl={anchorEl}
+                    open={openExportMenu}
+                    onClose={handleExportClose}
+                    anchorOrigin={{
+                      vertical: "top",
+                      horizontal: "right",
+                    }}
+                    transformOrigin={{
+                      vertical: "bottom",
+                      horizontal: "right",
+                    }}
+                    PaperProps={{
+                      sx: { mb: 1, width: 200 }
+                    }}
+                  >
+                    <MenuItem onClick={() => { handlePrint(); handleExportClose(); }}>
+                      <ListItemIcon>
+                        <PictureAsPdfIcon fontSize="small" sx={{ color: "#ef4444" }} />
+                      </ListItemIcon>
+                      <ListItemText>Export as PDF</ListItemText>
+                    </MenuItem>
+                    <MenuItem onClick={handleExportCSV}>
+                      <ListItemIcon>
+                        <TableChartIcon fontSize="small" sx={{ color: "#16a34a" }} />
+                      </ListItemIcon>
+                      <ListItemText>Export as CSV</ListItemText>
+                    </MenuItem>
+                    <MenuItem onClick={handleExportJSON}>
+                      <ListItemIcon>
+                        <DataObjectIcon fontSize="small" sx={{ color: "#3b82f6" }} />
+                      </ListItemIcon>
+                      <ListItemText>Export as JSON</ListItemText>
+                    </MenuItem>
+                  </Menu>
+                </div>
               </div>
             </div>
           )}
