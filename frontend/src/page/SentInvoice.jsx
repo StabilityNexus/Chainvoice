@@ -153,7 +153,7 @@ function SentInvoice() {
 
         const litNodeClient = litClientRef.current;
         if (!litNodeClient) {
-          alert("Lit client not initialized");
+          toast.error("Lit client not initialized");
           return;
         }
         console.log("chainid",chainId)
