@@ -15,6 +15,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import toast from "react-hot-toast";
 
 const Treasure = () => {
   const [treasureAmount, setTreasureAmount] = useState(0);
@@ -66,7 +67,7 @@ const Treasure = () => {
 
   const handleSetTreasuryAddress = async () => {
     if (!ethers.isAddress(newTreasuryAddress)) {
-      alert("Please enter a valid Ethereum address");
+      toast.error("Please enter a valid Ethereum address");
       return;
     }
     try {
@@ -87,10 +88,10 @@ const Treasure = () => {
       await tx.wait();
       setTreasuryAddress(newTreasuryAddress);
       setNewTreasuryAddress("");
-      alert("Treasury address updated successfully!");
+      toast.success("Treasury address updated successfully!");
     } catch (error) {
       console.error("Error setting treasury address:", error);
-      alert(error.message || "Failed to update treasury address");
+      toast.error(error.message || "Failed to update treasury address");
     } finally {
       setLoading((prev) => ({ ...prev, setAddress: false }));
     }
@@ -115,10 +116,10 @@ const Treasure = () => {
       await tx.wait();
       const newAmt = await contract.accumulatedFees();
       setTreasureAmount(ethers.formatUnits(newAmt));
-      alert("Funds withdrawn successfully!");
+      toast.success("Funds withdrawn successfully!");
     } catch (error) {
       console.error("Error withdrawing collection:", error);
-      alert(error.message || "Failed to withdraw funds");
+      toast.error(error.message || "Failed to withdraw funds");
     } finally {
       setLoading((prev) => ({ ...prev, withdraw: false }));
     }
@@ -126,7 +127,7 @@ const Treasure = () => {
 
   const handleUpdateFee = async () => {
     if (!newFee || isNaN(newFee)) {
-      alert("Please enter a valid fee amount");
+      toast.error("Please enter a valid fee amount");
       return;
     }
     try {
@@ -150,10 +151,10 @@ const Treasure = () => {
       const updatedFee = await contract.fee();
       setFee(ethers.formatUnits(updatedFee));
       setNewFee("");
-      alert("Fee updated successfully!");
+      toast.success("Fee updated successfully!");
     } catch (error) {
       console.error("Error updating fee:", error);
-      alert(error.message || "Failed to update fee");
+      toast.error(error.message || "Failed to update fee");
     } finally {
       setLoading((prev) => ({ ...prev, feeUpdate: false }));
     }

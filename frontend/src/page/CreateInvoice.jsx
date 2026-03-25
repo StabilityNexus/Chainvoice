@@ -49,6 +49,7 @@ import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
 import { useTokenList } from "@/hooks/useTokenList";
+import toast from "react-hot-toast";
 
 /** Public RPC URLs by chain ID for token verification when visitor has no wallet (e.g. opening invoice request link in incognito). */
 const CHAIN_ID_TO_PUBLIC_RPC = {
@@ -58,6 +59,7 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
   56: "https://bsc-dataseed.binance.org",
   8453: "https://mainnet.base.org",
   11155111: "https://rpc.ankr.com/eth_sepolia",
+  5115: "https://rpc.testnet.citrea.xyz",
 };
 
 function CreateInvoice() {
@@ -89,6 +91,9 @@ function CreateInvoice() {
   const [verifiedToken, setVerifiedToken] = useState(null);
 
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
+  // Holds inline validation error for client wallet address
+// Used instead of browser alerts for better, non blocking UX
+  const [clientAddressError, setClientAddressError] = useState("");
 
   // const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"]; //sepolia based chainvoice test token (CIN)
 
@@ -155,6 +160,7 @@ function CreateInvoice() {
 
     if (urlClientAddress) {
       setClientAddress(urlClientAddress);
+      validateClientAddress(urlClientAddress);
     }
 
     if (urlDescription || urlAmount) {
@@ -312,12 +318,49 @@ function CreateInvoice() {
     ]);
   };
 
+  
+
+const validateClientAddress = useCallback((value) => {
+  // Empty input, no error
+  if (!value) {
+    setClientAddressError("");
+    return;
+  }
+
+  // Do not validate until it looks like a full EVM address
+  if (!value.startsWith("0x") || value.length < 42) {
+    setClientAddressError("");
+    return;
+  }
+
+  // Invalid EVM address
+  if (!ethers.isAddress(value)) {
+    setClientAddressError("Please enter a valid wallet address");
+    return;
+  }
+
+  // Self-invoicing check
+  if (value.toLowerCase() === account.address?.toLowerCase()) {
+    setClientAddressError("You cannot create an invoice for your own wallet");
+    return;
+  }
+
+  // Valid other wallet
+  setClientAddressError("");
+}, [account.address]);
+
   const createInvoiceRequest = async (data) => {
     if (!isConnected || !walletClient) {
-      alert("Please connect your wallet");
+      toast.error("Please connect your wallet");
       return;
     }
 
+    validateClientAddress(data.clientAddress);
+    if (clientAddressError) {
+      return;
+    }
+
+    setClientAddressError("");
     try {
       setLoading(true);
       const provider = new BrowserProvider(walletClient);
@@ -325,7 +368,7 @@ function CreateInvoice() {
 
       const paymentToken = useCustomToken ? verifiedToken : selectedToken;
       if (!paymentToken?.address) {
-        alert("Please select or verify a payment token.");
+        toast.error("Please select or verify a payment token.");
         setLoading(false);
         return;
       }
@@ -365,7 +408,7 @@ function CreateInvoice() {
       // 2. Setup Lit
       const litNodeClient = litClientRef.current;
       if (!litNodeClient) {
-        alert("Lit client not initialized");
+        toast.error("Lit client not initialized");
         return;
       }
       const accessControlConditions = [
@@ -460,7 +503,7 @@ function CreateInvoice() {
       setTimeout(() => navigate("/dashboard/sent"), 4000);
     } catch (err) {
       console.error("Encryption or transaction failed:", err);
-      alert("Failed to create invoice.");
+      toast.error("Failed to create invoice.");
     } finally {
       setLoading(false);
     }
@@ -700,9 +743,20 @@ function CreateInvoice() {
                 className="w-full mb-4 border-gray-300 text-black"
                 name="clientAddress"
                 value={clientAddress}
-                onChange={(e) => setClientAddress(e.target.value)}
+                onChange={(e) => {const value = e.target.value;
+                         setClientAddress(value);
+                      validateClientAddress(value);
+                     }}
+                     onBlur={(e) => {
+    validateClientAddress(e.target.value);
+  }}
               />
-
+              {clientAddressError && (
+                 <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                    <AlertCircle className="h-4 w-4" />
+                        <span>{clientAddressError}</span>
+                            </div>
+                               )}
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">

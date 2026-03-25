@@ -4,7 +4,7 @@ name: Track Contributor PRs
 on:
   pull_request_target:
     types: [closed]
-    branches: [main, master, develop]
+    branches: [main, master, develop, test]
 
 permissions:
   pull-requests: read
@@ -14,13 +14,16 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     outputs:
-      lines_changed: ${{ steps.calc.outputs.lines_changed }}
+      lines_changed: ${{ steps.calc.outputs.result }}
     steps:
       - name: Calculate lines changed
         id: calc
-        run: |
-          LINES_CHANGED=$(( ${{ github.event.pull_request.additions }} + ${{ github.event.pull_request.deletions }} ))
-          echo "lines_changed=$LINES_CHANGED" >> $GITHUB_OUTPUT
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const additions = context.payload.pull_request.additions || 0;
+            const deletions = context.payload.pull_request.deletions || 0;
+            return additions + deletions;
   
   update-pr-count:
     needs: calculate-changes
@@ -31,6 +34,6 @@ jobs:
       repo_name: ${{ github.repository }}
       pr_author: ${{ github.event.pull_request.user.login }}
       pr_title: ${{ github.event.pull_request.title }}
-      lines_changed: ${{ needs.calculate-changes.outputs.lines_changed }}
+      lines_changed: ${{ fromJSON(needs.calculate-changes.outputs.lines_changed) }}
     secrets:
       GIST_PAT: ${{ secrets.GIST_PAT }}
