@@ -224,9 +224,7 @@ function Landing() {
 
       {/* CTA Section */}
       <section className="py-32 bg-[#0F1015] relative overflow-hidden border-t border-gray-800/50">
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute inset-0 bg-[url('/images/grid-pattern.svg')] bg-center"></div>
-        </div>
+
 
         <div className="container mx-auto px-6 text-center relative">
           <motion.div
