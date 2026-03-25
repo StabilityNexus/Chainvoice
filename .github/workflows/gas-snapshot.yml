@@ -1,0 +1,34 @@
+name: Gas Snapshot Diff
+
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+        branches: [main, master]
+
+env:
+    FOUNDRY_PROFILE: ci
+
+jobs:
+    gas-snapshot:
+        name: Gas Snapshot Diff
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+
+            - name: Compare gas snapshot diff
+              working-directory: contracts
+              run: |
+                  if [ ! -f .gas-snapshot ]; then
+                    echo "::error::.gas-snapshot is missing. Commit a baseline snapshot to enable gas regression checks."
+                    exit 1
+                  fi
+                  if ! forge snapshot --diff .gas-snapshot; then
+                    echo "❌ Gas usage increased. Review the diff above."
+                    exit 1
+                  fi

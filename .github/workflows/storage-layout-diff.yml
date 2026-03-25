@@ -1,0 +1,80 @@
+name: Storage Layout Diff
+
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+        branches: [main, master]
+
+env:
+    FOUNDRY_PROFILE: ci
+
+jobs:
+    storage-layout-diff:
+        name: Storage Layout Diff
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+
+            - name: Build contracts
+              working-directory: contracts
+              run: forge build
+
+            - name: Generate storage layouts
+              working-directory: contracts
+              run: |
+                  set -euo pipefail
+                  if [ ! -d .storage-baselines ]; then
+                    echo "No .storage-baselines directory. Skipping generation."
+                    exit 0
+                  fi
+
+                  mkdir -p .storage-layouts
+                  mapfile -t CONTRACTS < <(find .storage-baselines -type f -name '*.json' -exec basename {} .json \;)
+
+                  if [ "${#CONTRACTS[@]}" -eq 0 ]; then
+                    echo "No baselines found in .storage-baselines. Skipping generation."
+                    exit 0
+                  fi
+
+                  for contract in "${CONTRACTS[@]}"; do
+                    forge inspect "$contract" storage-layout > ".storage-layouts/${contract}.json"
+                  done
+
+            - name: Diff against baseline
+              working-directory: contracts
+              run: |
+                  shopt -s nullglob
+                  CHANGED=0
+                  if [ ! -d .storage-layouts ]; then
+                    echo "No .storage-layouts generated. Skipping diff."
+                    exit 0
+                  fi
+                  files=(.storage-layouts/*.json)
+                  if [ ${#files[@]} -eq 0 ]; then
+                    echo "No storage layouts were generated. Skipping diff."
+                    exit 0
+                  fi
+
+                  for file in "${files[@]}"; do
+                    name=$(basename "$file")
+                    baseline=".storage-baselines/$name"
+                    if [ -f "$baseline" ]; then
+                      if ! diff -u "$baseline" "$file"; then
+                        echo "❌ Storage layout changed for $name"
+                        CHANGED=1
+                      fi
+                    else
+                      echo "❌ No baseline found for $name — add it to .storage-baselines/"
+                      CHANGED=1
+                    fi
+                  done
+
+                  if [ "$CHANGED" -eq 1 ]; then
+                    exit 1
+                  fi
