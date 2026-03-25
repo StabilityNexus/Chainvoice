@@ -345,7 +345,7 @@ function BatchPayment() {
 
         const litNodeClient = litClientRef.current;
         if (!litNodeClient) {
-          alert("Lit client not initialized");
+          toast.error("Lit client not initialized");
           return;
         }
 
@@ -744,7 +744,7 @@ function BatchPayment() {
           );
 
           await approveTx.wait();
-          alert(
+          toast.success(
             `Approval for ${tokenSymbol} completed! Now processing payment...`
           );
         }
@@ -754,7 +754,7 @@ function BatchPayment() {
         });
 
         await tx.wait();
-        alert(`Payment successful in ${tokenSymbol}!`);
+        toast.success(`Payment successful in ${tokenSymbol}!`);
       } else {
         const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
         const total = amountDueInWei + BigInt(fee);
@@ -764,7 +764,7 @@ function BatchPayment() {
         });
 
         await tx.wait();
-        alert("Payment successful in ETH!");
+        toast.success("Payment successful in ETH!");
       }
 
       // Refresh invoice status

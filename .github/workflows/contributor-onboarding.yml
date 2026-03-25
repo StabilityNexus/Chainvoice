@@ -1,0 +1,75 @@
+# Contributor Onboarding Workflow for Chainvoice
+name: Contributor Onboarding
+
+on:
+  pull_request_target:
+    types: [closed]
+    branches: [main, master, develop, test]
+  issue_comment:
+    types: [created]
+
+permissions:
+  pull-requests: write
+  issues: write
+
+jobs:
+  # Request Discord ID and wallet from first-time contributors
+  request-info:
+    if: |
+      github.event_name == 'pull_request_target' && 
+      github.event.pull_request.merged == true &&
+      contains(github.event.pull_request.labels.*.name, 'first-time-contributor')
+    uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-request-info.yml@main
+    with:
+      pr_number: ${{ github.event.pull_request.number }}
+      repo_name: ${{ github.repository }}
+      pr_author: ${{ github.event.pull_request.user.login }}
+    secrets:
+      GIST_PAT: ${{ secrets.GIST_PAT }}
+  
+  fetch-pr-meta:
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      (contains(github.event.comment.body, 'discord:') || contains(github.event.comment.body, 'Discord:'))
+    runs-on: ubuntu-latest
+    outputs:
+      pr_author: ${{ steps.meta.outputs.pr_author }}
+      pr_title: ${{ steps.meta.outputs.pr_title }}
+      lines_changed: ${{ steps.meta.outputs.lines_changed }}
+    steps:
+      - id: meta
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const prNumber = context.payload.issue.number;
+            const { data: pr } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: prNumber,
+            });
+            core.setOutput('pr_author', pr.user.login);
+            core.setOutput('pr_title', pr.title);
+            core.setOutput('lines_changed', pr.additions + pr.deletions);
+  
+  # Process contributor response with Discord ID and wallet
+  process-response:
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    needs: fetch-pr-meta
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      (contains(github.event.comment.body, 'discord:') || contains(github.event.comment.body, 'Discord:'))
+    uses: StabilityNexus/ContributorAutomation/.github/workflows/reusable-process-response.yml@main
+    with:
+      pr_number: ${{ github.event.issue.number }}
+      repo_name: ${{ github.repository }}
+      pr_author: ${{ needs.fetch-pr-meta.outputs.pr_author }}
+      pr_title: ${{ needs.fetch-pr-meta.outputs.pr_title }}
+      lines_changed: ${{ fromJSON(needs.fetch-pr-meta.outputs.lines_changed) }}
+    secrets:
+      GIST_PAT: ${{ secrets.GIST_PAT }}
