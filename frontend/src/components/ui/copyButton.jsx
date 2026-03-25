@@ -7,6 +7,7 @@ const CopyButton = ({ textToCopy, className = "" }) => {
 
   const handleCopy = async (e) => {
     e.stopPropagation();
+    e.preventDefault();
     try {
       await navigator.clipboard.writeText(textToCopy);
       setCopied(true);
@@ -16,11 +17,19 @@ const CopyButton = ({ textToCopy, className = "" }) => {
     }
   };
 
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" || e.key === " ") {
+      handleCopy(e);
+    }
+  };
+
   return (
-    <button
-      type="button"
+    <span
+      role="button"
+      tabIndex={0}
       onClick={handleCopy}
-      className={`inline-flex items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-100 transition-colors ${className}`}
+      onKeyDown={handleKeyDown}
+      className={`inline-flex cursor-pointer items-center gap-1 px-2 py-1 text-xs rounded hover:bg-gray-100 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gray-400 ${className}`}
       title="Copy address"
     >
       {copied ? (
@@ -34,7 +43,7 @@ const CopyButton = ({ textToCopy, className = "" }) => {
           <span className="text-gray-500">Copy</span>
         </>
       )}
-    </button>
+    </span>
   );
 };
 

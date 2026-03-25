@@ -35,8 +35,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import toast from "react-hot-toast";
 
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { encryptString } from "@lit-protocol/encryption/src/lib/encryption.js";
@@ -57,6 +56,7 @@ import {
   getLineAmountDetails,
   getSafeLineAmountDisplay,
   INVOICE_DECIMALS,
+  parseNumericInputToWei,
 } from "@/utils/invoiceCalculations";
 
 function CreateInvoicesBatch() {
@@ -76,6 +76,7 @@ function CreateInvoicesBatch() {
   const [tokenVerificationState, setTokenVerificationState] = useState("idle");
   const [verifiedToken, setVerifiedToken] = useState(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
+  const [clientAddressErrors, setClientAddressErrors] = useState({});
 
   // UI state for collapsible invoices
   const [expandedInvoice, setExpandedInvoice] = useState(0);
@@ -180,16 +181,23 @@ function CreateInvoicesBatch() {
       },
     ]);
     setExpandedInvoice(newIndex);
-    toast.success("New invoice added to batch");
   };
 
   const removeInvoiceRow = (index) => {
     if (invoiceRows.length > 1) {
       setInvoiceRows((prev) => prev.filter((_, i) => i !== index));
+      setClientAddressErrors((prev) => {
+        const next = {};
+        Object.entries(prev).forEach(([key, value]) => {
+          const numericKey = Number(key);
+          if (numericKey < index) next[numericKey] = value;
+          if (numericKey > index) next[numericKey - 1] = value;
+        });
+        return next;
+      });
       if (expandedInvoice === index) {
         setExpandedInvoice(0);
       }
-      toast.success("Invoice removed from batch");
     }
   };
 
@@ -290,19 +298,27 @@ function CreateInvoicesBatch() {
 
   // Enhanced error handling for batch creation
   const getErrorMessage = (error) => {
-    if (error.code === "ACTION_REJECTED") {
+    if (error?.code === "ACTION_REJECTED") {
       return "Transaction was cancelled by user";
-    } else if (error.message?.includes("insufficient")) {
-      return "Insufficient balance to complete transaction";
-    } else if (error.message?.includes("network")) {
-      return "Network error. Please check your connection and try again";
-    } else if (error.reason) {
-      return `Transaction failed: ${error.reason}`;
-    } else if (error.message) {
-      return error.message;
-    } else {
-      return "Failed to create invoice batch. Please try again.";
     }
+
+    if (error?.message?.toLowerCase().includes("insufficient")) {
+      return "Insufficient balance to complete transaction";
+    }
+
+    if (error?.message?.toLowerCase().includes("network")) {
+      return "Network error. Please check your connection and try again";
+    }
+
+    if (error?.reason) {
+      return `Transaction failed: ${error.reason}`;
+    }
+
+    if (error?.message) {
+      return error.message;
+    }
+
+    return "Failed to create invoice batch. Please try again.";
   };
 
   const getClientAddressError = (value, options = {}) => {
@@ -324,6 +340,139 @@ function CreateInvoicesBatch() {
     return "";
   };
 
+  const validateClientAddress = (rowIndex, value, options = {}) => {
+    const error = getClientAddressError(value, options);
+    setClientAddressErrors((prev) => {
+      if (!error && !prev[rowIndex]) return prev;
+      const next = { ...prev };
+      if (error) {
+        next[rowIndex] = error;
+      } else {
+        delete next[rowIndex];
+      }
+      return next;
+    });
+    return !error;
+  };
+
+  const validateInvoicesBeforeSubmit = (rows, paymentToken) => {
+    const normalizedRows = rows.map((row) => ({
+      ...row,
+      clientAddress: (row.clientAddress || "").trim(),
+    }));
+
+    const tokenDecimals = Number(paymentToken?.decimals);
+    const pendingAddressErrors = {};
+    const duplicateTracker = new Map();
+
+    for (let rowIndex = 0; rowIndex < normalizedRows.length; rowIndex += 1) {
+      const row = normalizedRows[rowIndex];
+      const rowLabel = `Invoice #${rowIndex + 1}`;
+      const hasMeaningfulInput =
+        row.clientAddress || parseFloat(row.totalAmountDue) > 0;
+
+      if (!hasMeaningfulInput) {
+        continue;
+      }
+
+      const addressError = getClientAddressError(row.clientAddress, {
+        required: true,
+      });
+      if (addressError) {
+        pendingAddressErrors[rowIndex] = addressError;
+        setClientAddressErrors((prev) => ({ ...prev, ...pendingAddressErrors }));
+        toast.error(`${rowLabel}: ${addressError}`);
+        return null;
+      }
+
+      const normalizedAddress = row.clientAddress.toLowerCase();
+      if (duplicateTracker.has(normalizedAddress)) {
+        const firstIndex = duplicateTracker.get(normalizedAddress);
+        pendingAddressErrors[firstIndex] = "Duplicate wallet address in batch";
+        pendingAddressErrors[rowIndex] = "Duplicate wallet address in batch";
+        setClientAddressErrors((prev) => ({ ...prev, ...pendingAddressErrors }));
+        toast.error(
+          `Duplicate client wallet found in Invoice #${firstIndex + 1} and Invoice #${rowIndex + 1}`
+        );
+        return null;
+      }
+
+      duplicateTracker.set(normalizedAddress, rowIndex);
+
+      for (let itemIndex = 0; itemIndex < row.itemData.length; itemIndex += 1) {
+        const item = row.itemData[itemIndex];
+        const lineLabel = `${rowLabel}, line item ${itemIndex + 1}`;
+        const {
+          valid,
+          amountWei,
+          qtyWei,
+          unitPriceWei,
+          discountWei,
+          taxRateWei,
+        } = getLineAmountDetails(item);
+
+        if (!valid) {
+          toast.error(`${lineLabel} has invalid number format`);
+          return null;
+        }
+        if (qtyWei < 0n) {
+          toast.error(`${lineLabel}: quantity cannot be negative`);
+          return null;
+        }
+        if (unitPriceWei < 0n) {
+          toast.error(`${lineLabel}: unit price cannot be negative`);
+          return null;
+        }
+        if (discountWei < 0n) {
+          toast.error(`${lineLabel}: discount cannot be negative`);
+          return null;
+        }
+        if (taxRateWei < 0n) {
+          toast.error(`${lineLabel}: tax cannot be negative`);
+          return null;
+        }
+        if (amountWei < 0n) {
+          toast.error(
+            `${lineLabel} amount cannot be negative. Reduce discount or update values`
+          );
+          return null;
+        }
+      }
+
+      const totalWei = parseNumericInputToWei(row.totalAmountDue);
+      if (totalWei === null || totalWei <= 0n) {
+        toast.error(`${rowLabel}: invoice total must be greater than 0`);
+        return null;
+      }
+
+      if (Number.isInteger(tokenDecimals) && tokenDecimals >= 0) {
+        try {
+          ethers.parseUnits(row.totalAmountDue.toString(), tokenDecimals);
+        } catch {
+          toast.error(
+            `${rowLabel}: total supports up to ${tokenDecimals} decimals for ${paymentToken.symbol || "selected token"}`
+          );
+          return null;
+        }
+      }
+    }
+
+    setClientAddressErrors({});
+
+    const validInvoices = normalizedRows.filter(
+      (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
+    );
+
+    if (validInvoices.length === 0) {
+      toast.error(
+        "Please add at least one valid invoice with client address and amount"
+      );
+      return null;
+    }
+
+    return { validInvoices };
+  };
+
   // Create batch invoices
   const createInvoicesRequest = async () => {
     if (!isConnected || !walletClient) {
@@ -333,7 +482,6 @@ function CreateInvoicesBatch() {
 
     try {
       setLoading(true);
-      toast.info("Starting batch invoice creation...");
 
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
@@ -351,66 +499,14 @@ function CreateInvoicesBatch() {
         return;
       }
 
-      const normalizedRows = invoiceRows.map((row) => ({
-        ...row,
-        clientAddress: (row.clientAddress || "").trim(),
-      }));
-
-      const firstInvalidAddressRowIndex = normalizedRows.findIndex((row) => {
-        const hasMeaningfulInput =
-          row.clientAddress || parseFloat(row.totalAmountDue) > 0;
-        if (!hasMeaningfulInput) return false;
-        return Boolean(getClientAddressError(row.clientAddress, { required: true }));
-      });
-
-      if (firstInvalidAddressRowIndex !== -1) {
-        const addressError = getClientAddressError(
-          normalizedRows[firstInvalidAddressRowIndex].clientAddress,
-          { required: true }
-        );
-        toast.error(`Invoice #${firstInvalidAddressRowIndex + 1}: ${addressError}`);
-        return;
-      }
-
-      const firstInvalidRowIndex = normalizedRows.findIndex((row) =>
-        row.itemData.some((item) => {
-          const {
-            valid,
-            amountWei,
-            qtyWei,
-            unitPriceWei,
-            discountWei,
-            taxRateWei,
-          } = getLineAmountDetails(item);
-          return (
-            !valid ||
-            qtyWei < 0n ||
-            unitPriceWei < 0n ||
-            discountWei < 0n ||
-            taxRateWei < 0n ||
-            amountWei < 0n
-          );
-        })
+      const validationResult = validateInvoicesBeforeSubmit(
+        invoiceRows,
+        paymentToken
       );
-
-      if (firstInvalidRowIndex !== -1) {
-        toast.error(
-          `Invoice #${firstInvalidRowIndex + 1} has invalid or negative line items`
-        );
+      if (!validationResult) {
         return;
       }
-
-      // Validate invoices
-      const validInvoices = normalizedRows.filter(
-        (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
-      );
-
-      if (validInvoices.length === 0) {
-        toast.error(
-          "Please add at least one valid invoice with client address and amount"
-        );
-        return;
-      }
+      const { validInvoices } = validationResult;
 
       // Prepare batch arrays
       const tos = [];
@@ -424,14 +520,8 @@ function CreateInvoicesBatch() {
         return;
       }
 
-      toast.info(`Processing ${validInvoices.length} invoices...`);
-
       // Process each invoice
       for (const [index, row] of validInvoices.entries()) {
-        toast.info(
-          `Encrypting invoice ${index + 1} of ${validInvoices.length}...`
-        );
-
         const invoicePayload = {
           amountDue: row.totalAmountDue.toString(),
           dueDate,
@@ -560,9 +650,6 @@ function CreateInvoicesBatch() {
         encryptedHashes.push(dataToEncryptHash);
       }
 
-      toast.success("All invoices encrypted successfully!");
-      toast.info("Submitting batch transaction to blockchain...");
-
       // Send to contract
       const contractAddress = import.meta.env[
         `VITE_CONTRACT_ADDRESS_${chainId}`
@@ -582,17 +669,12 @@ function CreateInvoicesBatch() {
         encryptedHashes
       );
 
-      toast.info("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
 
       toast.success(
         `Successfully created ${validInvoices.length} invoices in batch!`
       );
-      toast.success(
-        `Gas saved: ~${
-          (validInvoices.length - 1) * 75
-        }% compared to individual transactions!`
-      );
+      toast.success(`Estimated gas savings: ~${(validInvoices.length - 1) * 75}%`);
 
       setTimeout(() => navigate("/dashboard/sent"), 3000);
     } catch (err) {
@@ -1072,16 +1154,29 @@ function CreateInvoicesBatch() {
                         </Label>
                         <Input
                           placeholder="0x... (Client's wallet address)"
-                          className="w-full border-gray-300 text-black font-mono"
+                          className={cn(
+                            "w-full text-black font-mono",
+                            clientAddressErrors[rowIndex]
+                              ? "border-red-500 focus-visible:ring-red-500"
+                              : "border-gray-300"
+                          )}
                           value={row.clientAddress}
-                          onChange={(e) =>
-                            updateInvoiceRow(
-                              rowIndex,
-                              "clientAddress",
-                              e.target.value
-                            )
-                          }
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            updateInvoiceRow(rowIndex, "clientAddress", value);
+                            validateClientAddress(rowIndex, value);
+                          }}
+                          onBlur={(e) => {
+                            validateClientAddress(rowIndex, e.target.value, {
+                              required: true,
+                            });
+                          }}
                         />
+                        {clientAddressErrors[rowIndex] && (
+                          <div className="mt-2 text-sm text-red-600">
+                            {clientAddressErrors[rowIndex]}
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
