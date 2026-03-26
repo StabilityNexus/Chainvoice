@@ -28,11 +28,14 @@ jobs:
             - name: Run Mythril on all contracts
               working-directory: contracts
               run: |
+                  # Determine solc locally based on foundry.toml
+                  MYTHRIL_SOLC=$(grep -oP "solc_version\s*=\s*'\K[^']+" foundry.toml || echo "0.8.13")
+                  echo "Dynamically selecting Mythril solc version: $MYTHRIL_SOLC"
                   find src -name "*.sol" | while read contract; do
                     echo "🔍 Scanning $contract ..."
                     docker run --rm \
                       -v "$(pwd):/project" \
                       mythril/myth analyze "/project/$contract" \
-                      --solv 0.8.24 \
+                      --solv "$MYTHRIL_SOLC" \
                       --execution-timeout 60
                   done

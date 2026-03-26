@@ -21,11 +21,14 @@ jobs:
               with:
                   node-version: "24"
 
-            - name: Install 4naly3er
+            - name: Install 4naly3er (pinned, rules preserved)
               run: |
                   git clone https://github.com/Picodes/4naly3er
                   cd 4naly3er
-                  rm -f src/issues/NC/uselessOverride.ts || true
+                  # Pin the revision for deterministic CI runs
+                  git checkout 04c4dbb9bbf59846b0a70acae3bc4aefebac9920
+                  # Preserved all NC rules (including uselessOverride.ts) for completeness.
+                  # If a suppression is required, a proper tracked issue will be created.
                   corepack enable
                   yarn install
 
