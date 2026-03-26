@@ -22,9 +22,6 @@ jobs:
                   cache: "yarn"
                   cache-dependency-path: contracts/yarn.lock
 
-            - name: Rewrite GitHub SSH URLs to HTTPS
-              run: git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
-
             - name: Install Node dependencies
               working-directory: contracts
               run: yarn install --frozen-lockfile
@@ -51,3 +48,4 @@ jobs:
               uses: crytic/slither-action@v0.3.0
               with:
                   target: 'contracts'
+                  solc-version: '0.8.13'
