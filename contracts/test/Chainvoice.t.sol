@@ -122,7 +122,7 @@ contract ChainvoiceTest is Test {
 
     function testPayInvoice_RevertIfWrongPayer() public createInvoice {
         uint256 fee = chainvoice.fee();
-        vm.expectRevert("Not authorized");
+        vm.expectRevert(Chainvoice.NotAuthorizedPayer.selector);
         vm.prank(alice);
         chainvoice.payInvoice{value: 1 ether + fee}(0);
     }

@@ -424,7 +424,7 @@ function About() {
       <section className="py-20 bg-[#0F1015] border-t border-gray-800/50">
         <div className="container mx-auto px-6">
           <div className="bg-[#1E2029] rounded-2xl p-8 md:p-16 text-center border border-gray-800 hover:border-green-500/30 transition-all duration-300 relative overflow-hidden">
-            <div className="absolute inset-0 bg-[url('/grid-pattern.svg')] opacity-10"></div>
+
             <div className="relative z-10">
               <h2 className="text-3xl md:text-5xl font-bold mb-6">
                 Ready to shape the future?
