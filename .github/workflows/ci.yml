@@ -19,11 +19,12 @@ jobs:
               uses: actions/setup-node@v4
               with:
                   node-version: "18"
-                  cache: "npm"
+                  cache: "yarn"
+                  cache-dependency-path: contracts/yarn.lock
 
             - name: Install Node dependencies
               working-directory: contracts
-              run: npm ci
+              run: yarn install --frozen-lockfile
 
             - name: Prettier check (Solidity)
               working-directory: contracts

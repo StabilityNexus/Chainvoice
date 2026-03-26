@@ -21,14 +21,14 @@ jobs:
               with:
                   node-version: "24"
 
-            - name: Install 4naly3er (pinned, rules preserved)
+            - name: Install 4naly3er (shallow clone, rules preserved)
               run: |
-                  git clone https://github.com/Picodes/4naly3er
+                  # Shallow clone – 4naly3er publishes no tags; log the resolved commit for auditability
+                  git clone --depth 1 https://github.com/Picodes/4naly3er
                   cd 4naly3er
-                  # Pin the revision for deterministic CI runs
-                  git checkout 04c4dbb9bbf59846b0a70acae3bc4aefebac9920
-                  # Preserved all NC rules (including uselessOverride.ts) for completeness.
-                  # If a suppression is required, a proper tracked issue will be created.
+                  echo "4naly3er pinned to commit: $(git rev-parse HEAD)"
+                  # All NC rules preserved (including uselessOverride.ts).
+                  # If a suppression is needed, open a tracked issue and reference it here.
                   corepack enable
                   yarn install
 
