@@ -558,6 +558,7 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
     fee,
     networkFee,
     nativeSymbol,
+    nativeDecimals,
   });
 
   pdf.setFontSize(11);

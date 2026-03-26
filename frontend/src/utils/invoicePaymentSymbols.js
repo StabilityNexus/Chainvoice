@@ -6,14 +6,14 @@ export const resolveInvoicePaymentContext = (invoice, network) => {
   
   // Use Wagmi network info to get correct native token symbol, name, and decimals
   // wagmi chain object typically has nativeCurrency: { name: 'Matic', symbol: 'MATIC', decimals: 18 }
-  const nativeSymbol = network?.nativeCurrency?.symbol || "ETH";
-  const nativeDecimals = network?.nativeCurrency?.decimals || 18;
-  const nativeName = network?.nativeCurrency?.name || "Ether";
+  const nativeSymbol = network?.nativeCurrency?.symbol ?? "ETH";
+  const nativeDecimals = network?.nativeCurrency?.decimals ?? 18;
+  const nativeName = network?.nativeCurrency?.name ?? "Ether";
 
   // Use provided token info, or default to the native chain info
-  const tokenName = invoice.paymentToken?.name || nativeName;
-  const tokenSymbol = invoice.paymentToken?.symbol || nativeSymbol;
-  const tokenDecimals = invoice.paymentToken?.decimals || nativeDecimals;
+  const tokenName = isNativePayment ? nativeName : (invoice.paymentToken?.name ?? nativeName);
+  const tokenSymbol = isNativePayment ? nativeSymbol : (invoice.paymentToken?.symbol ?? nativeSymbol);
+  const tokenDecimals = isNativePayment ? nativeDecimals : (invoice.paymentToken?.decimals ?? nativeDecimals);
 
   return {
     nativeSymbol,
@@ -41,13 +41,14 @@ export const buildInvoiceTotalText = ({
   fee,
   networkFee,
   nativeSymbol,
+  nativeDecimals,
 }) => {
   // If payment is in native currency, sum up the amount due and network fee safely using BigInt
   if (isNativePayment) {
     let amountDueWei, networkFeeWei;
     
     try {
-      amountDueWei = ethers.parseUnits(amountDue || "0", tokenDecimals || 18);
+      amountDueWei = ethers.parseUnits(amountDue || "0", nativeDecimals ?? 18);
     } catch {
       amountDueWei = 0n;
     }
@@ -59,10 +60,12 @@ export const buildInvoiceTotalText = ({
     }
 
     const totalWei = amountDueWei + networkFeeWei;
-    const totalAmount = ethers.formatUnits(totalWei, tokenDecimals || 18);
+    const totalAmount = ethers.formatUnits(totalWei, nativeDecimals ?? 18);
     
-    // Using .toFixed(6) to prevent extremely long decimals
-    return `${Number(totalAmount).toFixed(6)} ${nativeSymbol}`;
+    // Truncate to 6 decimal places without Number conversion
+    const [intPart, decPart = ""] = totalAmount.split(".");
+    const truncatedDec = decPart.slice(0, 6).padEnd(6, "0");
+    return `${intPart}.${truncatedDec} ${nativeSymbol}`;
   }
 
   // If ERC20 payment, show token amount + network fee in native token
