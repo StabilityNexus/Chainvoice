@@ -1,14 +1,20 @@
 import { ethers } from "ethers";
 
 export const resolveInvoicePaymentContext = (invoice, network) => {
-  // If no payment token is set, it's a native currency payment
-  const isNativePayment = !invoice.paymentToken || !invoice.paymentToken.address;
+  const tokenAddress = invoice.paymentToken?.address;
+  const isNativePayment = !tokenAddress || tokenAddress === ethers.ZeroAddress;
+
+  if (!network?.nativeCurrency) {
+    throw new Error("Missing native currency metadata for invoice payment context");
+  }
   
   // Use Wagmi network info to get correct native token symbol, name, and decimals
   // wagmi chain object typically has nativeCurrency: { name: 'Matic', symbol: 'MATIC', decimals: 18 }
-  const nativeSymbol = network?.nativeCurrency?.symbol ?? "ETH";
-  const nativeDecimals = network?.nativeCurrency?.decimals ?? 18;
-  const nativeName = network?.nativeCurrency?.name ?? "Ether";
+  const {
+    symbol: nativeSymbol,
+    decimals: nativeDecimals,
+    name: nativeName,
+  } = network.nativeCurrency;
 
   // Use provided token info, or default to the native chain info
   const tokenName = isNativePayment ? nativeName : (invoice.paymentToken?.name ?? nativeName);

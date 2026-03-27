@@ -359,7 +359,7 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
 
   pdf.setFontSize(8);
   pdf.setTextColor(...mediumGray);
-  if (invoice.paymentToken?.address) {
+  if (!isNativePayment && invoice.paymentToken?.address) {
     const contractAddr = invoice.paymentToken.address;
     const shortAddr = `${contractAddr.substring(0, 10)}......${contractAddr.substring(contractAddr.length - 8)}`;
     pdf.text(shortAddr, 25, yPos + 19);
