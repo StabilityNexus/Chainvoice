@@ -347,6 +347,14 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   const chainId = invoice.paymentToken?.chainId || invoice.chainId;
   const network = getWagmiChainInfo(chainId);
   const chainName = network?.name || getWagmiChainName(chainId) || "Unknown network";
+  let paymentContext;
+  try {
+    paymentContext = resolveInvoicePaymentContext(invoice, network);
+  } catch (err) {
+    throw new Error(
+      `Cannot generate PDF: unsupported chain (ID: ${chainId}). ${err.message}`
+    );
+  }
   const {
     nativeSymbol,
     nativeDecimals,
@@ -354,7 +362,7 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
     tokenName,
     tokenSymbol,
     tokenDecimals,
-  } = resolveInvoicePaymentContext(invoice, network);
+  } = paymentContext;
   pdf.text(`${tokenName} (${tokenSymbol})`, 25, yPos + 14);
 
   pdf.setFontSize(8);
