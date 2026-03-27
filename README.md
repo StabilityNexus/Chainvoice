@@ -101,41 +101,6 @@ npm test
 3. **Run tests with coverage (CI mode)**
 npm run test:ci
 
-### Negative Invoice Amount Feature: Covered Test Cases
-
-The Jest suite currently covers all validation and calculation paths for issue #148:
-
-- Parsing behavior for empty numeric input values
-- Parsing behavior for positive and negative decimal values
-- Invalid numeric format rejection
-- Line amount calculation with qty, unit price, discount, and tax
-- Negative line amount generation case (discount greater than line total)
-- Safe display clamping of negative amount to zero
-- Invalid line input display behavior
-- Required client address validation
-- Invalid wallet address format validation
-- Self-invoicing prevention validation
-- Valid client address acceptance
-- Single-invoice valid payload acceptance
-- Single-invoice negative line amount rejection
-- Single-invoice negative quantity rejection
-- Single-invoice negative unit price rejection
-- Single-invoice negative discount rejection
-- Single-invoice negative tax rejection
-- Single-invoice zero total rejection
-- Single-invoice invalid total format rejection
-- Single-invoice token decimal precision overflow rejection
-- Batch-invoice valid rows acceptance
-- Batch-invoice duplicate wallet detection
-- Batch-invoice negative line amount rejection
-- Batch-invoice token decimal precision overflow rejection
-- Batch-invoice empty or non-meaningful input rejection
-
-### Current Coverage Snapshot
-
-- invoiceCalculations.js: 96.55% statements, 95% branches, 100% functions, 96.29% lines
-- invoiceValidation.js: 93.25% statements, 86.95% branches, 100% functions, 92.94% lines
-
 ## Smart Contract Testing
 
 > **Prerequisites:** [Foundry](https://getfoundry.sh/) must be installed
