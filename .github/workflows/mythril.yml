@@ -1,0 +1,41 @@
+name: Mythril Security Scan
+
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+        branches: [main, master]
+
+env:
+    FOUNDRY_PROFILE: ci
+
+jobs:
+    mythril:
+        name: Mythril Security Scan
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+
+            - name: Build contracts
+              working-directory: contracts
+              run: forge build
+
+            - name: Run Mythril on all contracts
+              working-directory: contracts
+              run: |
+                  # Determine solc locally based on foundry.toml
+                  MYTHRIL_SOLC=$(grep -oP "solc_version\s*=\s*'\K[^']+" foundry.toml || echo "0.8.13")
+                  echo "Dynamically selecting Mythril solc version: $MYTHRIL_SOLC"
+                  find src -name "*.sol" | while read contract; do
+                    echo "🔍 Scanning $contract ..."
+                    docker run --rm \
+                      -v "$(pwd):/project" \
+                      mythril/myth analyze "/project/$contract" \
+                      --solv "$MYTHRIL_SOLC" \
+                      --execution-timeout 60
+                  done

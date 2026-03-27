@@ -1,0 +1,50 @@
+name: Gas Snapshot Diff
+
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+        branches: [main, master]
+
+env:
+    FOUNDRY_PROFILE: ci
+
+jobs:
+    gas-snapshot:
+        name: Gas Snapshot Diff
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+
+            - name: Compare gas snapshot diff
+              working-directory: contracts
+              run: |
+                  if [ ! -f .gas-snapshot ]; then
+                    echo "::error::.gas-snapshot is missing. Commit a baseline snapshot to enable gas regression checks."
+                    exit 1
+                  fi
+                  # Capture gas diff output to evaluate against threshold
+                  GAS_FAIL_THRESHOLD=${GAS_FAIL_THRESHOLD:-0}
+                  set +e
+                  output=$(forge snapshot --diff .gas-snapshot)
+                  exit_code=$?
+                  set -e
+                  echo "$output"
+                  
+                  if [ $exit_code -ne 0 ]; then
+                    # Parse the numeric gas delta from "forge snapshot --diff" summary
+                    parsed_delta=$(echo "$output" | grep -i "overall gas change" | grep -oE '[0-9]+' | head -1 || echo 0)
+                    if [ -z "$parsed_delta" ]; then parsed_delta=0; fi
+                    
+                    if [ "$parsed_delta" -gt "$GAS_FAIL_THRESHOLD" ]; then
+                      echo "❌ Gas increase ($parsed_delta) exceeded threshold ($GAS_FAIL_THRESHOLD)."
+                      exit 1
+                    else
+                      echo "⚠️ Gas increased by $parsed_delta, which is within the allowed threshold ($GAS_FAIL_THRESHOLD). Proceeding."
+                    fi
+                  fi
