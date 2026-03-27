@@ -33,7 +33,7 @@ export const resolveInvoicePaymentContext = (invoice, network) => {
 
 export const formatNetworkFeeValue = (fee, nativeDecimals) => {
   try {
-    return ethers.formatUnits(fee || "0", nativeDecimals || 18);
+    return ethers.formatUnits(fee || "0", nativeDecimals ?? 18);
   } catch {
     return "0.0";
   }
