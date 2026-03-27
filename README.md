@@ -19,7 +19,8 @@
   &nbsp;
   <a href="https://discord.gg/YzDKeEfWtS"><img src="https://img.shields.io/discord/995968619034984528?style=flat&logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=57F287" alt="Discord"></a>
   &nbsp;
-  <a href="https://news.stability.nexus/"><img src="https://img.shields.io/badge/Medium-white?style=flat&logo=medium&logoColor=black" alt="Medium"></a>
+  <a href="https://viewpoints.stability.nexus/">
+  <img src="https://img.shields.io/badge/Stable_Viewpoints-Articles-2ea44f?style=flat&labelColor=facc15" alt="Stable Viewpoints"></a>
   &nbsp;
   <a href="https://linkedin.com/company/stability-nexus"><img src="https://img.shields.io/badge/LinkedIn-0A66C2?style=flat&logo=linkedin&logoColor=white" alt="LinkedIn"></a>
   &nbsp;
@@ -172,7 +173,7 @@ Join our community for support, updates, and discussions:
 - **Telegram** - [t.me/StabilityNexus](https://t.me/StabilityNexus)
 - **Discord** - [discord.gg/YzDKeEfWtS](https://discord.gg/YzDKeEfWtS)
 - **X (Twitter)** - [@StabilityNexus](https://x.com/StabilityNexus)
-- **Medium** - [news.stability.nexus](https://news.stability.nexus)
+- **Stable ViewPoints** - [news.stability.nexus](https://viewpoints.stability.nexus/)
 - **LinkedIn** - [linkedin.com/company/stability-nexus](https://linkedin.com/company/stability-nexus)
 - **YouTube** - [youtube.com/@StabilityNexus](https://www.youtube.com/@StabilityNexus)
 
