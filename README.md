@@ -39,6 +39,7 @@ Chainvoice is a decentralized invoicing platform that enables secure, transparen
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
 - [Frontend Setup](#frontend-setup)
+- [Frontend Testing (Jest)](#frontend-testing-jest)
 - [Smart Contract Testing](#smart-contract-testing)
 - [Deploy to Ethereum Classic](#deploy-to-ethereum-classic)
 - [Environment Variables](#environment-variables)
@@ -88,6 +89,17 @@ npm run dev
 
 4. **Open application**
 Navigate to `http://localhost:5173` in your browser
+
+## Frontend Testing (Jest)
+
+1. **Navigate to frontend directory**
+cd frontend
+
+2. **Run tests**
+npm test
+
+3. **Run tests with coverage (CI mode)**
+npm run test:ci
 
 ## Smart Contract Testing
 

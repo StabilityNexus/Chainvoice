@@ -7,7 +7,6 @@ import {
   Contract,
   ethers,
   formatUnits,
-  parseUnits,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
@@ -36,8 +35,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import toast from "react-hot-toast";
 
 import { LitNodeClient } from "@lit-protocol/lit-node-client";
 import { encryptString } from "@lit-protocol/encryption/src/lib/encryption.js";
@@ -54,6 +52,15 @@ import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
+import {
+  getLineAmountDetails,
+  getSafeLineAmountDisplay,
+  INVOICE_DECIMALS,
+} from "@/utils/invoiceCalculations";
+import {
+  getClientAddressError,
+  validateBatchInvoiceData,
+} from "@/utils/invoiceValidation";
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
@@ -72,6 +79,7 @@ function CreateInvoicesBatch() {
   const [tokenVerificationState, setTokenVerificationState] = useState("idle");
   const [verifiedToken, setVerifiedToken] = useState(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
+  const [clientAddressErrors, setClientAddressErrors] = useState({});
 
   // UI state for collapsible invoices
   const [expandedInvoice, setExpandedInvoice] = useState(0);
@@ -115,18 +123,16 @@ function CreateInvoicesBatch() {
     setInvoiceRows((prev) =>
       prev.map((row) => {
         const total = row.itemData.reduce((sum, item) => {
-          const qty = parseUnits(item.qty || "0", 18);
-          const unitPrice = parseUnits(item.unitPrice || "0", 18);
-          const discount = parseUnits(item.discount || "0", 18);
-          const tax = parseUnits(item.tax || "0", 18);
-          const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-          const adjusted = lineTotal - discount + tax;
+          const { valid, amountWei } = getLineAmountDetails(item);
+          if (!valid) return sum;
+          let adjusted = amountWei;
+          if (adjusted < 0n) adjusted = 0n;
           return sum + adjusted;
         }, 0n);
 
         return {
           ...row,
-          totalAmountDue: formatUnits(total, 18),
+          totalAmountDue: formatUnits(total, INVOICE_DECIMALS),
         };
       })
     );
@@ -178,16 +184,23 @@ function CreateInvoicesBatch() {
       },
     ]);
     setExpandedInvoice(newIndex);
-    toast.success("New invoice added to batch");
   };
 
   const removeInvoiceRow = (index) => {
     if (invoiceRows.length > 1) {
       setInvoiceRows((prev) => prev.filter((_, i) => i !== index));
+      setClientAddressErrors((prev) => {
+        const next = {};
+        Object.entries(prev).forEach(([key, value]) => {
+          const numericKey = Number(key);
+          if (numericKey < index) next[numericKey] = value;
+          if (numericKey > index) next[numericKey - 1] = value;
+        });
+        return next;
+      });
       if (expandedInvoice === index) {
         setExpandedInvoice(0);
       }
-      toast.success("Invoice removed from batch");
     }
   };
 
@@ -213,15 +226,12 @@ function CreateInvoicesBatch() {
                 name === "discount" ||
                 name === "tax"
               ) {
-                const qty = parseUnits(updatedItem.qty || "0", 18);
-                const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
-                const discount = parseUnits(updatedItem.discount || "0", 18);
-                const tax = parseUnits(updatedItem.tax || "0", 18);
-
-                const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-                const finalAmount = lineTotal - discount + tax;
-
-                updatedItem.amount = formatUnits(finalAmount, 18);
+                const { valid, amountWei } = getLineAmountDetails(updatedItem);
+                if (!valid) {
+                  updatedItem.amount = "";
+                } else {
+                  updatedItem.amount = getSafeLineAmountDisplay(updatedItem);
+                }
               }
               return updatedItem;
             }
@@ -291,19 +301,62 @@ function CreateInvoicesBatch() {
 
   // Enhanced error handling for batch creation
   const getErrorMessage = (error) => {
-    if (error.code === "ACTION_REJECTED") {
+    if (error?.code === "ACTION_REJECTED") {
       return "Transaction was cancelled by user";
-    } else if (error.message?.includes("insufficient")) {
-      return "Insufficient balance to complete transaction";
-    } else if (error.message?.includes("network")) {
-      return "Network error. Please check your connection and try again";
-    } else if (error.reason) {
-      return `Transaction failed: ${error.reason}`;
-    } else if (error.message) {
-      return error.message;
-    } else {
-      return "Failed to create invoice batch. Please try again.";
     }
+
+    if (error?.message?.toLowerCase().includes("insufficient")) {
+      return "Insufficient balance to complete transaction";
+    }
+
+    if (error?.message?.toLowerCase().includes("network")) {
+      return "Network error. Please check your connection and try again";
+    }
+
+    if (error?.reason) {
+      return `Transaction failed: ${error.reason}`;
+    }
+
+    if (error?.message) {
+      return error.message;
+    }
+
+    return "Failed to create invoice batch. Please try again.";
+  };
+
+  const validateClientAddress = (rowIndex, value, options = {}) => {
+    const error = getClientAddressError(value, {
+      ...options,
+      ownerAddress: account.address,
+    });
+    setClientAddressErrors((prev) => {
+      if (!error && !prev[rowIndex]) return prev;
+      const next = { ...prev };
+      if (error) {
+        next[rowIndex] = error;
+      } else {
+        delete next[rowIndex];
+      }
+      return next;
+    });
+    return !error;
+  };
+
+  const validateInvoicesBeforeSubmit = (rows, paymentToken) => {
+    const validation = validateBatchInvoiceData({
+      rows,
+      paymentToken,
+      ownerAddress: account.address,
+    });
+
+    if (!validation.isValid) {
+      setClientAddressErrors(validation.addressErrors || {});
+      toast.error(validation.errorMessage);
+      return null;
+    }
+
+    setClientAddressErrors({});
+    return { validInvoices: validation.validInvoices };
   };
 
   // Create batch invoices
@@ -315,7 +368,6 @@ function CreateInvoicesBatch() {
 
     try {
       setLoading(true);
-      toast.info("Starting batch invoice creation...");
 
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
@@ -327,17 +379,20 @@ function CreateInvoicesBatch() {
         return;
       }
 
-      // Validate invoices
-      const validInvoices = invoiceRows.filter(
-        (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
-      );
-
-      if (validInvoices.length === 0) {
-        toast.error(
-          "Please add at least one valid invoice with client address and amount"
-        );
+      const tokenDecimals = Number(paymentToken?.decimals);
+      if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0) {
+        toast.error("Selected token has invalid decimals");
         return;
       }
+
+      const validationResult = validateInvoicesBeforeSubmit(
+        invoiceRows,
+        paymentToken
+      );
+      if (!validationResult) {
+        return;
+      }
+      const { validInvoices } = validationResult;
 
       // Prepare batch arrays
       const tos = [];
@@ -351,14 +406,8 @@ function CreateInvoicesBatch() {
         return;
       }
 
-      toast.info(`Processing ${validInvoices.length} invoices...`);
-
       // Process each invoice
       for (const [index, row] of validInvoices.entries()) {
-        toast.info(
-          `Encrypting invoice ${index + 1} of ${validInvoices.length}...`
-        );
-
         const invoicePayload = {
           amountDue: row.totalAmountDue.toString(),
           dueDate,
@@ -366,7 +415,7 @@ function CreateInvoicesBatch() {
           paymentToken: {
             address: paymentToken.address,
             symbol: paymentToken.symbol,
-            decimals: Number(paymentToken.decimals),
+            decimals: tokenDecimals,
           },
           user: {
             address: account?.address.toString(),
@@ -386,7 +435,10 @@ function CreateInvoicesBatch() {
             city: row.clientCity,
             postalcode: row.clientPostalcode,
           },
-          items: row.itemData,
+          items: row.itemData.map((item) => ({
+            ...item,
+            amount: getSafeLineAmountDisplay(item),
+          })),
           // Add batch metadata
           batchInfo: {
             batchId: `batch_${Date.now()}`,
@@ -466,18 +518,23 @@ function CreateInvoicesBatch() {
 
         // Add to batch arrays
         tos.push(row.clientAddress);
-        amounts.push(
-          ethers.parseUnits(
+        let amountForContract;
+        try {
+          amountForContract = ethers.parseUnits(
             row.totalAmountDue.toString(),
-            paymentToken.decimals
-          )
-        );
+            tokenDecimals
+          );
+        } catch {
+          toast.error(
+            `Invoice #${index + 1} total exceeds ${tokenDecimals} decimals for ${paymentToken.symbol || "selected token"}`
+          );
+          return;
+        }
+
+        amounts.push(amountForContract);
         encryptedPayloads.push(encryptedStringBase64);
         encryptedHashes.push(dataToEncryptHash);
       }
-
-      toast.success("All invoices encrypted successfully!");
-      toast.info("Submitting batch transaction to blockchain...");
 
       // Send to contract
       const contractAddress = import.meta.env[
@@ -498,17 +555,12 @@ function CreateInvoicesBatch() {
         encryptedHashes
       );
 
-      toast.info("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
 
       toast.success(
         `Successfully created ${validInvoices.length} invoices in batch!`
       );
-      toast.success(
-        `Gas saved: ~${
-          (validInvoices.length - 1) * 75
-        }% compared to individual transactions!`
-      );
+      toast.success(`Estimated gas savings: ~${(validInvoices.length - 1) * 75}%`);
 
       setTimeout(() => navigate("/dashboard/sent"), 3000);
     } catch (err) {
@@ -988,16 +1040,29 @@ function CreateInvoicesBatch() {
                         </Label>
                         <Input
                           placeholder="0x... (Client's wallet address)"
-                          className="w-full border-gray-300 text-black font-mono"
+                          className={cn(
+                            "w-full text-black font-mono",
+                            clientAddressErrors[rowIndex]
+                              ? "border-red-500 focus-visible:ring-red-500"
+                              : "border-gray-300"
+                          )}
                           value={row.clientAddress}
-                          onChange={(e) =>
-                            updateInvoiceRow(
-                              rowIndex,
-                              "clientAddress",
-                              e.target.value
-                            )
-                          }
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            updateInvoiceRow(rowIndex, "clientAddress", value);
+                            validateClientAddress(rowIndex, value);
+                          }}
+                          onBlur={(e) => {
+                            validateClientAddress(rowIndex, e.target.value, {
+                              required: true,
+                            });
+                          }}
                         />
+                        {clientAddressErrors[rowIndex] && (
+                          <div className="mt-2 text-sm text-red-600">
+                            {clientAddressErrors[rowIndex]}
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1088,7 +1153,7 @@ function CreateInvoicesBatch() {
                         <div className="col-span-4">DESCRIPTION</div>
                         <div className="col-span-1">QTY</div>
                         <div className="col-span-2">UNIT PRICE</div>
-                        <div className="col-span-1">DISCOUNT</div>
+                        <div className="col-span-1">DISCOUNT (AMOUNT)</div>
                         <div className="col-span-1">TAX(%)</div>
                         <div className="col-span-2">AMOUNT</div>
                         <div className="col-span-1">ACTION</div>
@@ -1149,11 +1214,11 @@ function CreateInvoicesBatch() {
                             <div className="grid grid-cols-2 gap-2 md:contents">
                               <div className="md:col-span-1">
                                 <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
-                                  Discount
+                                  Discount (Amount)
                                 </label>
                                 <Input
                                   type="text"
-                                  placeholder="0"
+                                  placeholder="Flat amount"
                                   className="w-full border-gray-300 text-black"
                                   name="discount"
                                   value={item.discount}
@@ -1184,12 +1249,7 @@ function CreateInvoicesBatch() {
                                   Amount
                                 </label>
                                 <div className="bg-gray-100 px-3 py-2 rounded border text-gray-700 font-mono text-sm">
-                                  {(
-                                    (parseFloat(item.qty) || 0) *
-                                      (parseFloat(item.unitPrice) || 0) -
-                                    (parseFloat(item.discount) || 0) +
-                                    (parseFloat(item.tax) || 0)
-                                  ).toFixed(4)}
+                                  {item.amount === "" ? "-" : (Number(item.amount) || 0).toFixed(4)}
                                 </div>
                               </div>
                               <div className="md:col-span-1 flex justify-center md:justify-center">

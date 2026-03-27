@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
+    "test:watch": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --watch",
+    "test:ci": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --ci --coverage"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
@@ -66,6 +69,7 @@
     "eslint-plugin-react-hooks": "^5.0.0",
     "eslint-plugin-react-refresh": "^0.4.16",
     "globals": "^15.14.0",
+    "jest": "^30.2.0",
     "postcss": "^8.5.0",
     "tailwindcss": "^3.4.17",
     "vite": "^6.0.5"
