@@ -1,6 +1,10 @@
 import jsPDF from "jspdf";
-import { ethers } from "ethers";
 import { getWagmiChainName, getWagmiChainInfo } from "./wagmiChainHelpers";
+import {
+  buildInvoiceTotalText,
+  formatNetworkFeeValue,
+  resolveInvoicePaymentContext,
+} from "./invoicePaymentSymbols";
 
 /**
  * Load logo image with multiple fallback methods
@@ -340,21 +344,43 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
 
   pdf.setFontSize(10);
   pdf.setFont("helvetica", "normal");
-  const tokenName = invoice.paymentToken?.name || "Ether";
-  const tokenSymbol = invoice.paymentToken?.symbol || "ETH";
+  const chainId = invoice.paymentToken?.chainId || invoice.chainId;
+  const network = getWagmiChainInfo(chainId);
+  const chainName = network?.name || getWagmiChainName(chainId) || "Unknown network";
+  let paymentContext;
+  try {
+    paymentContext = resolveInvoicePaymentContext(invoice, network);
+  } catch (err) {
+    throw new Error(
+      `Cannot generate PDF: unsupported chain (ID: ${chainId}). ${err.message}`
+    );
+  }
+  const {
+    nativeSymbol,
+    nativeDecimals,
+    isNativePayment,
+    tokenName,
+    tokenSymbol,
+    tokenDecimals,
+  } = paymentContext;
+  if (
+    !isNativePayment &&
+    (!invoice.paymentToken?.symbol || invoice.paymentToken?.decimals == null)
+  ) {
+    throw new Error(
+      `Cannot generate PDF: missing ERC-20 token metadata for ${invoice.paymentToken?.address || "unknown token"} on chain ${chainId}.`
+    );
+  }
   pdf.text(`${tokenName} (${tokenSymbol})`, 25, yPos + 14);
 
   pdf.setFontSize(8);
   pdf.setTextColor(...mediumGray);
-  if (invoice.paymentToken?.address) {
+  if (!isNativePayment && invoice.paymentToken?.address) {
     const contractAddr = invoice.paymentToken.address;
     const shortAddr = `${contractAddr.substring(0, 10)}......${contractAddr.substring(contractAddr.length - 8)}`;
     pdf.text(shortAddr, 25, yPos + 19);
-    const chainId = invoice.paymentToken?.chainId || invoice.chainId;
-    const network = getWagmiChainInfo(chainId);
-    const chainName = network?.name || getWagmiChainName(chainId) || "Unknown network";
     pdf.text(
-      `Decimals: ${invoice.paymentToken.decimals || 18} | Chain: ${chainName}`,
+      `Decimals: ${tokenDecimals} | Chain: ${chainName}`,
       120,
       yPos + 14
     );
@@ -523,8 +549,8 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   pdf.setFont("helvetica", "normal");
   pdf.text("Network Fee:", 25, yPos + 13);
   pdf.setFont("helvetica", "bold");
-  const networkFee = ethers.formatUnits(fee);
-  pdf.text(`${networkFee} ETH`, 185, yPos + 13, { align: "right" });
+  const networkFee = formatNetworkFeeValue(fee, nativeDecimals);
+  pdf.text(`${networkFee} ${nativeSymbol}`, 185, yPos + 13, { align: "right" });
 
   pdf.setDrawColor(...mediumGray);
   pdf.setLineWidth(0.5);
@@ -540,27 +566,15 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   pdf.setTextColor(...darkGray);
   pdf.text("TOTAL AMOUNT:", 25, yPos + 25);
 
-
-  let totalText;
-  if (tokenSymbol === "ETH") {
-    // Use ethers.BigNumber for precise addition in wei
-    let amountDueWei, networkFeeWei;
-    try {
-      amountDueWei = ethers.parseUnits(invoice.amountDue || "0", 18);
-    } catch {
-      amountDueWei = 0n;
-    }
-    try {
-      networkFeeWei = ethers.parseUnits(networkFee || "0", 18);
-    } catch {
-      networkFeeWei = 0n;
-    }
-    const totalWei = amountDueWei + networkFeeWei;
-    const totalEth = ethers.formatUnits(totalWei, 18);
-    totalText = `${Number(totalEth).toFixed(6)} ETH`;
-  } else {
-    totalText = `${invoice.amountDue} ${tokenSymbol} + ${networkFee} ETH`;
-  }
+  const totalText = buildInvoiceTotalText({
+    isNativePayment,
+    amountDue: invoice.amountDue,
+    tokenSymbol,
+    fee,
+    networkFee,
+    nativeSymbol,
+    nativeDecimals,
+  });
 
   pdf.setFontSize(11);
   pdf.text(totalText, 185, yPos + 25, { align: "right" });
