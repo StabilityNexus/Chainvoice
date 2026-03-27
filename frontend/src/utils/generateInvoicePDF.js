@@ -570,7 +570,6 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
     isNativePayment,
     amountDue: invoice.amountDue,
     tokenSymbol,
-    tokenDecimals,
     fee,
     networkFee,
     nativeSymbol,

@@ -43,7 +43,6 @@ export const buildInvoiceTotalText = ({
   isNativePayment,
   amountDue,
   tokenSymbol,
-  tokenDecimals,
   fee,
   networkFee,
   nativeSymbol,
