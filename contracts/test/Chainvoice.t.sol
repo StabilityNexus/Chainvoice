@@ -18,7 +18,7 @@ contract ChainvoiceTest is Test {
     }
 
     /* ------------------------------------------------------------ */
-    /*                       CREATE INVOICE                         */
+    /*                          CREATE INVOICE                      */
     /* ------------------------------------------------------------ */
 
     function testCreateInvoice_Native() public {
@@ -31,12 +31,16 @@ contract ChainvoiceTest is Test {
             "hash123"
         );
 
+        // FIX: Added offset (0) and limit (10) for pagination
         Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(
-            alice
+            alice,
+            0,
+            10
         );
 
+        // FIX: Added offset (0) and limit (10) for pagination
         Chainvoice.InvoiceDetails[] memory received = chainvoice
-            .getReceivedInvoices(bob);
+            .getReceivedInvoices(bob, 0, 10);
 
         assertEq(sent.length, 1);
         assertEq(received.length, 1);
