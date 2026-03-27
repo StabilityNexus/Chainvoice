@@ -90,6 +90,16 @@ npm run dev
 4. **Open application**
 Navigate to `http://localhost:5173` in your browser
 
+## Frontend Testing (Jest)
+
+1. **Navigate to frontend directory**
+cd frontend
+
+2. **Run tests**
+npm test
+
+3. **Run tests with coverage (CI mode)**
+npm run test:ci
 ## Smart Contract Testing
 
 > **Prerequisites:** [Foundry](https://getfoundry.sh/) must be installed
