@@ -52,8 +52,11 @@ import {
   getLineAmountDetails,
   getSafeLineAmountDisplay,
   INVOICE_DECIMALS,
-  parseNumericInputToWei,
 } from "@/utils/invoiceCalculations";
+import {
+  getClientAddressError,
+  validateSingleInvoiceData,
+} from "@/utils/invoiceValidation";
 import toast from "react-hot-toast";
 
 /** Public RPC URLs by chain ID for token verification when visitor has no wallet (e.g. opening invoice request link in incognito). */
@@ -344,95 +347,34 @@ function CreateInvoice() {
       },
     ]);
   };
-  const getClientAddressError = useCallback((value, options = {}) => {
-    const { required = false } = options;
-    const trimmed = (value || "").trim();
-
-    if (!trimmed) {
-      return required ? "Please enter a client wallet address" : "";
-    }
-
-    if (!trimmed.startsWith("0x") || trimmed.length !== 42 || !ethers.isAddress(trimmed)) {
-      return "Please enter a valid wallet address";
-    }
-
-    if (trimmed.toLowerCase() === account.address?.toLowerCase()) {
-      return "You cannot create an invoice for your own wallet";
-    }
-
-    return "";
-  }, [account.address]);
-
   const validateClientAddress = useCallback((value, options = {}) => {
-    const error = getClientAddressError(value, options);
+    const error = getClientAddressError(value, {
+      ...options,
+      ownerAddress: account.address,
+    });
     setClientAddressError(error);
     return !error;
-  }, [getClientAddressError]);
+  }, [account.address]);
 
   const validateInvoiceBeforeSubmit = useCallback((data, paymentToken) => {
-    const addressError = getClientAddressError(data.clientAddress, { required: true });
-    if (addressError) {
-      setClientAddressError(addressError);
-      toast.error(addressError);
+    const validation = validateSingleInvoiceData({
+      clientAddress: data.clientAddress,
+      itemData,
+      totalAmountDue,
+      paymentToken,
+      ownerAddress: account.address,
+    });
+
+    if (!validation.isValid) {
+      if (validation.fieldErrors.clientAddress) {
+        setClientAddressError(validation.fieldErrors.clientAddress);
+      }
+      toast.error(validation.errorMessage);
       return false;
-    }
-
-    for (let i = 0; i < itemData.length; i += 1) {
-      const item = itemData[i];
-      const { valid, amountWei, qtyWei, unitPriceWei, discountWei, taxRateWei } = getLineAmountDetails(item);
-      const lineLabel = `Line item ${i + 1}`;
-
-      if (!valid) {
-        toast.error(`${lineLabel} has invalid number format`);
-        return false;
-      }
-
-      if (qtyWei < 0n) {
-        toast.error(`${lineLabel}: quantity cannot be negative`);
-        return false;
-      }
-
-      if (unitPriceWei < 0n) {
-        toast.error(`${lineLabel}: unit price cannot be negative`);
-        return false;
-      }
-
-      if (discountWei < 0n) {
-        toast.error(`${lineLabel}: discount cannot be negative`);
-        return false;
-      }
-
-      if (taxRateWei < 0n) {
-        toast.error(`${lineLabel}: tax cannot be negative`);
-        return false;
-      }
-
-      if (amountWei < 0n) {
-        toast.error(`${lineLabel} amount cannot be negative. Reduce discount or update values`);
-        return false;
-      }
-    }
-
-    const totalWei = parseNumericInputToWei(totalAmountDue);
-    if (totalWei === null || totalWei <= 0n) {
-      toast.error("Invoice total must be greater than 0");
-      return false;
-    }
-
-    const tokenDecimals = Number(paymentToken?.decimals);
-    if (paymentToken && Number.isInteger(tokenDecimals) && tokenDecimals >= 0) {
-      try {
-        ethers.parseUnits(totalAmountDue.toString(), tokenDecimals);
-      } catch {
-        toast.error(
-          `Invoice total supports up to ${tokenDecimals} decimals for ${paymentToken.symbol || "selected token"}`
-        );
-        return false;
-      }
     }
 
     return true;
-  }, [getClientAddressError, itemData, totalAmountDue]);
+  }, [account.address, itemData, totalAmountDue]);
 
   const createInvoiceRequest = async (data) => {
     if (!isConnected || !walletClient) {

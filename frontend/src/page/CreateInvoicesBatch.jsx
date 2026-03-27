@@ -56,8 +56,11 @@ import {
   getLineAmountDetails,
   getSafeLineAmountDisplay,
   INVOICE_DECIMALS,
-  parseNumericInputToWei,
 } from "@/utils/invoiceCalculations";
+import {
+  getClientAddressError,
+  validateBatchInvoiceData,
+} from "@/utils/invoiceValidation";
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
@@ -321,27 +324,11 @@ function CreateInvoicesBatch() {
     return "Failed to create invoice batch. Please try again.";
   };
 
-  const getClientAddressError = (value, options = {}) => {
-    const { required = false } = options;
-    const trimmed = (value || "").trim();
-
-    if (!trimmed) {
-      return required ? "Please enter a client wallet address" : "";
-    }
-
-    if (!trimmed.startsWith("0x") || trimmed.length !== 42 || !ethers.isAddress(trimmed)) {
-      return "Please enter a valid wallet address";
-    }
-
-    if (trimmed.toLowerCase() === account.address?.toLowerCase()) {
-      return "You cannot create an invoice for your own wallet";
-    }
-
-    return "";
-  };
-
   const validateClientAddress = (rowIndex, value, options = {}) => {
-    const error = getClientAddressError(value, options);
+    const error = getClientAddressError(value, {
+      ...options,
+      ownerAddress: account.address,
+    });
     setClientAddressErrors((prev) => {
       if (!error && !prev[rowIndex]) return prev;
       const next = { ...prev };
@@ -356,121 +343,20 @@ function CreateInvoicesBatch() {
   };
 
   const validateInvoicesBeforeSubmit = (rows, paymentToken) => {
-    const normalizedRows = rows.map((row) => ({
-      ...row,
-      clientAddress: (row.clientAddress || "").trim(),
-    }));
+    const validation = validateBatchInvoiceData({
+      rows,
+      paymentToken,
+      ownerAddress: account.address,
+    });
 
-    const tokenDecimals = Number(paymentToken?.decimals);
-    const pendingAddressErrors = {};
-    const duplicateTracker = new Map();
-
-    for (let rowIndex = 0; rowIndex < normalizedRows.length; rowIndex += 1) {
-      const row = normalizedRows[rowIndex];
-      const rowLabel = `Invoice #${rowIndex + 1}`;
-      const hasMeaningfulInput =
-        row.clientAddress || parseFloat(row.totalAmountDue) > 0;
-
-      if (!hasMeaningfulInput) {
-        continue;
-      }
-
-      const addressError = getClientAddressError(row.clientAddress, {
-        required: true,
-      });
-      if (addressError) {
-        pendingAddressErrors[rowIndex] = addressError;
-        setClientAddressErrors((prev) => ({ ...prev, ...pendingAddressErrors }));
-        toast.error(`${rowLabel}: ${addressError}`);
-        return null;
-      }
-
-      const normalizedAddress = row.clientAddress.toLowerCase();
-      if (duplicateTracker.has(normalizedAddress)) {
-        const firstIndex = duplicateTracker.get(normalizedAddress);
-        pendingAddressErrors[firstIndex] = "Duplicate wallet address in batch";
-        pendingAddressErrors[rowIndex] = "Duplicate wallet address in batch";
-        setClientAddressErrors((prev) => ({ ...prev, ...pendingAddressErrors }));
-        toast.error(
-          `Duplicate client wallet found in Invoice #${firstIndex + 1} and Invoice #${rowIndex + 1}`
-        );
-        return null;
-      }
-
-      duplicateTracker.set(normalizedAddress, rowIndex);
-
-      for (let itemIndex = 0; itemIndex < row.itemData.length; itemIndex += 1) {
-        const item = row.itemData[itemIndex];
-        const lineLabel = `${rowLabel}, line item ${itemIndex + 1}`;
-        const {
-          valid,
-          amountWei,
-          qtyWei,
-          unitPriceWei,
-          discountWei,
-          taxRateWei,
-        } = getLineAmountDetails(item);
-
-        if (!valid) {
-          toast.error(`${lineLabel} has invalid number format`);
-          return null;
-        }
-        if (qtyWei < 0n) {
-          toast.error(`${lineLabel}: quantity cannot be negative`);
-          return null;
-        }
-        if (unitPriceWei < 0n) {
-          toast.error(`${lineLabel}: unit price cannot be negative`);
-          return null;
-        }
-        if (discountWei < 0n) {
-          toast.error(`${lineLabel}: discount cannot be negative`);
-          return null;
-        }
-        if (taxRateWei < 0n) {
-          toast.error(`${lineLabel}: tax cannot be negative`);
-          return null;
-        }
-        if (amountWei < 0n) {
-          toast.error(
-            `${lineLabel} amount cannot be negative. Reduce discount or update values`
-          );
-          return null;
-        }
-      }
-
-      const totalWei = parseNumericInputToWei(row.totalAmountDue);
-      if (totalWei === null || totalWei <= 0n) {
-        toast.error(`${rowLabel}: invoice total must be greater than 0`);
-        return null;
-      }
-
-      if (Number.isInteger(tokenDecimals) && tokenDecimals >= 0) {
-        try {
-          ethers.parseUnits(row.totalAmountDue.toString(), tokenDecimals);
-        } catch {
-          toast.error(
-            `${rowLabel}: total supports up to ${tokenDecimals} decimals for ${paymentToken.symbol || "selected token"}`
-          );
-          return null;
-        }
-      }
-    }
-
-    setClientAddressErrors({});
-
-    const validInvoices = normalizedRows.filter(
-      (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
-    );
-
-    if (validInvoices.length === 0) {
-      toast.error(
-        "Please add at least one valid invoice with client address and amount"
-      );
+    if (!validation.isValid) {
+      setClientAddressErrors(validation.addressErrors || {});
+      toast.error(validation.errorMessage);
       return null;
     }
 
-    return { validInvoices };
+    setClientAddressErrors({});
+    return { validInvoices: validation.validInvoices };
   };
 
   // Create batch invoices
