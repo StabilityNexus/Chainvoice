@@ -67,11 +67,8 @@ export const buildInvoiceTotalText = ({
 
     const totalWei = amountDueWei + networkFeeWei;
     const totalAmount = ethers.formatUnits(totalWei, nativeDecimals ?? 18);
-    
-    // Truncate to 6 decimal places without Number conversion
-    const [intPart, decPart = ""] = totalAmount.split(".");
-    const truncatedDec = decPart.slice(0, 6).padEnd(6, "0");
-    return `${intPart}.${truncatedDec} ${nativeSymbol}`;
+
+    return `${totalAmount} ${nativeSymbol}`;
   }
 
   // If ERC20 payment, show token amount + network fee in native token

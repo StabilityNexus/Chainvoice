@@ -363,6 +363,14 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
     tokenSymbol,
     tokenDecimals,
   } = paymentContext;
+  if (
+    !isNativePayment &&
+    (!invoice.paymentToken?.symbol || invoice.paymentToken?.decimals == null)
+  ) {
+    throw new Error(
+      `Cannot generate PDF: missing ERC-20 token metadata for ${invoice.paymentToken?.address || "unknown token"} on chain ${chainId}.`
+    );
+  }
   pdf.text(`${tokenName} (${tokenSymbol})`, 25, yPos + 14);
 
   pdf.setFontSize(8);
