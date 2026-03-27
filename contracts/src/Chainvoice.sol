@@ -236,15 +236,17 @@ contract Chainvoice {
 
     // ========== Pay single invoice ==========
     function payInvoice(uint256 invoiceId) external payable nonReentrant {
-        if (invoiceId >= invoices.length) revert InvalidInvoiceId();
-        InvoiceDetails storage invoice = invoices[invoiceId];
-        
-        if (msg.sender != invoice.to) revert NotAuthorizedPayer();
-        if (invoice.isPaid) revert InvoiceAlreadyPaid();
-        if (invoice.isCancelled) revert InvoiceCancelledError();
+        require(invoiceId < invoices.length, "Invalid invoice ID");
+
+        InvoiceDetails storage invoiceStorage = invoices[invoiceId]; //(read once from storage)
+        InvoiceDetails memory invoice = invoiceStorage;   // now read all from this invoice(memory)
+        require(msg.sender == invoice.to, "Not authorized");
+        require(!invoice.isPaid, "Already paid");
+        require(!invoice.isCancelled, "Invoice is cancelled");
 
         // Effects first for CEI (mark paid, bump fees), then interactions
-        invoice.isPaid = true;
+        invoiceStorage.isPaid = true;
+
         if (invoice.tokenAddress == address(0)) {
             if (msg.value != invoice.amountDue + fee) revert IncorrectPaymentAmount();
             accumulatedFees += fee;
