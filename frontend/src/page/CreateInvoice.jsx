@@ -51,6 +51,14 @@ import CountryPicker from "@/components/CountryPicker";
 import { useTokenList } from "@/hooks/useTokenList";
 import toast from "react-hot-toast";
 
+import ProductCatalogImport from "@/components/ProductCatalogImport";
+import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
+import { useProductCatalog } from "@/hooks/useProductCatalog";
+import {
+  applyProductToInvoiceItem,
+  createEmptyInvoiceItem,
+} from "@/utils/productCatalogInvoiceHelpers";
+
 /** Public RPC URLs by chain ID for token verification when visitor has no wallet (e.g. opening invoice request link in incognito). */
 const CHAIN_ID_TO_PUBLIC_RPC = {
   1: "https://eth.llamarpc.com",
@@ -78,6 +86,8 @@ function CreateInvoice() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const litClientRef = useRef(null);
+  const itemRefsMobile = useRef([]);
+  const itemRefsDesktop = useRef([]);
   const [clientAddress, setClientAddress] = useState("");
   const [userCountry, setUserCountry] = useState("");
   const [clientCountry, setClientCountry] = useState("");
@@ -97,16 +107,34 @@ function CreateInvoice() {
 
   // const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"]; //sepolia based chainvoice test token (CIN)
 
-  const [itemData, setItemData] = useState([
-    {
-      description: "",
-      qty: "",
-      unitPrice: "",
-      discount: "",
-      tax: "",
-      amount: "",
-    },
-  ]);
+  const [itemData, setItemData] = useState([createEmptyInvoiceItem()]);
+
+  const { catalogMetadata } = useProductCatalog();
+
+  const handleProductSelect = useCallback((product, index) => {
+    setItemData((prevItemData) => {
+      const newData = prevItemData.map((item, i) => {
+        if (i === index) {
+          return applyProductToInvoiceItem(item, product);
+        }
+        return item;
+      });
+
+      if (index === prevItemData.length - 1) {
+        newData.push(createEmptyInvoiceItem());
+      }
+
+      return newData;
+    });
+
+    setTimeout(() => {
+      const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+      const nextInput = isDesktop
+        ? itemRefsDesktop.current[index + 1]
+        : itemRefsMobile.current[index + 1];
+      nextInput?.focus();
+    }, 50);
+  }, []);
 
   const [totalAmountDue, setTotalAmountDue] = useState(0);
 
@@ -166,12 +194,7 @@ function CreateInvoice() {
     if (urlDescription || urlAmount) {
       setItemData((prev) => {
         const first = prev[0] ?? {
-          description: "",
-          qty: "",
-          unitPrice: "",
-          discount: "",
-          tax: "",
-          amount: "",
+          ...createEmptyInvoiceItem(),
         };
         const isFirstLineEmpty = !first.description && !first.unitPrice;
         if (!isFirstLineEmpty) return prev;
@@ -305,17 +328,7 @@ function CreateInvoice() {
   };
 
   const addItem = () => {
-    setItemData((prev) => [
-      ...prev,
-      {
-        description: "",
-        qty: "",
-        unitPrice: "",
-        discount: "",
-        tax: "",
-        amount: "",
-      },
-    ]);
+    setItemData((prev) => [...prev, createEmptyInvoiceItem()]);
   };
 
   
@@ -355,8 +368,16 @@ const validateClientAddress = useCallback((value) => {
       return;
     }
 
-    validateClientAddress(data.clientAddress);
-    if (clientAddressError) {
+    if (!data.clientAddress) {
+      setClientAddressError("Client address is required");
+      return;
+    }
+    if (!ethers.isAddress(data.clientAddress)) {
+      setClientAddressError("Please enter a valid wallet address");
+      return;
+    }
+    if (data.clientAddress.toLowerCase() === account.address?.toLowerCase()) {
+      setClientAddressError("You cannot create an invoice for your own wallet");
       return;
     }
 
@@ -1068,6 +1089,9 @@ const validateClientAddress = useCallback((value) => {
             </div>
           </div>
 
+          {/* Product Catalog Import Section */}
+          <ProductCatalogImport />
+
           {/* Invoice Items Section */}
           <div className="mb-6 sm:mb-8">
             {/* Desktop Header - Hidden on mobile */}
@@ -1085,23 +1109,25 @@ const validateClientAddress = useCallback((value) => {
               <h3 className="font-semibold text-sm">Invoice Items</h3>
             </div>
 
-            <div className="border border-gray-200 rounded-b-lg bg-white overflow-hidden">
+            <div className="border border-gray-200 rounded-b-lg bg-white">
               <div className="p-3 sm:p-4 space-y-4 md:space-y-3">
                 {itemData.map((_, index) => (
-                  <div className="relative" key={index}>
+                  <div className="relative" key={index} style={{ zIndex: 50 - index }}>
                     {/* Mobile Layout - Stacked */}
                     <div className="md:hidden space-y-3 pb-4 border-b border-gray-200 last:border-b-0">
                       <div>
                         <Label className="text-xs font-medium text-gray-600 mb-1 block">
                           Description
                         </Label>
-                        <Input
-                          type="text"
+                        <ProductAutocompleteInput
+                          inputRef={(el) => (itemRefsMobile.current[index] = el)}
                           placeholder="Enter Description"
                           className="w-full border-gray-300 text-black"
                           name="description"
                           value={itemData[index]?.description ?? ""}
                           onChange={(e) => handleItemData(e, index)}
+                          onSelectProduct={(product) => handleProductSelect(product, index)}
+                          catalogMetadata={catalogMetadata}
                         />
                       </div>
 
@@ -1214,13 +1240,15 @@ const validateClientAddress = useCallback((value) => {
                     {/* Desktop Layout - Grid */}
                     <div className="hidden md:grid grid-cols-12 gap-2 items-center">
                       <div className="col-span-4">
-                        <Input
-                          type="text"
+                        <ProductAutocompleteInput
+                          inputRef={(el) => (itemRefsDesktop.current[index] = el)}
                           placeholder="Enter Description"
-                          className="w-full border-gray-300 text-black"
+                          className="w-full border-gray-300 text-black py-2"
                           name="description"
                           value={itemData[index]?.description ?? ""}
                           onChange={(e) => handleItemData(e, index)}
+                          onSelectProduct={(product) => handleProductSelect(product, index)}
+                          catalogMetadata={catalogMetadata}
                         />
                       </div>
                       <div className="col-span-1">
