@@ -70,6 +70,7 @@ function CreateInvoicesBatch() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const litClientRef = useRef(null);
+  const itemRefs = useRef({});
 
   // Token selection state
   const [selectedToken, setSelectedToken] = useState(null);
@@ -259,6 +260,11 @@ function CreateInvoicesBatch() {
         return { ...row, itemData: updatedItemData };
       })
     );
+
+    setTimeout(() => {
+      const nextInput = itemRefs.current[`${rowIndex}-${itemIndex + 1}`];
+      nextInput?.focus();
+    }, 50);
   };
 
   // Token verification
@@ -1110,6 +1116,7 @@ function CreateInvoicesBatch() {
                                 Description
                               </label>
                               <ProductAutocompleteInput
+                                inputRef={(el) => (itemRefs.current[`${rowIndex}-${itemIndex}`] = el)}
                                 placeholder="Enter Description"
                                 className="w-full border-gray-300 text-black"
                                 name="description"
