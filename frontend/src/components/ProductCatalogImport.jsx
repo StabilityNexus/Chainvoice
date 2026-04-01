@@ -62,6 +62,12 @@ export default function ProductCatalogImport() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
+    if (savedUrl) {
+      setPersistUrl(true);
+    }
+  }, [savedUrl]);
+
+  useEffect(() => {
     if (!persistUrl) return;
     if (savedUrl) {
       setUrlInput(savedUrl);
@@ -283,13 +289,7 @@ export default function ProductCatalogImport() {
 
           <div>
             <Label className="text-sm font-medium text-gray-700 block mb-2">Fetch from URL (CSV/JSON)</Label>
-            <form 
-              className="flex items-center gap-2"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void handleUrlLoad();
-              }}
-            >
+            <div className="flex items-center gap-2">
               <Input
                 type="url"
                 placeholder="https://example.com/data.csv"
@@ -301,10 +301,19 @@ export default function ProductCatalogImport() {
                     window.localStorage.setItem(LAST_CATALOG_URL_INPUT_KEY, nextValue);
                   }
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (!isProcessing && urlInput.trim()) {
+                      void handleUrlLoad();
+                    }
+                  }
+                }}
                 disabled={isProcessing}
                 className="flex-1 bg-gray-50 border-gray-200 text-gray-800"
               />
-              <Button type="submit" disabled={isProcessing || !urlInput.trim()} className="shrink-0 bg-gray-800 text-white hover:bg-gray-700">
+              <Button type="button" onClick={handleUrlLoad} disabled={isProcessing || !urlInput.trim()} className="shrink-0 bg-gray-800 text-white hover:bg-gray-700">
                 <LinkIcon className="w-4 h-4 mr-2" /> Fetch URL
               </Button>
               <Button
@@ -317,7 +326,7 @@ export default function ProductCatalogImport() {
               >
                 <RefreshCw className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`} />
               </Button>
-            </form>
+            </div>
 
             <div className="mt-2 flex items-center gap-2">
               <input

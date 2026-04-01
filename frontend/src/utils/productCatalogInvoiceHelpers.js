@@ -4,6 +4,7 @@ const PRECISION = 18;
 const ONE = parseUnits('1', PRECISION);
 
 export const createEmptyInvoiceItem = () => ({
+  id: crypto.randomUUID(),
   description: '',
   qty: '',
   unitPrice: '',

@@ -128,7 +128,7 @@ const normalizeImportUrl = (rawUrl) => {
       return input;
     }
 
-    if (path.includes('/spreadsheets/d/e/')) {
+    if (/\/spreadsheets\/(?:u\/\d+\/)?d\/e\//.test(path)) {
       if (path.endsWith('/pubhtml')) {
         const pubUrl = new URL(url.toString());
         pubUrl.pathname = path.replace('/pubhtml', '/pub');
@@ -143,7 +143,7 @@ const normalizeImportUrl = (rawUrl) => {
       return input;
     }
 
-    const match = path.match(/\/spreadsheets\/d\/([^/]+)/);
+    const match = path.match(/\/spreadsheets\/(?:u\/\d+\/)?d\/([^/]+)/);
     if (!match?.[1]) {
       return input;
     }

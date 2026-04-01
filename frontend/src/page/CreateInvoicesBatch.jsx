@@ -1103,7 +1103,7 @@ function CreateInvoicesBatch() {
                           <div
                             className="relative flex flex-col md:grid md:grid-cols-12 gap-2 mb-3 pb-3 md:pb-0 border-b md:border-b-0 border-gray-200 md:items-center"
                             style={{ zIndex: Math.max(1, row.itemData.length - itemIndex) }}
-                            key={itemIndex}
+                            key={item.id}
                           >
                             <div className="md:col-span-4 w-full">
                               <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
