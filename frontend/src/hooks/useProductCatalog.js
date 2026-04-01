@@ -87,8 +87,11 @@ const parseAndNormalizeCSV = (csvString) => {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        if (results.errors.length > 0 && results.data.length === 0) {
-          return reject(new Error('Invalid CSV format'));
+        if (results.errors.length > 0) {
+          const firstError = results.errors[0];
+          const rowSuffix =
+            typeof firstError?.row === 'number' ? ` near row ${firstError.row + 1}` : '';
+          return reject(new Error(`Invalid CSV format${rowSuffix}`));
         }
 
         try {
@@ -348,7 +351,7 @@ export const useProductCatalog = () => {
     }
 
     return { success: true };
-  }, [catalogMetadata]);
+  }, [catalogMetadata, broadcastCatalogUpdate]);
 
   const persistCurrentURLData = useCallback(async () => {
     const currentUrl = catalogMetadata?.url;
