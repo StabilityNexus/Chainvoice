@@ -344,9 +344,11 @@ export const useProductCatalog = () => {
       await del(CATALOG_KEY);
       memoryCache = updatedMetadata;
       setCatalogMetadata(updatedMetadata);
-      // broadcastCatalogUpdate is outside of the component context, but assuming we can call it. Wait, the suggestion said "call broadcastCatalogUpdate(updatedMetadata)".
-      // Let me just put it exactly as requested.
-      if (typeof broadcastCatalogUpdate === 'function') broadcastCatalogUpdate(updatedMetadata);
+      await del(CATALOG_KEY);
+      memoryCache = updatedMetadata;
+      setCatalogMetadata(updatedMetadata);
+      broadcastCatalogUpdate(updatedMetadata);
+    }
     }
 
     return { success: true };
