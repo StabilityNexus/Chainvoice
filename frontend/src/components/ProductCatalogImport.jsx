@@ -57,7 +57,7 @@ export default function ProductCatalogImport() {
   } = useProductCatalog();
 
   const [urlInput, setUrlInput] = useState('');
-  const [persistUrl, setPersistUrl] = useState(true);
+  const [persistUrl, setPersistUrl] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef(null);
 
@@ -176,7 +176,7 @@ export default function ProductCatalogImport() {
     try {
       await clearCatalog();
       setUrlInput('');
-      setPersistUrl(true);
+      setPersistUrl(false);
       if (typeof window !== 'undefined') {
         window.localStorage.removeItem(LAST_CATALOG_URL_INPUT_KEY);
       }
@@ -283,7 +283,13 @@ export default function ProductCatalogImport() {
 
           <div>
             <Label className="text-sm font-medium text-gray-700 block mb-2">Fetch from URL (CSV/JSON)</Label>
-            <div className="flex items-center gap-2">
+            <form 
+              className="flex items-center gap-2"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void handleUrlLoad();
+              }}
+            >
               <Input
                 type="url"
                 placeholder="https://example.com/data.csv"
@@ -298,7 +304,7 @@ export default function ProductCatalogImport() {
                 disabled={isProcessing}
                 className="flex-1 bg-gray-50 border-gray-200 text-gray-800"
               />
-              <Button type="button" onClick={handleUrlLoad} disabled={isProcessing || !urlInput.trim()} className="shrink-0 bg-gray-800 text-white hover:bg-gray-700">
+              <Button type="submit" disabled={isProcessing || !urlInput.trim()} className="shrink-0 bg-gray-800 text-white hover:bg-gray-700">
                 <LinkIcon className="w-4 h-4 mr-2" /> Fetch URL
               </Button>
               <Button
@@ -311,7 +317,7 @@ export default function ProductCatalogImport() {
               >
                 <RefreshCw className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`} />
               </Button>
-            </div>
+            </form>
 
             <div className="mt-2 flex items-center gap-2">
               <input

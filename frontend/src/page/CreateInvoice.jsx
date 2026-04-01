@@ -1112,7 +1112,7 @@ const validateClientAddress = useCallback((value) => {
             <div className="border border-gray-200 rounded-b-lg bg-white">
               <div className="p-3 sm:p-4 space-y-4 md:space-y-3">
                 {itemData.map((_, index) => (
-                  <div className="relative" key={index} style={{ zIndex: 50 - index }}>
+                  <div className="relative" key={index} style={{ zIndex: Math.max(1, 50 - index) }}>
                     {/* Mobile Layout - Stacked */}
                     <div className="md:hidden space-y-3 pb-4 border-b border-gray-200 last:border-b-0">
                       <div>

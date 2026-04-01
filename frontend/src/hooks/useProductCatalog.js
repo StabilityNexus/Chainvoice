@@ -36,7 +36,10 @@ const normalizeRows = (rows) => {
       }
 
       for (const [alias, canonical] of Object.entries(FIELD_ALIAS_MAP)) {
-        if (normRow[alias] && !normRow[canonical]) {
+        if (
+          Object.prototype.hasOwnProperty.call(normRow, alias) &&
+          (normRow[canonical] === undefined || normRow[canonical] === '')
+        ) {
           normRow[canonical] = normRow[alias];
           delete normRow[alias];
         }
@@ -146,7 +149,8 @@ const normalizeImportUrl = (rawUrl) => {
     }
 
     const docId = match[1];
-    const gid = url.searchParams.get('gid') || '0';
+    const hashGid = url.hash.match(/(?:^#|[?&#])gid=(\d+)/)?.[1];
+    const gid = url.searchParams.get('gid') || hashGid || '0';
     return `https://docs.google.com/spreadsheets/d/${docId}/export?format=csv&gid=${gid}`;
   } catch {
     return input;
