@@ -344,11 +344,7 @@ export const useProductCatalog = () => {
       await del(CATALOG_KEY);
       memoryCache = updatedMetadata;
       setCatalogMetadata(updatedMetadata);
-      await del(CATALOG_KEY);
-      memoryCache = updatedMetadata;
-      setCatalogMetadata(updatedMetadata);
       broadcastCatalogUpdate(updatedMetadata);
-    }
     }
 
     return { success: true };
