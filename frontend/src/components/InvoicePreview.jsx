@@ -38,6 +38,7 @@ import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
+import { formatInvoiceDate } from "../utils/formatDate";
 
 const InvoicePreview = ({
   invoice,
@@ -293,11 +294,7 @@ const InvoicePreview = ({
                 Issued:
               </span>
               <span className="text-gray-600">
-                {new Date(invoice.issueDate).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
+                {formatInvoiceDate(invoice.issueDate)}
               </span>
             </div>
             <div className="flex items-center">
@@ -305,11 +302,7 @@ const InvoicePreview = ({
                 Due:
               </span>
               <span className="text-gray-600">
-                {new Date(invoice.dueDate).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
+                {formatInvoiceDate(invoice.dueDate)}
               </span>
             </div>
           </div>
