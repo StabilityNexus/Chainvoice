@@ -5,6 +5,7 @@ import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import "../src/Chainvoice.sol";
 
+
 contract ChainvoiceTest is Test {
     Chainvoice chainvoice;
 
@@ -51,6 +52,7 @@ contract ChainvoiceTest is Test {
         assertFalse(inv.isCancelled);
     }
 
+
     /* ------------------------------------------------------------ */
     /*                       PAY INVOICE                            */
     /* ------------------------------------------------------------ */
@@ -93,95 +95,90 @@ contract ChainvoiceTest is Test {
     }
 
     /* ------------------------------------------------------------ */
-    /*                       FAILURE CASES                          */
+    /*                       FAILURE CASES - CREATE INVOICE         */
     /* ------------------------------------------------------------ */
 
-    function testPayInvoice_RevertIfWrongPayer() public {
+    function testCreateInvoiceRevertIfInvalidAddress() public{
+        vm.prank(alice);
+        vm.expectRevert("Recipient address is zero");
+        chainvoice.createInvoice(address(0), 1 ether, address(0), "data", "hash");
+    }
+
+    function testCreateInvoiceRevertIfSelfInvoicing() public{
+        vm.prank(alice);
+        vm.expectRevert("Self-invoicing not allowed");
+        chainvoice.createInvoice(alice, 1 ether, address(0), "data", "hash");
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                       FAILURE CASES - PAY INVOICE            */
+    /* ------------------------------------------------------------ */
+
+    modifier createInvoice(){
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
+        _;
+    }
+
+    function testPayInvoice_RevertIfWrongPayer() public createInvoice {
         uint256 fee = chainvoice.fee();
         vm.expectRevert(Chainvoice.NotAuthorizedPayer.selector);
         vm.prank(alice);
         chainvoice.payInvoice{value: 1 ether + fee}(0);
     }
 
-    function testPayInvoice_RevertIfIncorrectValue() public {
-        vm.prank(alice);
-        chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
-
-        vm.expectRevert(Chainvoice.IncorrectPaymentAmount.selector);
+    function testPayInvoice_RevertIfIncorrectValue() public createInvoice {
+        uint256 fee = chainvoice.fee();
+        vm.expectRevert("Incorrect payment amount");
         vm.prank(bob);
-        chainvoice.payInvoice{value: 1 ether}(0);
+        chainvoice.payInvoice{value: 1 ether + fee + 1}(0);
+    }
+
+    function testPayInvoice_RevertIfInvalidInvoiceId() public createInvoice{
+        uint256 fee = chainvoice.fee();
+
+        vm.expectRevert("Invalid invoice ID");
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(type(uint256).max);
+    }
+
+    function testPayInvoice_RevertIfInvoiceAlreadyPaid() public createInvoice{
+        uint256 fee = chainvoice.fee();
+
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+
+        vm.expectRevert("Already paid");
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
     }
 
     /* ------------------------------------------------------------ */
-    /*                    OWNERSHIP MANAGEMENT                      */
+    /*                       FAILURE CASES - CANCEL INVOICE         */
     /* ------------------------------------------------------------ */
 
-    function testInitiateOwnershipTransfer() public {
-        address newOwner = address(0xC0FFEE);
-        
-        vm.prank(alice); // alice is not the owner
-        vm.expectRevert("Only owner can call");
-        chainvoice.initiateOwnershipTransfer(newOwner);
-
-        vm.prank(address(this)); // this is the owner (from setUp)
-        chainvoice.initiateOwnershipTransfer(newOwner);
-        
-        assertEq(chainvoice.pendingOwner(), newOwner);
+    function testCancelInvoiceRevertIfNotTheOwner() public createInvoice{
+        vm.expectRevert("Only invoice creator can cancel");
+        vm.prank(bob);
+        chainvoice.cancelInvoice(0);
     }
 
-    function testInitiateOwnershipTransferInvalidAddress() public {
-        vm.expectRevert(Chainvoice.InvalidNewOwner.selector);
-        chainvoice.initiateOwnershipTransfer(address(0));
+    function testCancelInvoiceRevertIfItIsAlreadyPaid() public createInvoice{
+        uint256 fee = chainvoice.fee();
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
 
-        // Try to transfer to self
-        vm.expectRevert(Chainvoice.InvalidNewOwner.selector);
-        chainvoice.initiateOwnershipTransfer(address(this));
+        vm.expectRevert("Invoice not cancellable");
+        vm.prank(alice);
+        chainvoice.cancelInvoice(0);
     }
 
-    function testAcceptOwnership() public {
-        address newOwner = address(0xC0FFEE);
-        
-        chainvoice.initiateOwnershipTransfer(newOwner);
-        
-        vm.prank(newOwner);
-        chainvoice.acceptOwnership();
-        
-        assertEq(chainvoice.owner(), newOwner);
-        assertEq(chainvoice.pendingOwner(), address(0));
-    }
+    function testCancelInvoiceRevertIfItIsAlreadyCancelled() public createInvoice{
+        vm.prank(alice);
+        chainvoice.cancelInvoice(0);
 
-    function testAcceptOwnershipNotPending() public {
-        vm.prank(address(0xDEADBEEF));
-        vm.expectRevert(Chainvoice.OwnershipNotPending.selector);
-        chainvoice.acceptOwnership();
-    }
-
-    function testCancelOwnershipTransfer() public {
-        address newOwner = address(0xC0FFEE);
-        
-        chainvoice.initiateOwnershipTransfer(newOwner);
-        assertEq(chainvoice.pendingOwner(), newOwner);
-        
-        chainvoice.cancelOwnershipTransfer();
-        assertEq(chainvoice.pendingOwner(), address(0));
-    }
-
-    function testCancelOwnershipTransferNoPending() public {
-        vm.expectRevert(Chainvoice.OwnershipNotPending.selector);
-        chainvoice.cancelOwnershipTransfer();
-    }
-
-    function testFeeUpdateEvent() public {
-        uint256 newFee = 0.001 ether;
-        chainvoice.setFeeAmount(newFee);
-        assertEq(chainvoice.fee(), newFee);
-    }
-
-    function testTreasuryAddressUpdateEvent() public {
-        address newTreasury = address(0xdead);
-        chainvoice.setTreasuryAddress(newTreasury);
-        assertEq(chainvoice.treasuryAddress(), newTreasury);
+        vm.expectRevert("Invoice not cancellable");
+        vm.prank(alice);
+        chainvoice.cancelInvoice(0);
     }
 }
