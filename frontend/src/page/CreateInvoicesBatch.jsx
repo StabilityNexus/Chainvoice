@@ -61,6 +61,13 @@ import {
   getClientAddressError,
   validateBatchInvoiceData,
 } from "@/utils/invoiceValidation";
+import ProductCatalogImport from "@/components/ProductCatalogImport";
+import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
+import { useProductCatalog } from "@/hooks/useProductCatalog";
+import {
+  applyProductToInvoiceItem,
+  createEmptyInvoiceItem,
+} from "@/utils/productCatalogInvoiceHelpers";
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
@@ -71,6 +78,7 @@ function CreateInvoicesBatch() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const litClientRef = useRef(null);
+  const itemRefs = useRef({});
 
   // Token selection state
   const [selectedToken, setSelectedToken] = useState(null);
@@ -94,16 +102,7 @@ function CreateInvoicesBatch() {
       clientCountry: "",
       clientCity: "",
       clientPostalcode: "",
-      itemData: [
-        {
-          description: "",
-          qty: "",
-          unitPrice: "",
-          discount: "",
-          tax: "",
-          amount: "",
-        },
-      ],
+      itemData: [createEmptyInvoiceItem()],
       totalAmountDue: 0,
     },
   ]);
@@ -117,6 +116,8 @@ function CreateInvoicesBatch() {
     userCity: "",
     userPostalcode: "",
   });
+
+  const { catalogMetadata } = useProductCatalog();
 
   // Calculate totals for each invoice
   useEffect(() => {
@@ -170,16 +171,7 @@ function CreateInvoicesBatch() {
         clientCountry: "",
         clientCity: "",
         clientPostalcode: "",
-        itemData: [
-          {
-            description: "",
-            qty: "",
-            unitPrice: "",
-            discount: "",
-            tax: "",
-            amount: "",
-          },
-        ],
+        itemData: [createEmptyInvoiceItem()],
         totalAmountDue: 0,
       },
     ]);
@@ -253,20 +245,37 @@ function CreateInvoicesBatch() {
             ...row,
             itemData: [
               ...row.itemData,
-              {
-                description: "",
-                qty: "",
-                unitPrice: "",
-                discount: "",
-                tax: "",
-                amount: "",
-              },
+              createEmptyInvoiceItem(),
             ],
           };
         }
         return row;
       })
     );
+  };
+
+  const handleProductSelect = (product, rowIndex, itemIndex) => {
+    setInvoiceRows((prevRows) =>
+      prevRows.map((row, rIndex) => {
+        if (rIndex !== rowIndex) return row;
+
+        const updatedItemData = row.itemData.map((item, iIndex) => {
+          if (iIndex !== itemIndex) return item;
+          return applyProductToInvoiceItem(item, product);
+        });
+
+        if (itemIndex === row.itemData.length - 1) {
+          updatedItemData.push(createEmptyInvoiceItem());
+        }
+
+        return { ...row, itemData: updatedItemData };
+      })
+    );
+
+    setTimeout(() => {
+      const nextInput = itemRefs.current[`${rowIndex}-${itemIndex + 1}`];
+      nextInput?.focus();
+    }, 50);
   };
 
   // Token verification
@@ -368,6 +377,7 @@ function CreateInvoicesBatch() {
 
     try {
       setLoading(true);
+      toast("Starting batch invoice creation...");
 
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
@@ -406,8 +416,14 @@ function CreateInvoicesBatch() {
         return;
       }
 
+      toast(`Processing ${validInvoices.length} invoices...`);
+
       // Process each invoice
       for (const [index, row] of validInvoices.entries()) {
+        toast(
+          `Encrypting invoice ${index + 1} of ${validInvoices.length}...`
+        );
+
         const invoicePayload = {
           amountDue: row.totalAmountDue.toString(),
           dueDate,
@@ -536,6 +552,9 @@ function CreateInvoicesBatch() {
         encryptedHashes.push(dataToEncryptHash);
       }
 
+      toast.success("All invoices encrypted successfully!");
+      toast("Submitting batch transaction to blockchain...");
+
       // Send to contract
       const contractAddress = import.meta.env[
         `VITE_CONTRACT_ADDRESS_${chainId}`
@@ -555,6 +574,7 @@ function CreateInvoicesBatch() {
         encryptedHashes
       );
 
+      toast("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
 
       toast.success(
@@ -943,6 +963,8 @@ function CreateInvoicesBatch() {
             </div>
           </div>
 
+          <ProductCatalogImport />
+
           {/* Clean Invoice Rows */}
           <div className="w-full mb-6 sm:mb-8 space-y-4">
             <div className="flex items-center justify-between">
@@ -1142,7 +1164,7 @@ function CreateInvoicesBatch() {
                     </div>
 
                     {/* Clean Invoice Items */}
-                    <div className="w-full bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    <div className="w-full bg-white rounded-lg border border-gray-200">
                       <div className="bg-gray-100 px-4 py-3 rounded-t-lg">
                         <h4 className="font-semibold text-gray-800">
                           Invoice Items
@@ -1162,14 +1184,16 @@ function CreateInvoicesBatch() {
                       <div className="p-2 sm:p-4">
                         {row.itemData.map((item, itemIndex) => (
                           <div
-                            className="flex flex-col md:grid md:grid-cols-12 gap-2 mb-3 pb-3 md:pb-0 border-b md:border-b-0 border-gray-200 md:items-center"
-                            key={itemIndex}
+                            className="relative flex flex-col md:grid md:grid-cols-12 gap-2 mb-3 pb-3 md:pb-0 border-b md:border-b-0 border-gray-200 md:items-center"
+                            style={{ zIndex: Math.max(1, row.itemData.length - itemIndex) }}
+                            key={item.id}
                           >
                             <div className="md:col-span-4 w-full">
                               <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
                                 Description
                               </label>
-                              <Input
+                              <ProductAutocompleteInput
+                                inputRef={(el) => (itemRefs.current[`${rowIndex}-${itemIndex}`] = el)}
                                 placeholder="Enter Description"
                                 className="w-full border-gray-300 text-black"
                                 name="description"
@@ -1177,6 +1201,10 @@ function CreateInvoicesBatch() {
                                 onChange={(e) =>
                                   handleItemData(e, rowIndex, itemIndex)
                                 }
+                                onSelectProduct={(product) =>
+                                  handleProductSelect(product, rowIndex, itemIndex)
+                                }
+                                catalogMetadata={catalogMetadata}
                               />
                             </div>
                             <div className="grid grid-cols-2 gap-2 md:contents">
