@@ -359,7 +359,8 @@ function BatchPayment() {
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-        const res = await contract.getReceivedInvoices(address);
+        // Fetching the first 100 invoices (Offset: 0, Limit: 100)
+const res = await contract.getReceivedInvoices(address, 0, 100);
 
         if (!res || !Array.isArray(res) || res.length === 0) {
           setReceivedInvoices([]);
