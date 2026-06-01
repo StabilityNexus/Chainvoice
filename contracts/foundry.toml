@@ -2,6 +2,7 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-solc_version = '0.8.13'
+solc_version = '0.8.20'
+   remappings = ['@openzeppelin/=lib/openzeppelin-contracts/']
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
 # forge create --rpc-url https://eth-sepolia.g.alchemy.com/v2/nnY0qPUQLYsUvb5BKJM5bh81sI6O0PQG   --private-key fba7342ef6879df2c735644c734ea69c140f423d84eb2d53fbdfd53fd5d7c586  src/Token.sol:MyToken --legacy
