@@ -122,7 +122,7 @@ contract ChainvoiceTest is Test {
         address newOwner = address(0xC0FFEE);
         
         vm.prank(alice); // alice is not the owner
-        vm.expectRevert("Only owner can call");
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
         chainvoice.initiateOwnershipTransfer(newOwner);
 
         vm.prank(address(this)); // this is the owner (from setUp)
