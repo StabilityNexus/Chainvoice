@@ -1,0 +1,38 @@
+name: Coverage Report
+
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+        branches: [main, master]
+
+env:
+    FOUNDRY_PROFILE: ci
+
+jobs:
+    coverage:
+        name: Coverage Report
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+
+            - name: Install lcov
+              run: |
+                  sudo apt-get update
+                  sudo apt-get install -y lcov
+
+            - name: Generate coverage report
+              working-directory: contracts
+              run: forge coverage --report lcov
+
+            - name: Upload to Codecov
+              uses: codecov/codecov-action@v4
+              with:
+                  files: ./contracts/lcov.info
+                  fail_ci_if_error: false
+                  token: ${{ secrets.CODECOV_TOKEN }}

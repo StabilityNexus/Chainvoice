@@ -1,0 +1,32 @@
+name: Contract Size Check
+
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+        branches: [main, master]
+
+env:
+    FOUNDRY_PROFILE: ci
+
+jobs:
+    contract-size:
+        name: Contract Size Check
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Install Foundry
+              uses: foundry-rs/foundry-toolchain@v1
+
+            - name: Build and check contract sizes
+              working-directory: contracts
+              run: |
+                  forge build --sizes 2>&1 | tee sizes.txt
+                  # Fail if any contract is >= 23616 bytes (warn zone before 24KB EIP-170 limit)
+                  if grep -E '^\s*\|.*\s([2-9][0-9]{3}|[1-9][0-9]{4})\s' sizes.txt; then
+                    echo "❌ One or more contracts are dangerously close to or over the 24KB limit."
+                    exit 1
+                  fi

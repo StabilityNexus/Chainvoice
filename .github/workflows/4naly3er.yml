@@ -1,0 +1,44 @@
+name: 4naly3er Report
+
+on:
+    push:
+        branches: [main, master]
+    pull_request:
+        branches: [main, master]
+
+jobs:
+    analyzer_4naly3er:
+        name: 4naly3er Gas Optimization Report
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "24"
+
+            - name: Install 4naly3er (shallow clone, rules preserved)
+              run: |
+                  # Shallow clone – 4naly3er publishes no tags; log the resolved commit for auditability
+                  git clone --depth 1 https://github.com/Picodes/4naly3er
+                  cd 4naly3er
+                  echo "4naly3er pinned to commit: $(git rev-parse HEAD)"
+                  # All NC rules preserved (including uselessOverride.ts).
+                  # If a suppression is needed, open a tracked issue and reference it here.
+                  corepack enable
+                  yarn install
+
+            - name: Run 4naly3er on src/
+              run: |
+                  cd 4naly3er
+                  yarn analyze ../contracts/src ../4naly3er-report.md
+
+            - name: Upload 4naly3er report
+              uses: actions/upload-artifact@v4
+              with:
+                  name: 4naly3er-report
+                  path: 4naly3er-report.md

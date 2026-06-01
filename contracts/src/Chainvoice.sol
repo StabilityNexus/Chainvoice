@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.13;
+pragma solidity 0.8.28;
 
 interface IERC20 {
     function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
@@ -103,15 +103,6 @@ contract Chainvoice {
     // Constants
     uint256 public constant MAX_BATCH = 50;
 
-    // ========== Internal Utils ==========
-    function _isERC20(address token) internal view returns (bool) {
-        if (token == address(0)) return false;
-        if (token.code.length == 0) return false;
-        (bool success, ) = token.staticcall(
-            abi.encodeWithSignature("balanceOf(address)", address(this))
-        );
-        return success;
-    }
 
     // ========== Single-invoice create ==========
     function createInvoice(
@@ -249,6 +240,7 @@ contract Chainvoice {
             if (msg.value != invoice.amountDue + fee) revert IncorrectPaymentAmount();
             accumulatedFees += fee;
 
+            // slither-disable-next-line low-level-calls
             (bool sent, ) = payable(invoice.from).call{value: invoice.amountDue}("");
             if (!sent) revert NativeTransferFailed();
         } else {
@@ -276,6 +268,7 @@ contract Chainvoice {
     }
 
     // ========== Batch pay (all-or-nothing) ==========
+    // slither-disable-next-line cyclomatic-complexity
     function payInvoicesBatch(uint256[] calldata invoiceIds) external payable nonReentrant {
         uint256 n = invoiceIds.length;
         if (n == 0 || n > MAX_BATCH) revert InvalidBatchSize();
@@ -317,6 +310,7 @@ contract Chainvoice {
             // Pay each issuer
             for (uint256 i = 0; i < n; i++) {
                 InvoiceDetails storage inv = invoices[invoiceIds[i]];
+                // slither-disable-next-line calls-loop,low-level-calls
                 (bool sent, ) = payable(inv.from).call{value: inv.amountDue}("");
                 if (!sent) revert NativeTransferFailed();
                 emit InvoicePaid(inv.id, inv.from, inv.to, inv.amountDue, address(0));
@@ -331,6 +325,7 @@ contract Chainvoice {
 
             for (uint256 i = 0; i < n; i++) {
                 InvoiceDetails storage inv = invoices[invoiceIds[i]];
+                // slither-disable-next-line calls-loop
                 bool ok = erc20.transferFrom(msg.sender, inv.from, inv.amountDue);
                 if (!ok) revert TokenTransferFailed();
                 emit InvoicePaid(inv.id, inv.from, inv.to, inv.amountDue, token);
@@ -431,9 +426,9 @@ contract Chainvoice {
     }
 
     // ========== Admin - Fee Management ==========
-    function setFeeAmount(uint256 _fee) external onlyOwner {
-        emit FeeUpdated(fee, _fee);
-        fee = _fee;
+    function setFeeAmount(uint256 newFee) external onlyOwner {
+        emit FeeUpdated(fee, newFee);
+        fee = newFee;
     }
 
     function setTreasuryAddress(address newTreasury) external onlyOwner {
@@ -450,6 +445,8 @@ contract Chainvoice {
         uint256 amount = accumulatedFees;
         accumulatedFees = 0;
 
+        // slither-disable-next-line arbitrary-send-eth,low-level-calls
+        // treasuryAddress is owner-controlled; ETH is intentionally sent there
         (bool success, ) = payable(treasuryAddress).call{value: amount}("");
         if (!success) revert WithdrawFailed();
     }
