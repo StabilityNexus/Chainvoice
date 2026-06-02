@@ -7,7 +7,6 @@ import {
   ethers,
   formatUnits,
   JsonRpcProvider,
-  parseUnits,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
@@ -49,6 +48,15 @@ import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
 import { useTokenList } from "@/hooks/useTokenList";
+import {
+  getLineAmountDetails,
+  getSafeLineAmountDisplay,
+  INVOICE_DECIMALS,
+} from "@/utils/invoiceCalculations";
+import {
+  getClientAddressError,
+  validateSingleInvoiceData,
+} from "@/utils/invoiceValidation";
 import toast from "react-hot-toast";
 
 import ProductCatalogImport from "@/components/ProductCatalogImport";
@@ -179,6 +187,40 @@ function CreateInvoice() {
     }
   }, []);
 
+  const resolveTokenDecimals = useCallback(
+    async (tokenAddress, fallbackDecimals) => {
+      if (
+        fallbackDecimals !== undefined &&
+        fallbackDecimals !== null &&
+        !Number.isNaN(Number(fallbackDecimals))
+      ) {
+        return Number(fallbackDecimals);
+      }
+
+      try {
+        let provider;
+        const rpcUrl =
+          chainIdForTokens && CHAIN_ID_TO_PUBLIC_RPC[Number(chainIdForTokens)];
+
+        if (rpcUrl) {
+          provider = new JsonRpcProvider(rpcUrl);
+        } else if (typeof window !== "undefined" && window.ethereum) {
+          provider = new BrowserProvider(window.ethereum);
+        } else {
+          return null;
+        }
+
+        const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+        const decimals = await contract.decimals();
+        return Number(decimals);
+      } catch (error) {
+        console.warn("Failed to resolve token decimals:", error);
+        return null;
+      }
+    },
+    [chainIdForTokens]
+  );
+
   useEffect(() => {
     const urlClientAddress = searchParams.get("clientAddress");
     const urlTokenAddress = searchParams.get("tokenAddress");
@@ -203,6 +245,7 @@ function CreateInvoice() {
           ...(urlDescription && { description: urlDescription }),
           ...(urlAmount && { qty: "1", unitPrice: urlAmount }),
         };
+        updatedFirst.amount = getSafeLineAmountDisplay(updatedFirst);
         return [updatedFirst, ...prev.slice(1)];
       });
     }
@@ -266,17 +309,12 @@ function CreateInvoice() {
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
-      const qty = parseUnits(item.qty || "0", 18);
-      const unitPrice = parseUnits(item.unitPrice || "0", 18);
-      const discount = parseUnits(item.discount || "0", 18);
-      const tax = parseUnits(item.tax || "0", 18);
-      const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-      const adjusted = lineTotal - discount + tax;
-
-      return sum + adjusted;
+      const { valid, amountWei } = getLineAmountDetails(item);
+      if (!valid || amountWei < 0n) return sum;
+      return sum + amountWei;
     }, 0n);
 
-    setTotalAmountDue(formatUnits(total, 18));
+    setTotalAmountDue(formatUnits(total, INVOICE_DECIMALS));
   }, [itemData]);
 
   useEffect(() => {
@@ -300,6 +338,17 @@ function CreateInvoice() {
   const handleItemData = (e, index) => {
     const { name, value } = e.target;
 
+    if (name === "discount" && value !== "") {
+      if (/[^0-9.]/.test(value)) return;
+      const parts = value.split(".");
+      if (parts.length > 2) return;
+      
+      if (!isNaN(parseFloat(value))) {
+        const numValue = parseFloat(value);
+        if (numValue < 0 || numValue > 99) return;
+      }
+    }
+
     setItemData((prevItemData) =>
       prevItemData.map((item, i) => {
         if (i === index) {
@@ -310,15 +359,7 @@ function CreateInvoice() {
             name === "discount" ||
             name === "tax"
           ) {
-            const qty = parseUnits(updatedItem.qty || "0", 18);
-            const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
-            const discount = parseUnits(updatedItem.discount || "0", 18);
-            const tax = parseUnits(updatedItem.tax || "0", 18);
-
-            const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-            const finalAmount = lineTotal - discount + tax;
-
-            updatedItem.amount = formatUnits(finalAmount, 18);
+            updatedItem.amount = getSafeLineAmountDisplay(updatedItem);
           }
           return updatedItem;
         }
@@ -330,37 +371,34 @@ function CreateInvoice() {
   const addItem = () => {
     setItemData((prev) => [...prev, createEmptyInvoiceItem()]);
   };
+  const validateClientAddress = useCallback((value, options = {}) => {
+    const error = getClientAddressError(value, {
+      ...options,
+      ownerAddress: account.address,
+    });
+    setClientAddressError(error);
+    return !error;
+  }, [account.address]);
 
-  
+  const validateInvoiceBeforeSubmit = useCallback((data, paymentToken) => {
+    const validation = validateSingleInvoiceData({
+      clientAddress: data.clientAddress,
+      itemData,
+      totalAmountDue,
+      paymentToken,
+      ownerAddress: account.address,
+    });
 
-const validateClientAddress = useCallback((value) => {
-  // Empty input, no error
-  if (!value) {
-    setClientAddressError("");
-    return;
-  }
+    if (!validation.isValid) {
+      if (validation.fieldErrors.clientAddress) {
+        setClientAddressError(validation.fieldErrors.clientAddress);
+      }
+      toast.error(validation.errorMessage);
+      return false;
+    }
 
-  // Do not validate until it looks like a full EVM address
-  if (!value.startsWith("0x") || value.length < 42) {
-    setClientAddressError("");
-    return;
-  }
-
-  // Invalid EVM address
-  if (!ethers.isAddress(value)) {
-    setClientAddressError("Please enter a valid wallet address");
-    return;
-  }
-
-  // Self-invoicing check
-  if (value.toLowerCase() === account.address?.toLowerCase()) {
-    setClientAddressError("You cannot create an invoice for your own wallet");
-    return;
-  }
-
-  // Valid other wallet
-  setClientAddressError("");
-}, [account.address]);
+    return true;
+  }, [account.address, itemData, totalAmountDue]);
 
   const createInvoiceRequest = async (data) => {
     if (!isConnected || !walletClient) {
@@ -368,16 +406,24 @@ const validateClientAddress = useCallback((value) => {
       return;
     }
 
-    if (!data.clientAddress) {
-      setClientAddressError("Client address is required");
+    const paymentToken = useCustomToken ? verifiedToken : selectedToken;
+    if (!paymentToken?.address) {
+      toast.error("Please select or verify a payment token.");
       return;
     }
-    if (!ethers.isAddress(data.clientAddress)) {
-      setClientAddressError("Please enter a valid wallet address");
+
+    const tokenDecimals = Number(paymentToken?.decimals);
+    if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0) {
+      toast.error("Selected token has invalid decimals");
       return;
     }
-    if (data.clientAddress.toLowerCase() === account.address?.toLowerCase()) {
-      setClientAddressError("You cannot create an invoice for your own wallet");
+
+    const normalizedData = {
+      ...data,
+      clientAddress: (data.clientAddress || "").trim(),
+    };
+
+    if (!validateInvoiceBeforeSubmit(normalizedData, paymentToken)) {
       return;
     }
 
@@ -386,13 +432,6 @@ const validateClientAddress = useCallback((value) => {
       setLoading(true);
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
-
-      const paymentToken = useCustomToken ? verifiedToken : selectedToken;
-      if (!paymentToken?.address) {
-        toast.error("Please select or verify a payment token.");
-        setLoading(false);
-        return;
-      }
 
       const invoicePayload = {
         amountDue: totalAmountDue.toString(),
@@ -413,15 +452,18 @@ const validateClientAddress = useCallback((value) => {
           postalcode: data.userPostalcode,
         },
         client: {
-          address: data.clientAddress,
-          fname: data.clientFname,
-          lname: data.clientLname,
-          email: data.clientEmail,
-          country: data.clientCountry,
-          city: data.clientCity,
-          postalcode: data.clientPostalcode,
+          address: normalizedData.clientAddress,
+          fname: normalizedData.clientFname,
+          lname: normalizedData.clientLname,
+          email: normalizedData.clientEmail,
+          country: normalizedData.clientCountry,
+          city: normalizedData.clientCity,
+          postalcode: normalizedData.clientPostalcode,
         },
-        items: itemData,
+        items: itemData.map((item) => ({
+          ...item,
+          amount: getSafeLineAmountDisplay(item),
+        })),
       };
 
       const invoiceString = JSON.stringify(invoicePayload);
@@ -453,7 +495,7 @@ const validateClientAddress = useCallback((value) => {
           parameters: [":userAddress"],
           returnValueTest: {
             comparator: "=",
-            value: data.clientAddress.toLowerCase(),
+            value: normalizedData.clientAddress.toLowerCase(),
           },
         },
       ];
@@ -513,8 +555,8 @@ const validateClientAddress = useCallback((value) => {
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
       const tx = await contract.createInvoice(
-        data.clientAddress,
-        ethers.parseUnits(totalAmountDue.toString(), paymentToken.decimals),
+        normalizedData.clientAddress,
+        ethers.parseUnits(totalAmountDue.toString(), tokenDecimals),
         paymentToken.address,
         encryptedStringBase64,
         dataToEncryptHash
@@ -911,14 +953,29 @@ const validateClientAddress = useCallback((value) => {
                       )}
                       <TokenPicker
                         selected={selectedToken}
-                        onSelect={(token) => {
+                        onSelect={async (token) => {
+                          const address = token.contract_address || token.address;
+                          const decimals = await resolveTokenDecimals(
+                            address,
+                            token.decimals
+                          );
+
+                          if (decimals === null) {
+                            toast.error(
+                              "Failed to fetch token decimals for selected token"
+                            );
+                            return false;
+                          }
+
                           setSelectedToken({
-                            address: token.contract_address,
+                            address,
                             symbol: token.symbol,
                             name: token.name,
                             logo: token.image,
-                            decimals: 18,
+                            decimals,
                           });
+
+                          return true;
                         }}
                         chainId={chainIdForTokens}
                         disabled={loading}
@@ -1099,7 +1156,7 @@ const validateClientAddress = useCallback((value) => {
               <div className="col-span-4">DESCRIPTION</div>
               <div className="col-span-1">QTY</div>
               <div className="col-span-2">UNIT PRICE</div>
-              <div className="col-span-1">DISCOUNT</div>
+              <div className="col-span-1">DISCOUNT (AMOUNT)</div>
               <div className="col-span-1">TAX(%)</div>
               <div className="col-span-2">AMOUNT</div>
             </div>
@@ -1141,6 +1198,8 @@ const validateClientAddress = useCallback((value) => {
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="qty"
+                            min="0"
+                            step="any"
                             value={itemData[index]?.qty ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
@@ -1150,10 +1209,12 @@ const validateClientAddress = useCallback((value) => {
                             Unit Price
                           </Label>
                           <Input
-                            type="text"
+                            type="number"
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="unitPrice"
+                            min="0"
+                            step="any"
                             value={itemData[index]?.unitPrice ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
@@ -1163,15 +1224,22 @@ const validateClientAddress = useCallback((value) => {
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <Label className="text-xs font-medium text-gray-600 mb-1 block">
-                            Discount
+                            Discount (Amount)
                           </Label>
                           <Input
-                            type="text"
-                            placeholder="0"
+                            type="number"
+                            placeholder="Flat amount"
                             className="w-full border-gray-300 text-black"
                             name="discount"
+                            min="0"
+                            step="any"
                             value={itemData[index]?.discount ?? ""}
                             onChange={(e) => handleItemData(e, index)}
+                            onKeyDown={(e) => {
+                              if (['e', 'E', '+', '-'].includes(e.key)) {
+                                e.preventDefault();
+                              }
+                            }}
                           />
                         </div>
                         <div>
@@ -1179,10 +1247,12 @@ const validateClientAddress = useCallback((value) => {
                             Tax (%)
                           </Label>
                           <Input
-                            type="text"
+                            type="number"
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
                             name="tax"
+                            min="0"
+                            step="any"
                             value={itemData[index]?.tax ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
@@ -1199,12 +1269,7 @@ const validateClientAddress = useCallback((value) => {
                           className="w-full bg-gray-100 border-gray-300 text-gray-700 font-semibold"
                           name="amount"
                           disabled
-                          value={String(
-                            (parseFloat(itemData[index]?.qty) || 0) *
-                              (parseFloat(itemData[index]?.unitPrice) || 0) -
-                              (parseFloat(itemData[index]?.discount) || 0) +
-                              (parseFloat(itemData[index]?.tax) || 0)
-                          )}
+                          value={getSafeLineAmountDisplay(itemData[index]) || "0"}
                         />
                       </div>
 
@@ -1257,36 +1322,49 @@ const validateClientAddress = useCallback((value) => {
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="qty"
+                          min="0"
+                          step="any"
                           value={itemData[index]?.qty ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
                       <div className="col-span-2">
                         <Input
-                          type="text"
+                          type="number"
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="unitPrice"
+                          min="0"
+                          step="any"
                           value={itemData[index]?.unitPrice ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
                       </div>
                       <div className="col-span-1">
                         <Input
-                          type="text"
-                          placeholder="0"
+                          type="number"
+                          placeholder="Flat amount"
                           className="w-full border-gray-300 text-black py-2"
                           name="discount"
+                          min="0"
+                          step="any"
                           value={itemData[index]?.discount ?? ""}
                           onChange={(e) => handleItemData(e, index)}
+                          onKeyDown={(e) => {
+                            if (['e', 'E', '+', '-'].includes(e.key)) {
+                              e.preventDefault();
+                            }
+                          }}
                         />
                       </div>
                       <div className="col-span-1">
                         <Input
-                          type="text"
+                          type="number"
                           placeholder="0"
                           className="w-full border-gray-300 text-black py-2"
                           name="tax"
+                          min="0"
+                          step="any"
                           value={itemData[index]?.tax ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
@@ -1298,12 +1376,7 @@ const validateClientAddress = useCallback((value) => {
                           className="w-full bg-gray-50 border-gray-300 text-gray-700 py-2"
                           name="amount"
                           disabled
-                          value={String(
-                            (parseFloat(itemData[index]?.qty) || 0) *
-                              (parseFloat(itemData[index]?.unitPrice) || 0) -
-                              (parseFloat(itemData[index]?.discount) || 0) +
-                              (parseFloat(itemData[index]?.tax) || 0)
-                          )}
+                          value={getSafeLineAmountDisplay(itemData[index]) || "0"}
                         />
                       </div>
 

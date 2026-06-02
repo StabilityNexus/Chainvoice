@@ -1,8 +1,39 @@
-# React + Vite
+# Chainvoice Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This frontend is built with React and Vite.
 
-Currently, two official plugins are available:
+## Prerequisites
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- Node.js 20+
+- npm
+
+## Development
+
+1. Install dependencies:
+npm install
+
+2. Start local dev server:
+npm run dev
+
+3. Build production assets:
+npm run build
+
+## Testing
+
+Jest is configured for utility-level unit testing.
+
+- Run tests:
+npm test
+
+- Run tests with coverage (CI mode):
+npm run test:ci
+
+- Watch mode:
+npm run test:watch
+
+## Current Test Scope
+
+- Invoice amount calculations
+- Single invoice validation rules
+- Batch invoice validation rules
+- Negative amount prevention and message consistency

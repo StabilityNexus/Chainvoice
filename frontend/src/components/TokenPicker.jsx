@@ -115,19 +115,24 @@ const TokenItem = memo(function TokenItem({
   query,
   isSelected,
   onSelect,
+  disabled = false,
+  isLoading = false,
 }) {
   const handleClick = useCallback(() => {
+    if (disabled) return;
     onSelect(token);
-  }, [onSelect, token]);
+  }, [disabled, onSelect, token]);
 
   return (
     <button
       type="button"
       onClick={handleClick}
+      disabled={disabled}
       className={cn(
         "w-full flex items-center gap-3 p-3 rounded-lg text-left",
         "hover:bg-gray-50 focus:bg-gray-50 focus:outline-none transition-colors duration-200",
         "border border-transparent hover:border-gray-200",
+        disabled && "opacity-60 cursor-not-allowed",
         isSelected && "bg-blue-50 border-blue-200 ring-1 ring-blue-200"
       )}
     >
@@ -162,9 +167,11 @@ const TokenItem = memo(function TokenItem({
         </div>
       </div>
 
-      {isSelected && (
+      {isLoading ? (
+        <Loader2 className="w-4 h-4 animate-spin text-blue-600 flex-shrink-0" />
+      ) : isSelected ? (
         <div className="w-2 h-2 rounded-full bg-blue-600 flex-shrink-0" />
-      )}
+      ) : null}
     </button>
   );
 });
@@ -181,6 +188,8 @@ export function TokenPicker({
   onCustomTokenClick,
 }) {
   const [open, setOpen] = useState(false);
+  const [isSelecting, setIsSelecting] = useState(false);
+  const [selectingTokenAddress, setSelectingTokenAddress] = useState(null);
   const inputRef = useRef(null);
   const {
     tokens,
@@ -202,12 +211,28 @@ export function TokenPicker({
     }
   }, [open, setQuery]);
 
-  const handleSelect = (token) => {
-    onSelect(token);
-    setOpen(false);
+  const handleSelect = async (token) => {
+    if (isSelecting) return;
+
+    const tokenAddress = token.contract_address || token.address;
+    setIsSelecting(true);
+    setSelectingTokenAddress(tokenAddress);
+
+    try {
+      const shouldClose = await Promise.resolve(onSelect(token));
+      if (shouldClose !== false) {
+        setOpen(false);
+      }
+    } catch {
+      // Parent handler is responsible for surfacing a user-facing error.
+    } finally {
+      setIsSelecting(false);
+      setSelectingTokenAddress(null);
+    }
   };
 
   const handleCustomTokenClick = () => {
+    if (isSelecting) return;
     if (onCustomTokenClick) {
       onCustomTokenClick();
     }
@@ -221,7 +246,7 @@ export function TokenPicker({
       <Button
           type="button"
           variant="outline"
-          disabled={disabled || isOnTestnet}
+          disabled={disabled || isOnTestnet || isSelecting}
           onClick={() => setOpen(true)}
           className={cn(
             "h-12 px-4 justify-between bg-white hover:bg-gray-50 border border-gray-300 text-gray-900",
@@ -271,7 +296,12 @@ export function TokenPicker({
         </div>
       )}
 
-      <Modal isOpen={open} onClose={() => setOpen(false)}>
+      <Modal
+        isOpen={open}
+        onClose={() => {
+          if (!isSelecting) setOpen(false);
+        }}
+      >
         <div className="p-6">
           <div className="flex items-center gap-2 mb-4">
             <Coins className="w-5 h-5 text-blue-600" />
@@ -280,7 +310,10 @@ export function TokenPicker({
             </h2>
             <button
               type="button"
-              onClick={() => setOpen(false)}
+              onClick={() => {
+                if (!isSelecting) setOpen(false);
+              }}
+              disabled={isSelecting}
               className="ml-auto p-1 hover:bg-gray-100 rounded-full transition-colors"
             >
               <X className="w-5 h-5 text-gray-500" />
@@ -294,6 +327,7 @@ export function TokenPicker({
                 ref={inputRef}
                 placeholder={placeholder}
                 value={query}
+                disabled={isSelecting}
                 onChange={(e) => setQuery(e.target.value)}
                 className="pl-10 pr-10 h-12 border-gray-300 text-black"
               />
@@ -376,6 +410,12 @@ export function TokenPicker({
                       key={token.contract_address}
                       token={token}
                       query={query}
+                      disabled={isSelecting}
+                      isLoading={
+                        isSelecting &&
+                        selectingTokenAddress ===
+                          (token.contract_address || token.address)
+                      }
                       isSelected={
                         selected?.contract_address === token.contract_address ||
                         selected?.address === token.contract_address
@@ -392,6 +432,7 @@ export function TokenPicker({
                 <button
                   type="button"
                   onClick={handleCustomTokenClick}
+                  disabled={isSelecting}
                   className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors border-2 border-dashed border-gray-200 hover:border-gray-300"
                 >
                   <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
