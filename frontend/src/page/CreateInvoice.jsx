@@ -338,6 +338,17 @@ function CreateInvoice() {
   const handleItemData = (e, index) => {
     const { name, value } = e.target;
 
+    if (name === "discount" && value !== "") {
+      if (/[^0-9.]/.test(value)) return;
+      const parts = value.split(".");
+      if (parts.length > 2) return;
+      
+      if (!isNaN(parseFloat(value))) {
+        const numValue = parseFloat(value);
+        if (numValue < 0 || numValue > 99) return;
+      }
+    }
+
     setItemData((prevItemData) =>
       prevItemData.map((item, i) => {
         if (i === index) {
@@ -1224,6 +1235,11 @@ function CreateInvoice() {
                             step="any"
                             value={itemData[index]?.discount ?? ""}
                             onChange={(e) => handleItemData(e, index)}
+                            onKeyDown={(e) => {
+                              if (['e', 'E', '+', '-'].includes(e.key)) {
+                                e.preventDefault();
+                              }
+                            }}
                           />
                         </div>
                         <div>
@@ -1334,6 +1350,11 @@ function CreateInvoice() {
                           step="any"
                           value={itemData[index]?.discount ?? ""}
                           onChange={(e) => handleItemData(e, index)}
+                          onKeyDown={(e) => {
+                            if (['e', 'E', '+', '-'].includes(e.key)) {
+                              e.preventDefault();
+                            }
+                          }}
                         />
                       </div>
                       <div className="col-span-1">

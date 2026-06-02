@@ -206,6 +206,17 @@ function CreateInvoicesBatch() {
   const handleItemData = (e, rowIndex, itemIndex) => {
     const { name, value } = e.target;
 
+    if (name === "discount" && value !== "") {
+      if (/[^0-9.]/.test(value)) return;
+      const parts = value.split(".");
+      if (parts.length > 2) return;
+      
+      if (!isNaN(parseFloat(value))) {
+        const numValue = parseFloat(value);
+        if (numValue < 0 || numValue > 99) return;
+      }
+    }
+
     setInvoiceRows((prevRows) =>
       prevRows.map((row, rIndex) => {
         if (rIndex === rowIndex) {
@@ -1253,6 +1264,11 @@ function CreateInvoicesBatch() {
                                   onChange={(e) =>
                                     handleItemData(e, rowIndex, itemIndex)
                                   }
+                                  onKeyDown={(e) => {
+                                    if (['e', 'E', '+', '-'].includes(e.key)) {
+                                      e.preventDefault();
+                                    }
+                                  }}
                                 />
                               </div>
                               <div className="md:col-span-1">
