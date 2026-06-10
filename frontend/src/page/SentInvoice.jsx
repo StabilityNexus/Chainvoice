@@ -732,7 +732,7 @@ function SentInvoice() {
                   <div className="flex items-center space-x-4">
                     <div className="bg-white p-3.5 rounded-xl border-2 border-gray-200 shadow-lg flex-shrink-0">
                       <img
-                        src="/logo.png"
+                        src={`${import.meta.env.BASE_URL}logo.png`}
                         alt="Chainvoice"
                         className="h-16 w-16 object-contain"
                         onError={(e) => {

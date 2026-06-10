@@ -1,25 +1,23 @@
-# Workflow for deploying static content to GitHub Pages
+# Workflow for deploying static content to GitHub Pages via gh-pages branch.
+# Preserves any PR preview directories that already exist on gh-pages.
 name: Deploy static content to Pages
 
 on:
   push:
     branches: ['main']
+    paths:
+      - 'frontend/**'
   workflow_dispatch:
 
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
 concurrency:
-  group: 'pages'
-  cancel-in-progress: true
+  group: 'gh-pages-deploy'
+  cancel-in-progress: false
 
 jobs:
   deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       # Checkout repo
@@ -41,27 +39,46 @@ jobs:
             npm install
           fi
         working-directory: ./frontend
+
       # Build project
       - name: Build
         run: npm run build
         working-directory: ./frontend
-        env: 
+        env:
           VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
           VITE_CONTRACT_ADDRESS_11155111: ${{ secrets.VITE_CONTRACT_ADDRESS_11155111 }}
           VITE_CONTRACT_ADDRESS_61: ${{ secrets.VITE_CONTRACT_ADDRESS_61 }}
           VITE_CONTRACT_ADDRESS_137: ${{ secrets.VITE_CONTRACT_ADDRESS_137 }}
 
-      # Setup Pages
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
+      # Restore PR preview directories from gh-pages branch (if present)
+      # so that a production redeploy does not wipe them out.
+      - name: Restore PR preview directories from gh-pages
+        run: |
+          git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1 || {
+            echo "gh-pages branch does not exist yet — skipping restore."
+            exit 0
+          }
 
-      # Upload artifact
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+          git fetch origin gh-pages --depth=1
+
+          # Copy the pr-preview tree into the freshly built dist so the
+          # subsequent deploy action includes it in the push.
+          git checkout origin/gh-pages -- pr-preview/ 2>/dev/null && {
+            cp -r pr-preview ./frontend/dist/pr-preview
+            rm -rf pr-preview
+          } || {
+            echo "No pr-preview directory on gh-pages yet — skipping restore."
+          }
+
+      # Add .nojekyll to prevent Jekyll processing
+      - name: Add .nojekyll
+        run: touch ./frontend/dist/.nojekyll
+
+      # Deploy to gh-pages branch
+      - name: Deploy to gh-pages branch
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: ./frontend/dist
-
-      # Deploy to GitHub Pages
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./frontend/dist
+          cname: chainvoice.stability.nexus
+          commit_message: "deploy: production site from ${{ github.sha }}"
