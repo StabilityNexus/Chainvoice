@@ -81,7 +81,7 @@ function App() {
             })}
           >
             <div className="font-Montserrat h-screen">
-              <Router basename={import.meta.env.BASE_URL}>
+              <Router>
                 <Routes>
                   <Route path="/" element={<Applayout />}>
                     <Route index element={<Landing />} />
