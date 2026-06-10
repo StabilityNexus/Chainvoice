@@ -3,7 +3,7 @@
 
 <!-- Logos -->
 <p align="center">
-  <img alt="Stability Nexus" src="frontend/public/nexus.png" width="140">
+  <img alt="Stability Nexus" src="docs/assets/nexus.png" width="140">
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img alt="Chainvoice" src="frontend/public/logo.png" width="140">
 </p>
