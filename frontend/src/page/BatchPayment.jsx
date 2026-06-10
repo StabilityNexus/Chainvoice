@@ -1312,7 +1312,7 @@ function BatchPayment() {
                 <div className="flex justify-between items-start mb-8">
                   <div>
                     <div className="flex items-center space-x-3 mb-6">
-                      <img src="/logo.png" alt="Chainvoice" className="h-8" />
+                      <img src={`${import.meta.env.BASE_URL}logo.png`} alt="Chainvoice" className="h-8" />
                       <p className="text-3xl font-bold text-green-500">
                         Cha
                         <span className="text-3xl font-bold text-gray-600">

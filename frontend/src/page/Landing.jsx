@@ -39,7 +39,7 @@ function Landing() {
                 <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm">
                   <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-full">
                     <img
-                      src="/lit-protocol-logo.png"
+                      src={`${import.meta.env.BASE_URL}lit-protocol-logo.png`}
                       alt="Lit Protocol"
                       className="h-4 w-4"
                     />
@@ -65,14 +65,14 @@ function Landing() {
                 className="relative"
               >
                 <img
-                  src="/dashboard.png"
+                  src={`${import.meta.env.BASE_URL}dashboard.png`}
                   alt="Secure Invoice Dashboard"
                   className="rounded-xl shadow-2xl border border-gray-700/50"
                 />
                 <div className="absolute -bottom-6 -right-6 bg-gradient-to-r from-green-500 to-emerald-600 p-2 rounded-lg shadow-lg">
                   <div className="bg-black/80 p-3 rounded flex items-center">
                     <img
-                      src="/lit-protocol-logo.png"
+                      src={`${import.meta.env.BASE_URL}lit-protocol-logo.png`}
                       alt="Lit Protocol"
                       className="h-4 mr-2"
                     />
@@ -210,7 +210,7 @@ function Landing() {
               className="relative"
             >
               <img
-                src="/token-select.png"
+                src={`${import.meta.env.BASE_URL}token-select.png`}
                 alt="Token Payment Flow"
                 className="rounded-xl border border-gray-700/50 shadow-xl"
               />
@@ -268,7 +268,7 @@ function Landing() {
                 rel="noopener noreferrer"
               >
                 <img
-                  src="/logo-animated.gif"
+                  src={`${import.meta.env.BASE_URL}logo-animated.gif`}
                   alt="Stability Nexus"
                   className="h-14"
                 />
