@@ -1,12 +1,15 @@
 # Workflow for deploying static content to GitHub Pages via gh-pages branch.
 # Preserves any PR preview directories that already exist on gh-pages.
+# NOTE: This is configured for testing on the fork (Atharva0506/Chainvoice).
+#       For the org repo, change 'development' back to 'main' and uncomment the cname.
 name: Deploy static content to Pages
 
 on:
   push:
-    branches: ['main']
+    branches: ['development']
     paths:
       - 'frontend/**'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -40,9 +43,9 @@ jobs:
           fi
         working-directory: ./frontend
 
-      # Build project
+      # Build project with correct base path for GitHub Pages project site
       - name: Build
-        run: npm run build
+        run: npm run build -- --base /${{ github.event.repository.name }}/
         working-directory: ./frontend
         env:
           VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
@@ -75,10 +78,10 @@ jobs:
         run: touch ./frontend/dist/.nojekyll
 
       # Deploy to gh-pages branch
+      # NOTE: For the org repo with custom domain, add: cname: chainvoice.stability.nexus
       - name: Deploy to gh-pages branch
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./frontend/dist
-          cname: chainvoice.stability.nexus
           commit_message: "deploy: production site from ${{ github.sha }}"

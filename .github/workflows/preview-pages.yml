@@ -1,6 +1,8 @@
 # Builds and deploys the Vite frontend for PRs to the "pr-preview" directory
 # on the gh-pages branch, and posts a comment with the preview URL to the PR.
 # Also removes the preview from gh-pages when the PR is closed.
+# NOTE: This is configured for testing on the fork (Atharva0506/Chainvoice).
+#       For the org repo, change target branch references if needed.
 
 name: Deploy PR preview to gh-pages
 
@@ -9,6 +11,7 @@ on:
     types: [opened, synchronize, reopened, closed]
     paths:
       - 'frontend/**'
+      - '.github/workflows/preview-pages.yml'
 
 permissions:
   contents: write
@@ -41,7 +44,7 @@ jobs:
         working-directory: ./frontend
 
       - name: Build preview site
-        run: npm run build -- --base /pr-preview/pr-${{ github.event.pull_request.number }}/
+        run: npm run build -- --base /${{ github.event.repository.name }}/pr-preview/pr-${{ github.event.pull_request.number }}/
         working-directory: ./frontend
         env:
           VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
@@ -70,11 +73,6 @@ jobs:
             const repoOwner = context.repo.owner;
             const repoName = context.repo.repo;
 
-            // Determine the preview URL based on whether a custom domain exists.
-            // For the main org repo with a custom domain:
-            //   https://chainvoice.stability.nexus/pr-preview/pr-<N>/
-            // For forks or repos without a custom domain:
-            //   https://<owner>.github.io/<repo>/pr-preview/pr-<N>/
             const previewUrl = `https://${repoOwner}.github.io/${repoName}/pr-preview/pr-${prNumber}/`;
 
             const marker = '<!-- pr-preview-bot -->';
