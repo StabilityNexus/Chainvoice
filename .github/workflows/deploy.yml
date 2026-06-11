@@ -10,6 +10,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  # Required by peaceiris/actions-gh-pages to push built site to the gh-pages branch
   contents: write
 
 concurrency:
