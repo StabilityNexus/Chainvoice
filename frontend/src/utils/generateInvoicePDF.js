@@ -13,7 +13,8 @@ import {
 const loadLogoImage = async () => {
   try {
     const invoiceElement = document.getElementById("invoice-print");
-    const logoImg = invoiceElement?.querySelector('img[src="/logo.png"]') || 
+    const logoPath = `${import.meta.env.BASE_URL}logo.png`;
+    const logoImg = invoiceElement?.querySelector(`img[src="${logoPath}"]`) || 
                     invoiceElement?.querySelector('img[src*="logo"]');
     
     if (logoImg) {
@@ -52,7 +53,7 @@ const loadLogoImage = async () => {
   }
 
   try {
-    const response = await fetch('/logo.png', {
+    const response = await fetch(`${import.meta.env.BASE_URL}logo.png`, {
       method: 'GET',
       headers: {
         'Cache-Control': 'no-cache',
@@ -143,7 +144,7 @@ const loadLogoImage = async () => {
         reject(new Error('Image load failed'));
       };
       
-      img.src = "/logo.png";
+      img.src = `${import.meta.env.BASE_URL}logo.png`;
     });
     
     return logoDataUrl;

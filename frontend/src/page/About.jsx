@@ -467,7 +467,7 @@ function About() {
                 rel="noopener noreferrer"
               >
                 <img
-                  src="/logo-animated.gif"
+                  src={`${import.meta.env.BASE_URL}logo-animated.gif`}
                   alt="Stability Nexus"
                   className="h-14"
                 />

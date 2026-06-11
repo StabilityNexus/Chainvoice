@@ -1,0 +1,66 @@
+# Workflow 1 of 2 for PR previews (fork-safe).
+# This is a lightweight trigger — it only uploads metadata.
+# The actual build and deploy is handled by pr-deploy.yml via workflow_run,
+# which runs in the base repository context with secrets and write permissions.
+#
+# WHY TWO WORKFLOWS?
+# 1. Single workflow with `pull_request` + `contents: write` fails with 403
+#    on org repos where GITHUB_TOKEN defaults to read-only.
+# 2. Fork PRs never get secrets on `pull_request` trigger (GitHub blocks this).
+#    By building in pr-deploy.yml (workflow_run context), we get secrets so
+#    features like wallet connection work in PR previews.
+# 3. Fork code never gets write access — pr-deploy.yml always runs from main.
+
+name: "PR Preview: Build"
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - 'frontend/**'
+
+# Read-only permissions — this workflow only uploads metadata.
+permissions:
+  contents: read
+
+jobs:
+  # ─── Signal a deploy when PR is opened or updated ───────────────────────
+  signal-deploy:
+    if: github.event.action != 'closed'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pr-preview-build-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Save deploy metadata
+        run: |
+          mkdir -p ./pr-metadata
+          echo "${{ github.event.pull_request.number }}" > ./pr-metadata/pr_number
+          echo "${{ github.event.pull_request.head.sha }}" > ./pr-metadata/sha
+          echo "deploy" > ./pr-metadata/action
+
+      - name: Upload PR metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-metadata-${{ github.event.pull_request.number }}
+          path: ./pr-metadata
+          retention-days: 1
+
+  # ─── Signal cleanup when PR is closed (merged or abandoned) ─────────────
+  signal-cleanup:
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Save cleanup metadata
+        run: |
+          mkdir -p ./pr-metadata
+          echo "${{ github.event.pull_request.number }}" > ./pr-metadata/pr_number
+          echo "${{ github.event.pull_request.head.sha }}" > ./pr-metadata/sha
+          echo "cleanup" > ./pr-metadata/action
+
+      - name: Upload PR metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-metadata-${{ github.event.pull_request.number }}
+          path: ./pr-metadata
+          retention-days: 1
