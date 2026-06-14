@@ -16,6 +16,8 @@ import FormControl from "@mui/material/FormControl";
 import Select from "@mui/material/Select";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { FileStack, CreditCard, Layers3, PlusCircle, FileStackIcon } from "lucide-react";
+import InvoiceBackupBanner from "@/components/InvoiceBackupBanner";
+import WakuKeyRegistration from "@/components/WakuKeyRegistration";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -73,6 +75,9 @@ export default function Home() {
             Welcome <span className="font-medium text-green-400">Back!</span>
           </h1>
         </header>
+        
+        <InvoiceBackupBanner />
+        <WakuKeyRegistration />
 
         <Box
           sx={{

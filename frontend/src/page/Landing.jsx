@@ -31,7 +31,7 @@ function Landing() {
               </motion.h1>
 
               <p className="text-xl text-gray-300 leading-relaxed">
-                End-to-end encrypted, multi-chain invoicing with Lit Protocol
+                End-to-end encrypted, multi-chain invoicing with Waku Network
                 and support for 1000+ ERC20 tokens.
               </p>
 
@@ -39,11 +39,11 @@ function Landing() {
                 <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm">
                   <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-full">
                     <img
-                      src="/lit-protocol-logo.png"
-                      alt="Lit Protocol"
+                      src="/waku-logo.svg"
+                      alt="Waku Network"
                       className="h-4 w-4"
                     />
-                    <span>Lit Protocol Encrypted</span>
+                    <span>Waku P2P Encrypted</span>
                   </div>
                   <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-full">
                     <SiEthereum className="text-green-400" />
@@ -72,12 +72,12 @@ function Landing() {
                 <div className="absolute -bottom-6 -right-6 bg-gradient-to-r from-green-500 to-emerald-600 p-2 rounded-lg shadow-lg">
                   <div className="bg-black/80 p-3 rounded flex items-center">
                     <img
-                      src="/lit-protocol-logo.png"
-                      alt="Lit Protocol"
+                      src="/waku-logo.svg"
+                      alt="Waku Network"
                       className="h-4 mr-2"
                     />
                     <p className="text-xs font-mono">
-                      Encrypted with Lit Protocol
+                      Encrypted via Waku
                     </p>
                   </div>
                 </div>
@@ -98,7 +98,7 @@ function Landing() {
               className="text-4xl font-bold mb-6"
             >
               <span className="text-green-400">Military-Grade Security</span>{" "}
-              Powered by Lit Protocol
+              Powered by Waku Network
             </motion.h2>
           </div>
 
@@ -108,7 +108,7 @@ function Landing() {
                 icon: <FiShield className="w-8 h-8" />,
                 title: "Decentralized Encryption",
                 description:
-                  "Invoice data is encrypted using Lit Protocol's distributed key management system, ensuring no single party can access sensitive information without proper authorization.",
+                  "Invoice data is encrypted using ECIES cryptography and transmitted securely via the Waku peer-to-peer network, ensuring absolute privacy.",
               },
               {
                 icon: <FiLock className="w-8 h-8" />,
@@ -120,7 +120,7 @@ function Landing() {
                 icon: <FiZap className="w-8 h-8" />,
                 title: "Cross-Chain Compatibility",
                 description:
-                  "Our Lit Protocol integration works seamlessly across all supported chains, maintaining security consistency throughout the ecosystem.",
+                  "Our Waku integration works seamlessly across all supported chains, maintaining privacy and security consistency throughout the ecosystem.",
               },
             ].map((feature, index) => (
               <motion.div
@@ -158,7 +158,7 @@ function Landing() {
             </motion.h2>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
               Accept payments in any ERC20 token while maintaining full
-              encryption and security through Lit Protocol
+              encryption and security through Waku Network
             </p>
           </div>
 
@@ -178,7 +178,7 @@ function Landing() {
 
               <p className="text-gray-400 mb-6 leading-relaxed">
                 Chainvoice's smart contract architecture automatically handles
-                token conversions and verifications, while Lit Protocol ensures
+                token conversions and verifications, while Waku Network ensures
                 all payment details remain encrypted until settlement. Our
                 system supports:
               </p>

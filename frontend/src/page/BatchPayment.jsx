@@ -5,14 +5,7 @@ import { BrowserProvider, Contract, ethers } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import html2canvas from "html2canvas";
-import { LitNodeClient } from "@lit-protocol/lit-node-client";
-import { decryptToString } from "@lit-protocol/encryption/src/lib/encryption.js";
-import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
-import {
-  createSiweMessageWithRecaps,
-  generateAuthSig,
-  LitAccessControlConditionResource,
-} from "@lit-protocol/auth-helpers";
+import { getReceivedInvoices as getLocalReceivedInvoices } from "@/services/invoiceStorage/invoiceDB.js";
 import { ERC20_ABI } from "../contractsABI/ERC20_ABI";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -44,8 +37,6 @@ function BatchPayment() {
   const [batchLoading, setBatchLoading] = useState(false);
   const [fee, setFee] = useState(0);
   const [error, setError] = useState(null);
-  const [litReady, setLitReady] = useState(false);
-  const litClientRef = useRef(null);
   const [paymentLoading, setPaymentLoading] = useState({});
   const [networkLoading, setNetworkLoading] = useState(false);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
@@ -304,36 +295,13 @@ function BatchPayment() {
     return grouped;
   };
 
-  // Initialize Lit Protocol
-  useEffect(() => {
-    const initLit = async () => {
-      try {
-        setLoading(true);
-        if (!litClientRef.current) {
-          const client = new LitNodeClient({
-            litNetwork: LIT_NETWORK.DatilDev,
-            debug: false,
-          });
-          await client.connect();
-          litClientRef.current = client;
-          setLitReady(true);
-        }
-      } catch (error) {
-        console.error("Error initializing Lit client:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    initLit();
-  }, []);
-
   useEffect(() => {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
-  // Fetch invoices with batch awareness
+  // Fetch invoices from local IndexedDB with batch awareness
   useEffect(() => {
-    if (!walletClient || !address || !litReady) return;
+    if (!walletClient || !address) return;
 
     const fetchReceivedInvoices = async () => {
       try {
@@ -341,13 +309,6 @@ function BatchPayment() {
         setError(null);
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
-        const network = await provider.getNetwork();
-
-        const litNodeClient = litClientRef.current;
-        if (!litNodeClient) {
-          toast.error("Lit client not initialized");
-          return;
-        }
 
         const contractAddress = import.meta.env[
           `VITE_CONTRACT_ADDRESS_${chainId}`
@@ -359,166 +320,58 @@ function BatchPayment() {
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-        const res = await contract.getReceivedInvoices(address);
+        // 1. Read from IndexedDB
+        const localInvoices = await getLocalReceivedInvoices(address);
+        const chainFiltered = localInvoices.filter(
+          (inv) => String(inv.chainId) === String(chainId)
+        );
 
-        if (!res || !Array.isArray(res) || res.length === 0) {
-          setReceivedInvoices([]);
-          setLoading(false);
-          return;
+        // 2. Fetch on-chain status
+        let onChainInvoices = [];
+        try {
+          onChainInvoices = await contract.getReceivedInvoices(address);
+        } catch (e) {
+          console.warn("Failed to fetch on-chain invoices:", e);
         }
 
-        const decryptedInvoices = [];
+        const onChainStatusMap = {};
+        for (const inv of onChainInvoices) {
+          const id = inv[0].toString();
+          onChainStatusMap[id] = {
+            isPaid: inv[5],
+            isCancelled: inv[6],
+          };
+        }
 
-        for (const invoice of res) {
-          try {
-            const id = invoice[0];
-            const from = invoice[1].toLowerCase();
-            const to = invoice[2].toLowerCase();
-            const isPaid = invoice[5];
-            const isCancelled = invoice[6];
-            const encryptedStringBase64 = invoice[7];
-            const dataToEncryptHash = invoice[8];
+        // 3. Merge
+        const mergedInvoices = chainFiltered.map((local) => {
+          const onChain = onChainStatusMap[local.invoiceId];
+          const parsed = { ...local.data };
+          parsed["id"] = BigInt(local.invoiceId);
+          parsed["isPaid"] = onChain ? onChain.isPaid : local.isPaid;
+          parsed["isCancelled"] = onChain ? onChain.isCancelled : local.isCancelled;
 
-            if (!encryptedStringBase64 || !dataToEncryptHash) continue;
+          const batchInfo = detectBatchFromMetadata(parsed);
+          if (batchInfo) parsed.batchInfo = batchInfo;
 
-            const currentUserAddress = address.toLowerCase();
-            if (currentUserAddress !== from && currentUserAddress !== to) {
-              continue;
+          if (parsed.paymentToken?.address) {
+            const tokenInfo = getTokenInfo(parsed.paymentToken.address);
+            if (tokenInfo) {
+              parsed.paymentToken = {
+                ...parsed.paymentToken,
+                logo: tokenInfo.image || tokenInfo.logo,
+                decimals: tokenInfo.decimals || parsed.paymentToken.decimals,
+                name: tokenInfo.name || parsed.paymentToken.name,
+                symbol: tokenInfo.symbol || parsed.paymentToken.symbol,
+              };
             }
-
-            const ciphertext = atob(encryptedStringBase64);
-            const accessControlConditions = [
-              {
-                contractAddress: "",
-                standardContractType: "",
-                chain: "ethereum",
-                method: "",
-                parameters: [":userAddress"],
-                returnValueTest: {
-                  comparator: "=",
-                  value: from,
-                },
-              },
-              { operator: "or" },
-              {
-                contractAddress: "",
-                standardContractType: "",
-                chain: "ethereum",
-                method: "",
-                parameters: [":userAddress"],
-                returnValueTest: {
-                  comparator: "=",
-                  value: to,
-                },
-              },
-            ];
-
-            const sessionSigs = await litNodeClient.getSessionSigs({
-              chain: "ethereum",
-              resourceAbilityRequests: [
-                {
-                  resource: new LitAccessControlConditionResource("*"),
-                  ability: LIT_ABILITY.AccessControlConditionDecryption,
-                },
-              ],
-              authNeededCallback: async ({
-                uri,
-                expiration,
-                resourceAbilityRequests,
-              }) => {
-                const nonce = await litNodeClient.getLatestBlockhash();
-                const toSign = await createSiweMessageWithRecaps({
-                  uri,
-                  expiration,
-                  resources: resourceAbilityRequests,
-                  walletAddress: address,
-                  nonce,
-                  litNodeClient,
-                });
-                return await generateAuthSig({ signer, toSign });
-              },
-            });
-
-            const decryptedString = await decryptToString(
-              {
-                accessControlConditions,
-                chain: "ethereum",
-                ciphertext,
-                dataToEncryptHash,
-                sessionSigs,
-              },
-              litNodeClient
-            );
-
-            const parsed = JSON.parse(decryptedString);
-            parsed["id"] = id;
-            parsed["isPaid"] = isPaid;
-            parsed["isCancelled"] = isCancelled;
-
-            // Detect batch information
-            const batchInfo = detectBatchFromMetadata(parsed);
-            if (batchInfo) {
-              parsed.batchInfo = batchInfo;
-            }
-
-            // Enhanced token info
-            if (parsed.paymentToken?.address) {
-              const tokenInfo = getTokenInfo(parsed.paymentToken.address);
-              if (tokenInfo) {
-                parsed.paymentToken = {
-                  ...parsed.paymentToken,
-                  logo: tokenInfo.image || tokenInfo.logo,
-                  decimals: tokenInfo.decimals || parsed.paymentToken.decimals,
-                  name: tokenInfo.name || parsed.paymentToken.name,
-                  symbol: tokenInfo.symbol || parsed.paymentToken.symbol,
-                };
-              } else {
-                try {
-                  const tokenContract = new ethers.Contract(
-                    parsed.paymentToken.address,
-                    ERC20_ABI,
-                    provider
-                  );
-
-                  const [symbol, name, decimals] = await Promise.all([
-                    tokenContract
-                      .symbol()
-                      .catch(() => parsed.paymentToken.symbol || "UNKNOWN"),
-                    tokenContract
-                      .name()
-                      .catch(() => parsed.paymentToken.name || "Unknown Token"),
-                    tokenContract
-                      .decimals()
-                      .catch(() => parsed.paymentToken.decimals || 18),
-                  ]);
-
-                  parsed.paymentToken = {
-                    ...parsed.paymentToken,
-                    symbol,
-                    name,
-                    decimals: Number(decimals),
-                    logo: "/tokenImages/generic.png",
-                  };
-                } catch (error) {
-                  console.error("Failed to fetch token info:", error);
-                  parsed.paymentToken.logo =
-                    parsed.paymentToken.logo || "/tokenImages/generic.png";
-                }
-              }
-            }
-
-            decryptedInvoices.push(parsed);
-          } catch (err) {
-            console.error(`Error processing invoice ${invoice[0]}:`, err);
           }
-        }
+          return parsed;
+        });
 
-        setReceivedInvoices(decryptedInvoices);
-
-        // Generate batch suggestions
-        const suggestions = findBatchSuggestions(decryptedInvoices);
+        setReceivedInvoices(mergedInvoices);
+        const suggestions = findBatchSuggestions(mergedInvoices);
         setBatchSuggestions(suggestions);
-
         const fee = await contract.fee();
         setFee(fee);
       } catch (error) {
@@ -530,7 +383,7 @@ function BatchPayment() {
     };
 
     fetchReceivedInvoices();
-  }, [walletClient, litReady, address, tokens]);
+  }, [walletClient, address, tokens, chainId]);
 
   // ENHANCED Batch payment function with pre-checks
   const handleBatchPayment = async () => {

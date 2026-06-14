@@ -50,7 +50,7 @@ export const ChainvoiceABI = [
         internalType: "address",
       },
       {
-        name: "encryptedInvoiceData",
+        name: "invoiceDataHash",
         type: "string",
         internalType: "string",
       },
@@ -582,6 +582,77 @@ export const ChainvoiceABI = [
         type: "address",
         indexed: false,
         internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  // ========== Waku Key Management ==========
+  {
+    type: "function",
+    name: "registerWakuPublicKey",
+    inputs: [
+      {
+        name: "publicKey",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "getWakuPublicKey",
+    inputs: [
+      {
+        name: "user",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "wakuPublicKeys",
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "event",
+    name: "WakuKeyRegistered",
+    inputs: [
+      {
+        name: "user",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "publicKey",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
       },
     ],
     anonymous: false,

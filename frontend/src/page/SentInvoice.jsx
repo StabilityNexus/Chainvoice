@@ -16,15 +16,7 @@ import { useRef } from "react";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
-import { LitNodeClient } from "@lit-protocol/lit-node-client";
-import { decryptToString } from "@lit-protocol/encryption/src/lib/encryption.js";
-import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
-import {
-  createSiweMessageWithRecaps,
-  generateAuthSig,
-  LitAccessControlConditionResource,
-} from "@lit-protocol/auth-helpers";
-import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
+import { getSentInvoices as getLocalSentInvoices } from "@/services/invoiceStorage/invoiceDB.js";
 import { toast } from "react-toastify";
 import {
   CircularProgress,
@@ -79,8 +71,6 @@ function SentInvoice() {
   const [sentInvoices, setSentInvoices] = useState([]);
   const [fee, setFee] = useState(0);
   const [error, setError] = useState(null);
-  const [litReady, setLitReady] = useState(false);
-  const litClientRef = useRef(null);
   const [paymentLoading, setPaymentLoading] = useState({});
   const [networkLoading, setNetworkLoading] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -128,33 +118,7 @@ function SentInvoice() {
   };
 
   useEffect(() => {
-    const initLit = async () => {
-      try {
-        setLoading(true);
-        if (!litClientRef.current) {
-          const client = new LitNodeClient({
-            litNetwork: LIT_NETWORK.DatilDev,
-            debug: false,
-          });
-          await client.connect();
-          litClientRef.current = client;
-          setLitReady(true);
-        }
-      } catch (error) {
-        console.error("Error initializing Lit client:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    initLit();
-  }, []);
-
-  useEffect(() => {
-    setShowWalletAlert(!isConnected);
-  }, [isConnected]);
-
-  useEffect(() => {
-    if (!walletClient || !address || !litReady) return;
+    if (!walletClient || !address) return;
 
     const fetchSentInvoices = async () => {
       try {
@@ -163,11 +127,6 @@ function SentInvoice() {
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
 
-        const litNodeClient = litClientRef.current;
-        if (!litNodeClient) {
-          toast.error("Lit client not initialized");
-          return;
-        }
         const contractAddress = import.meta.env[
           `VITE_CONTRACT_ADDRESS_${chainId}`
         ];
@@ -178,179 +137,73 @@ function SentInvoice() {
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-        const res = await contract.getSentInvoices(address);
-        console.log("Raw invoices data:", res);
+        // 1. Read invoices from local IndexedDB
+        const localInvoices = await getLocalSentInvoices(address);
+        // Filter to current chain
+        const chainFiltered = localInvoices.filter(
+          (inv) => String(inv.chainId) === String(chainId)
+        );
 
-        if (!res || !Array.isArray(res) || res.length === 0) {
-          console.warn("No invoices found.");
-          setSentInvoices([]);
-          setLoading(false);
-          return;
+        // 2. Also fetch on-chain invoice list to get status updates (paid/cancelled)
+        let onChainInvoices = [];
+        try {
+          onChainInvoices = await contract.getSentInvoices(address);
+        } catch (e) {
+          console.warn("Failed to fetch on-chain invoices:", e);
         }
 
-        const decryptedInvoices = [];
+        // Build a map of on-chain statuses by invoice ID
+        const onChainStatusMap = {};
+        for (const inv of onChainInvoices) {
+          const id = inv[0].toString();
+          onChainStatusMap[id] = {
+            isPaid: inv[5],
+            isCancelled: inv[6],
+            amountDue: inv[3],
+            tokenAddress: inv[4],
+            to: inv[2],
+          };
+        }
 
-        for (const invoice of res) {
-          try {
-            const id = invoice[0];
-            const from = invoice[1].toLowerCase();
-            const to = invoice[2].toLowerCase();
-            const isPaid = invoice[5];
-            const isCancelled = invoice[6];
-            const encryptedStringBase64 = invoice[7];
-            const dataToEncryptHash = invoice[8];
+        // 3. Merge local data with on-chain status
+        const mergedInvoices = chainFiltered.map((local) => {
+          const onChain = onChainStatusMap[local.invoiceId];
+          const parsed = { ...local.data };
+          parsed["id"] = BigInt(local.invoiceId);
+          parsed["isPaid"] = onChain ? onChain.isPaid : local.isPaid;
+          parsed["isCancelled"] = onChain ? onChain.isCancelled : local.isCancelled;
 
-            if (!encryptedStringBase64 || !dataToEncryptHash) continue;
-
-            const currentUserAddress = address.toLowerCase();
-            if (currentUserAddress !== from && currentUserAddress !== to) {
-              console.warn(`Unauthorized access attempt for invoice ${id}`);
-              continue;
+          // Enhance token info from token list
+          if (parsed.paymentToken?.address) {
+            const tokenInfo = getTokenInfo(parsed.paymentToken.address);
+            if (tokenInfo) {
+              parsed.paymentToken = {
+                ...parsed.paymentToken,
+                logo: tokenInfo.image || tokenInfo.logo,
+                decimals: tokenInfo.decimals || parsed.paymentToken.decimals,
+                name: tokenInfo.name || parsed.paymentToken.name,
+                symbol: tokenInfo.symbol || parsed.paymentToken.symbol,
+              };
             }
-
-            const ciphertext = atob(encryptedStringBase64);
-            const accessControlConditions = [
-              {
-                contractAddress: "",
-                standardContractType: "",
-                chain: "ethereum",
-                method: "",
-                parameters: [":userAddress"],
-                returnValueTest: {
-                  comparator: "=",
-                  value: from,
-                },
-              },
-              { operator: "or" },
-              {
-                contractAddress: "",
-                standardContractType: "",
-                chain: "ethereum",
-                method: "",
-                parameters: [":userAddress"],
-                returnValueTest: {
-                  comparator: "=",
-                  value: to,
-                },
-              },
-            ];
-
-            const sessionSigs = await litNodeClient.getSessionSigs({
-              chain: "ethereum",
-              resourceAbilityRequests: [
-                {
-                  resource: new LitAccessControlConditionResource("*"),
-                  ability: LIT_ABILITY.AccessControlConditionDecryption,
-                },
-              ],
-              authNeededCallback: async ({
-                uri,
-                expiration,
-                resourceAbilityRequests,
-              }) => {
-                const nonce = await litNodeClient.getLatestBlockhash();
-                const toSign = await createSiweMessageWithRecaps({
-                  uri,
-                  expiration,
-                  resources: resourceAbilityRequests,
-                  walletAddress: address,
-                  nonce,
-                  litNodeClient,
-                });
-                return await generateAuthSig({ signer, toSign });
-              },
-            });
-
-            const decryptedString = await decryptToString(
-              {
-                accessControlConditions,
-                chain: "ethereum",
-                ciphertext,
-                dataToEncryptHash,
-                sessionSigs,
-              },
-              litNodeClient
-            );
-
-            const parsed = JSON.parse(decryptedString);
-            parsed["id"] = id;
-            parsed["isPaid"] = isPaid;
-            parsed["isCancelled"] = isCancelled;
-
-            // Enhance with token details using the new token fetching system
-            if (parsed.paymentToken?.address) {
-              const tokenInfo = getTokenInfo(parsed.paymentToken.address);
-              if (tokenInfo) {
-                parsed.paymentToken = {
-                  ...parsed.paymentToken,
-                  logo: tokenInfo.image || tokenInfo.logo,
-                  decimals: tokenInfo.decimals || parsed.paymentToken.decimals,
-                  name: tokenInfo.name || parsed.paymentToken.name,
-                  symbol: tokenInfo.symbol || parsed.paymentToken.symbol,
-                };
-              } else {
-                // Fallback: try to fetch token info from blockchain if not in our list
-                try {
-                  const tokenContract = new ethers.Contract(
-                    parsed.paymentToken.address,
-                    ERC20_ABI,
-                    provider
-                  );
-
-                  const [symbol, name, decimals] = await Promise.all([
-                    tokenContract
-                      .symbol()
-                      .catch(() => parsed.paymentToken.symbol || "UNKNOWN"),
-                    tokenContract
-                      .name()
-                      .catch(() => parsed.paymentToken.name || "Unknown Token"),
-                    tokenContract
-                      .decimals()
-                      .catch(() => parsed.paymentToken.decimals || 18),
-                  ]);
-
-                  parsed.paymentToken = {
-                    ...parsed.paymentToken,
-                    symbol,
-                    name,
-                    decimals: Number(decimals),
-                    logo: "/tokenImages/generic.png", // Generic fallback
-                  };
-                } catch (error) {
-                  console.error(
-                    "Failed to fetch token info from blockchain:",
-                    error
-                  );
-                  // Keep existing data or set defaults
-                  parsed.paymentToken.logo =
-                    parsed.paymentToken.logo || "/tokenImages/generic.png";
-                }
-              }
-            }
-
-            decryptedInvoices.push(parsed);
-          } catch (err) {
-            console.error(`Error processing invoice ${invoice[0]}:`, err);
           }
-        }
+          return parsed;
+        });
 
-        setSentInvoices(decryptedInvoices);
+        setSentInvoices(mergedInvoices);
         const fee = await contract.fee();
         setFee(fee);
       } catch (error) {
-        console.error("Decryption error:", error);
+        console.error("Error loading invoices:", error);
         setError(
           "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
         );
-
       } finally {
-        console.log(sentInvoices);
         setLoading(false);
       }
     };
 
     fetchSentInvoices();
-  }, [walletClient, litReady, address, tokens]); // Added tokens to dependency array
+  }, [walletClient, address, tokens, chainId]);
 
   const [drawerState, setDrawerState] = useState({
     open: false,

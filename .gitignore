@@ -44,3 +44,10 @@ contracts/.env.local
 contracts/.env.development
 contracts/.env.production
 .vite/
+
+# Foundry broadcast artifacts
+contracts/broadcast/
+
+# Temporary files
+.env
+.commit_msg

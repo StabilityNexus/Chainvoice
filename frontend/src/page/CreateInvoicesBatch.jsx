@@ -38,14 +38,11 @@ import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
-import { LitNodeClient } from "@lit-protocol/lit-node-client";
-import { encryptString } from "@lit-protocol/encryption/src/lib/encryption.js";
-import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
-import {
-  createSiweMessageWithRecaps,
-  generateAuthSig,
-  LitAccessControlConditionResource,
-} from "@lit-protocol/auth-helpers";
+import { useWaku } from "@/hooks/useWaku";
+import { useWakuKeys } from "@/hooks/useWakuKeys";
+import { computeInvoiceHash } from "@/services/waku/invoiceHashUtils.js";
+import { sendEncryptedInvoice } from "@/services/waku/wakuInvoiceMessaging.js";
+import { storeInvoice } from "@/services/invoiceStorage/invoiceDB.js";
 
 import TokenIntegrationRequest from "@/components/TokenIntegrationRequest";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
@@ -69,7 +66,8 @@ function CreateInvoicesBatch() {
   const [issueDate, setIssueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const litClientRef = useRef(null);
+  const { isReady: wakuReady } = useWaku();
+  const { keys: wakuKeys, deriveKeysOnly } = useWakuKeys();
   const itemRefs = useRef({});
 
   // Token selection state
@@ -132,20 +130,7 @@ function CreateInvoicesBatch() {
     );
   }, [invoiceRows.map((r) => JSON.stringify(r.itemData)).join(",")]);
 
-  // Initialize Lit
-  useEffect(() => {
-    const initLit = async () => {
-      if (!litClientRef.current) {
-        const client = new LitNodeClient({
-          litNetwork: LIT_NETWORK.DatilDev,
-          debug: false,
-        });
-        await client.connect();
-        litClientRef.current = client;
-      }
-    };
-    initLit();
-  }, []);
+
 
   useEffect(() => {
     setShowWalletAlert(!isConnected);
@@ -350,13 +335,14 @@ function CreateInvoicesBatch() {
       // Prepare batch arrays
       const tos = [];
       const amounts = [];
-      const encryptedPayloads = [];
+      const invoiceDataHashes = [];
       const encryptedHashes = [];
+      const invoicePayloads = []; // keep for local storage
 
-      const litNodeClient = litClientRef.current;
-      if (!litNodeClient) {
-        toast.error("Encryption service not ready. Please try again.");
-        return;
+      // Derive Waku keys if needed
+      let currentKeys = wakuKeys;
+      if (!currentKeys) {
+        currentKeys = await deriveKeysOnly();
       }
 
       toast(`Processing ${validInvoices.length} invoices...`);
@@ -364,7 +350,7 @@ function CreateInvoicesBatch() {
       // Process each invoice
       for (const [index, row] of validInvoices.entries()) {
         toast(
-          `Encrypting invoice ${index + 1} of ${validInvoices.length}...`
+          `Processing invoice ${index + 1} of ${validInvoices.length}...`
         );
 
         const invoicePayload = {
@@ -395,7 +381,6 @@ function CreateInvoicesBatch() {
             postalcode: row.clientPostalcode,
           },
           items: row.itemData,
-          // Add batch metadata
           batchInfo: {
             batchId: `batch_${Date.now()}`,
             batchSize: validInvoices.length,
@@ -404,75 +389,9 @@ function CreateInvoicesBatch() {
           },
         };
 
-        const invoiceString = JSON.stringify(invoicePayload);
+        // Compute hash instead of encrypting
+        const invoiceDataHash = computeInvoiceHash(invoicePayload);
 
-        const accessControlConditions = [
-          {
-            contractAddress: "",
-            standardContractType: "",
-            chain: "ethereum",
-            method: "",
-            parameters: [":userAddress"],
-            returnValueTest: {
-              comparator: "=",
-              value: account.address.toLowerCase(),
-            },
-          },
-          { operator: "or" },
-          {
-            contractAddress: "",
-            standardContractType: "",
-            chain: "ethereum",
-            method: "",
-            parameters: [":userAddress"],
-            returnValueTest: {
-              comparator: "=",
-              value: row.clientAddress.toLowerCase(),
-            },
-          },
-        ];
-
-        const { ciphertext, dataToEncryptHash } = await encryptString(
-          {
-            accessControlConditions,
-            dataToEncrypt: invoiceString,
-          },
-          litNodeClient
-        );
-
-        const sessionSigs = await litNodeClient.getSessionSigs({
-          chain: "ethereum",
-          resourceAbilityRequests: [
-            {
-              resource: new LitAccessControlConditionResource("*"),
-              ability: LIT_ABILITY.AccessControlConditionDecryption,
-            },
-          ],
-          authNeededCallback: async ({
-            uri,
-            expiration,
-            resourceAbilityRequests,
-          }) => {
-            const nonce = await litNodeClient.getLatestBlockhash();
-            const toSign = await createSiweMessageWithRecaps({
-              uri,
-              expiration,
-              resources: resourceAbilityRequests,
-              walletAddress: account.address,
-              nonce,
-              litNodeClient,
-            });
-
-            return await generateAuthSig({
-              signer,
-              toSign,
-            });
-          },
-        });
-
-        const encryptedStringBase64 = btoa(ciphertext);
-
-        // Add to batch arrays
         tos.push(row.clientAddress);
         amounts.push(
           ethers.parseUnits(
@@ -480,11 +399,12 @@ function CreateInvoicesBatch() {
             paymentToken.decimals
           )
         );
-        encryptedPayloads.push(encryptedStringBase64);
-        encryptedHashes.push(dataToEncryptHash);
+        invoiceDataHashes.push(invoiceDataHash);
+        encryptedHashes.push(""); // reserved field
+        invoicePayloads.push(invoicePayload);
       }
 
-      toast.success("All invoices encrypted successfully!");
+      toast.success("All invoices processed!");
       toast("Submitting batch transaction to blockchain...");
 
       // Send to contract
@@ -502,12 +422,56 @@ function CreateInvoicesBatch() {
         tos,
         amounts,
         paymentToken.address,
-        encryptedPayloads,
+        invoiceDataHashes,
         encryptedHashes
       );
 
       toast("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
+
+      // Extract invoice IDs from events and store locally
+      try {
+        const iface = new ethers.Interface(ChainvoiceABI);
+        let eventIndex = 0;
+        for (const log of receipt.logs) {
+          try {
+            const parsed = iface.parseLog(log);
+            if (parsed?.name === 'InvoiceCreated' && eventIndex < invoicePayloads.length) {
+              const invoiceId = parsed.args[0].toString();
+              const payload = invoicePayloads[eventIndex];
+
+              // Store locally in IndexedDB
+              await storeInvoice({
+                invoiceId,
+                chainId: account.chainId,
+                from: account.address.toLowerCase(),
+                to: payload.client.address.toLowerCase(),
+                isPaid: false,
+                isCancelled: false,
+                invoiceDataHash: invoiceDataHashes[eventIndex],
+                data: payload,
+              });
+
+              // Try to send via Waku
+              try {
+                const receiverPubKey = await contract.getWakuPublicKey(payload.client.address);
+                if (receiverPubKey && receiverPubKey !== '0x' && receiverPubKey.length > 2) {
+                  const keyBytes = new Uint8Array(
+                    receiverPubKey.slice(2).match(/.{2}/g).map(b => parseInt(b, 16))
+                  );
+                  await sendEncryptedInvoice(payload, keyBytes, account.chainId, invoiceId);
+                }
+              } catch (wakuErr) {
+                console.warn(`Waku send for invoice ${invoiceId} failed (non-critical):`, wakuErr);
+              }
+
+              eventIndex++;
+            }
+          } catch {}
+        }
+      } catch (e) {
+        console.warn("Failed to extract invoice IDs from receipt:", e);
+      }
 
       toast.success(
         `Successfully created ${validInvoices.length} invoices in batch!`

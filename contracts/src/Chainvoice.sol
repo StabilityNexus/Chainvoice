@@ -38,6 +38,8 @@ contract Chainvoice {
     error TreasuryNotSet();
     error NoFeesAvailable();
     error WithdrawFailed();
+    error WakuKeyNotRegistered();
+    error InvalidWakuKey();
 
     // ========== Storage ==========
     error InvalidNewOwner();
@@ -52,13 +54,16 @@ contract Chainvoice {
         address tokenAddress;     // address(0) == native
         bool isPaid;
         bool isCancelled;
-        string encryptedInvoiceData; // Base64-encoded ciphertext
-        string encryptedHash; // Content hash or integrity ref
+        bytes32 invoiceDataHash;  // keccak256 hash of plaintext invoice data
+        string encryptedHash;     // Reserved field for backward compatibility
      }
 
     InvoiceDetails[] public invoices;
     mapping(address => uint256[]) public sentInvoices;
     mapping(address => uint256[]) public receivedInvoices;
+
+    // ========== Waku Public Key Registry ==========
+    mapping(address => bytes) public wakuPublicKeys;
 
     address public owner;
     address public treasuryAddress;
@@ -72,6 +77,7 @@ contract Chainvoice {
     event InvoiceCancelled(uint256 indexed id, address indexed from, address indexed to, address tokenAddress);
     event InvoiceBatchCreated(address indexed creator, address indexed token, uint256 count, uint256[] ids);
     event InvoiceBatchPaid(address indexed payer, address indexed token, uint256 count, uint256 totalAmount, uint256[] ids);
+    event WakuKeyRegistered(address indexed user, bytes publicKey);
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferInitiated(address indexed currentOwner, address indexed pendingOwner);
@@ -113,12 +119,28 @@ contract Chainvoice {
         return success;
     }
 
+    // ========== Waku Key Management ==========
+    /// @notice Register or update the caller's Waku ECIES public key.
+    /// @param publicKey The uncompressed secp256k1 public key (65 bytes).
+    function registerWakuPublicKey(bytes calldata publicKey) external {
+        if (publicKey.length != 65) revert InvalidWakuKey();
+        wakuPublicKeys[msg.sender] = publicKey;
+        emit WakuKeyRegistered(msg.sender, publicKey);
+    }
+
+    /// @notice Get a user's registered Waku public key.
+    /// @param user The address to look up.
+    /// @return The public key bytes (empty if not registered).
+    function getWakuPublicKey(address user) external view returns (bytes memory) {
+        return wakuPublicKeys[user];
+    }
+
     // ========== Single-invoice create ==========
     function createInvoice(
         address to,
         uint256 amountDue,
         address tokenAddress,
-        string memory encryptedInvoiceData,
+        bytes32 invoiceDataHash,
         string memory encryptedHash
     ) external {
         if (to == address(0)) revert ZeroAddress();
@@ -148,7 +170,7 @@ contract Chainvoice {
                 tokenAddress: tokenAddress,
                 isPaid: false,
                 isCancelled: false,
-                encryptedInvoiceData: encryptedInvoiceData,
+                invoiceDataHash: invoiceDataHash,
                 encryptedHash: encryptedHash
             })
         );
@@ -163,7 +185,7 @@ contract Chainvoice {
         address[] calldata tos,
         uint256[] calldata amountsDue,
         address tokenAddress,
-        string[] calldata encryptedPayloads,
+        bytes32[] calldata encryptedPayloads,
         string[] calldata encryptedHashes
     ) external {
         uint256 n = tos.length;
@@ -202,7 +224,7 @@ contract Chainvoice {
                     tokenAddress: tokenAddress,
                     isPaid: false,
                     isCancelled: false,
-                    encryptedInvoiceData: encryptedPayloads[i],
+                    invoiceDataHash: encryptedPayloads[i],
                     encryptedHash: encryptedHashes[i]
                 })
             );

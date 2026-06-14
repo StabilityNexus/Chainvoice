@@ -8,22 +8,17 @@ import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { BrowserProvider, Contract, ethers } from "ethers";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
-import { useRef } from "react";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
-import { LitNodeClient } from "@lit-protocol/lit-node-client";
-import { decryptToString } from "@lit-protocol/encryption/src/lib/encryption.js";
-import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
-import {
-  createSiweMessageWithRecaps,
-  generateAuthSig,
-  LitAccessControlConditionResource,
-} from "@lit-protocol/auth-helpers";
+import { getReceivedInvoices as getLocalReceivedInvoices, storeInvoice } from "@/services/invoiceStorage/invoiceDB.js";
+import { verifyInvoiceHash } from "@/services/waku/invoiceHashUtils.js";
+import { subscribeToInvoices, queryStoredInvoices } from "@/services/waku/wakuInvoiceMessaging.js";
+import { deriveWakuKeyPair } from "@/services/waku/wakuKeyManager.js";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -91,10 +86,10 @@ function ReceivedInvoice() {
   const [receivedInvoices, setReceivedInvoice] = useState([]);
   const [fee, setFee] = useState(0);
   const [error, setError] = useState(null);
-  const [litReady, setLitReady] = useState(false);
-  const litClientRef = useRef(null);
   const [paymentLoading, setPaymentLoading] = useState({});
   const [networkLoading, setNetworkLoading] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const wakuUnsubRef = useRef(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
 
   // Error handling states
@@ -631,36 +626,13 @@ function ReceivedInvoice() {
     }
   };
 
-  // Initialize Lit Protocol
-  useEffect(() => {
-    const initLit = async () => {
-      try {
-        setLoading(true);
-        if (!litClientRef.current) {
-          const client = new LitNodeClient({
-            litNetwork: LIT_NETWORK.DatilDev,
-            debug: false,
-          });
-          await client.connect();
-          litClientRef.current = client;
-          setLitReady(true);
-        }
-      } catch (error) {
-        console.error("Error initializing Lit client:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    initLit();
-  }, []);
-
   useEffect(() => {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
-  // Fetch invoices
+  // Fetch invoices from local IndexedDB + sync status from chain
   useEffect(() => {
-    if (!walletClient || !address || !litReady) return;
+    if (!walletClient || !address) return;
 
     const fetchReceivedInvoices = async () => {
       try {
@@ -668,13 +640,6 @@ function ReceivedInvoice() {
         setError(null);
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
-
-        const litNodeClient = litClientRef.current;
-        if (!litNodeClient) {
-          setError("Lit client not initialized. Please refresh the page.");
-          setLoading(false);
-          return;
-        }
 
         const contractAddress = import.meta.env[
           `VITE_CONTRACT_ADDRESS_${chainId}`
@@ -686,159 +651,62 @@ function ReceivedInvoice() {
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-        const res = await contract.getReceivedInvoices(address);
+        // 1. Read invoices from local IndexedDB
+        const localInvoices = await getLocalReceivedInvoices(address);
+        const chainFiltered = localInvoices.filter(
+          (inv) => String(inv.chainId) === String(chainId)
+        );
 
-        if (!res || !Array.isArray(res) || res.length === 0) {
-          setReceivedInvoice([]);
-          setLoading(false);
-          return;
+        // 2. Fetch on-chain invoice list for status updates
+        let onChainInvoices = [];
+        try {
+          onChainInvoices = await contract.getReceivedInvoices(address);
+        } catch (e) {
+          console.warn("Failed to fetch on-chain invoices:", e);
         }
 
-        const decryptedInvoices = [];
+        const onChainStatusMap = {};
+        for (const inv of onChainInvoices) {
+          const id = inv[0].toString();
+          onChainStatusMap[id] = {
+            isPaid: inv[5],
+            isCancelled: inv[6],
+            amountDue: inv[3],
+            tokenAddress: inv[4],
+            from: inv[1],
+          };
+        }
 
-        for (const invoice of res) {
-          try {
-            const id = invoice[0];
-            const from = invoice[1].toLowerCase();
-            const to = invoice[2].toLowerCase();
-            const isPaid = invoice[5];
-            const isCancelled = invoice[6];
-            const encryptedStringBase64 = invoice[7];
-            const dataToEncryptHash = invoice[8];
+        // 3. Merge local data with on-chain status
+        const mergedInvoices = chainFiltered.map((local) => {
+          const onChain = onChainStatusMap[local.invoiceId];
+          const parsed = { ...local.data };
+          parsed["id"] = BigInt(local.invoiceId);
+          parsed["isPaid"] = onChain ? onChain.isPaid : local.isPaid;
+          parsed["isCancelled"] = onChain ? onChain.isCancelled : local.isCancelled;
 
-            if (!encryptedStringBase64 || !dataToEncryptHash) continue;
-
-            const currentUserAddress = address.toLowerCase();
-            if (currentUserAddress !== from && currentUserAddress !== to) {
-              continue;
-            }
-
-            const ciphertext = atob(encryptedStringBase64);
-            const accessControlConditions = [
-              {
-                contractAddress: "",
-                standardContractType: "",
-                chain: "ethereum",
-                method: "",
-                parameters: [":userAddress"],
-                returnValueTest: {
-                  comparator: "=",
-                  value: from,
-                },
-              },
-              { operator: "or" },
-              {
-                contractAddress: "",
-                standardContractType: "",
-                chain: "ethereum",
-                method: "",
-                parameters: [":userAddress"],
-                returnValueTest: {
-                  comparator: "=",
-                  value: to,
-                },
-              },
-            ];
-
-            const sessionSigs = await litNodeClient.getSessionSigs({
-              chain: "ethereum",
-              resourceAbilityRequests: [
-                {
-                  resource: new LitAccessControlConditionResource("*"),
-                  ability: LIT_ABILITY.AccessControlConditionDecryption,
-                },
-              ],
-              authNeededCallback: async ({
-                uri,
-                expiration,
-                resourceAbilityRequests,
-              }) => {
-                const nonce = await litNodeClient.getLatestBlockhash();
-                const toSign = await createSiweMessageWithRecaps({
-                  uri,
-                  expiration,
-                  resources: resourceAbilityRequests,
-                  walletAddress: address,
-                  nonce,
-                  litNodeClient,
-                });
-                return await generateAuthSig({ signer, toSign });
-              },
-            });
-
-            const decryptedString = await decryptToString(
-              {
-                accessControlConditions,
-                chain: "ethereum",
-                ciphertext,
-                dataToEncryptHash,
-                sessionSigs,
-              },
-              litNodeClient
-            );
-
-            const parsed = JSON.parse(decryptedString);
-            parsed["id"] = id;
-            parsed["isPaid"] = isPaid;
-            parsed["isCancelled"] = isCancelled;
-
-            const batchInfo = detectBatchFromMetadata(parsed);
-            if (batchInfo) {
-              parsed.batchInfo = batchInfo;
-            }
-            if (parsed.paymentToken?.address) {
-              const tokenInfo = getTokenInfo(parsed.paymentToken.address);
-              if (tokenInfo) {
-                parsed.paymentToken = {
-                  ...parsed.paymentToken,
-                  logo: tokenInfo.image || tokenInfo.logo,
-                  decimals: tokenInfo.decimals || parsed.paymentToken.decimals,
-                  name: tokenInfo.name || parsed.paymentToken.name,
-                  symbol: tokenInfo.symbol || parsed.paymentToken.symbol,
-                };
-              } else {
-                // Fallback: try to fetch token info from blockchain if not in our list
-                try {
-                  const tokenContract = new ethers.Contract(
-                    parsed.paymentToken.address,
-                    ERC20_ABI,
-                    provider
-                  );
-
-                  const [symbol, name, decimals] = await Promise.all([
-                    tokenContract
-                      .symbol()
-                      .catch(() => parsed.paymentToken.symbol || "UNKNOWN"),
-                    tokenContract
-                      .name()
-                      .catch(() => parsed.paymentToken.name || "Unknown Token"),
-                    tokenContract
-                      .decimals()
-                      .catch(() => parsed.paymentToken.decimals || 18),
-                  ]);
-
-                  parsed.paymentToken = {
-                    ...parsed.paymentToken,
-                    symbol,
-                    name,
-                    decimals: Number(decimals),
-                    logo: "/tokenImages/generic.png",
-                  };
-                } catch (error) {
-                  parsed.paymentToken.logo =
-                    parsed.paymentToken.logo || "/tokenImages/generic.png";
-                }
-              }
-            }
-
-            decryptedInvoices.push(parsed);
-          } catch (err) {
-            console.error(`Error processing invoice ${invoice[0]}:`, err);
+          const batchInfo = detectBatchFromMetadata(parsed);
+          if (batchInfo) {
+            parsed.batchInfo = batchInfo;
           }
-        }
 
-        setReceivedInvoice(decryptedInvoices);
-        const suggestions = findBatchSuggestions(decryptedInvoices);
+          if (parsed.paymentToken?.address) {
+            const tokenInfo = getTokenInfo(parsed.paymentToken.address);
+            if (tokenInfo) {
+              parsed.paymentToken = {
+                ...parsed.paymentToken,
+                logo: tokenInfo.image || tokenInfo.logo,
+                decimals: tokenInfo.decimals || parsed.paymentToken.decimals,
+                name: tokenInfo.name || parsed.paymentToken.name,
+                symbol: tokenInfo.symbol || parsed.paymentToken.symbol,
+              };
+            }
+          }
+          return parsed;
+        });
+
+        setReceivedInvoice(mergedInvoices);
+        const suggestions = findBatchSuggestions(mergedInvoices);
         setBatchSuggestions(suggestions);
         const fee = await contract.fee();
         setFee(fee);
@@ -847,14 +715,106 @@ function ReceivedInvoice() {
         setError(
           "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
         );
-
       } finally {
         setLoading(false);
       }
     };
 
     fetchReceivedInvoices();
-  }, [walletClient, litReady, address, tokens]);
+  }, [walletClient, address, tokens, chainId, refreshTrigger]);
+
+  // ========== Waku Filter Subscription ==========
+  // Listen for real-time incoming encrypted invoices via Waku
+  useEffect(() => {
+    if (!walletClient || !address || !chainId) return;
+
+    let cancelled = false;
+
+    const startSubscription = async () => {
+      try {
+        const provider = new BrowserProvider(walletClient);
+        const signer = await provider.getSigner();
+
+        // Derive the user's Waku key pair (cached in sessionStorage)
+        const { privateKey } = await deriveWakuKeyPair(signer, address);
+
+        // Helper to store a Waku message into IndexedDB
+        const storeWakuMessage = async (message) => {
+          try {
+            await storeInvoice({
+              invoiceId: message.invoiceId,
+              chainId: message.chainId,
+              from: message.data?.senderAddress || message.data?.from,
+              to: address,
+              data: message.data,
+              isPaid: false,
+              isCancelled: false,
+            });
+            return true;
+          } catch (err) {
+            console.error('[ReceivedInvoice] Failed to store invoice:', err);
+            return false;
+          }
+        };
+
+        // --- 1. Query Waku Store for historical messages (sent while offline) ---
+        try {
+          console.log('[ReceivedInvoice] Querying Waku Store for historical invoices...');
+          const storedMessages = await queryStoredInvoices(privateKey, chainId);
+          let newCount = 0;
+          for (const message of storedMessages) {
+            if (cancelled) break;
+            const stored = await storeWakuMessage(message);
+            if (stored) newCount++;
+          }
+          if (newCount > 0 && !cancelled) {
+            console.log(`[ReceivedInvoice] Restored ${newCount} invoices from Waku Store`);
+            setRefreshTrigger((prev) => prev + 1);
+          }
+        } catch (storeErr) {
+          console.warn('[ReceivedInvoice] Waku Store query failed (non-fatal):', storeErr);
+        }
+
+        if (cancelled) return;
+
+        // --- 2. Subscribe to real-time messages (for new invoices while page is open) ---
+        const unsubscribe = await subscribeToInvoices(
+          privateKey,
+          chainId,
+          async (message) => {
+            if (cancelled) return;
+            console.log('[ReceivedInvoice] Waku real-time message received:', message);
+
+            const stored = await storeWakuMessage(message);
+            if (stored) {
+              setRefreshTrigger((prev) => prev + 1);
+              toast.success('New invoice received!');
+            }
+          }
+        );
+
+        if (!cancelled) {
+          wakuUnsubRef.current = unsubscribe;
+          console.log('[ReceivedInvoice] Waku subscription active on chain', chainId);
+        } else {
+          if (typeof unsubscribe === 'function') unsubscribe();
+        }
+      } catch (err) {
+        // Don't block the page if Waku fails
+        console.warn('[ReceivedInvoice] Waku setup failed (non-fatal):', err);
+      }
+    };
+
+    startSubscription();
+
+    return () => {
+      cancelled = true;
+      if (typeof wakuUnsubRef.current === 'function') {
+        wakuUnsubRef.current();
+        wakuUnsubRef.current = null;
+      }
+    };
+  }, [walletClient, address, chainId]);
 
   const toggleDrawer = (invoice) => (event) => {
     if (

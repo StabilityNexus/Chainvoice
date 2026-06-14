@@ -235,7 +235,7 @@ contract ChainvoiceTest is Test {
         assertEq(chainvoice.accumulatedFees(), 0);
         assertEq(treasury.balance, fee);
     }
-}
+
     /*                    OWNERSHIP MANAGEMENT                      */
     /* ------------------------------------------------------------ */
 
@@ -304,5 +304,90 @@ contract ChainvoiceTest is Test {
         address newTreasury = address(0xdead);
         chainvoice.setTreasuryAddress(newTreasury);
         assertEq(chainvoice.treasuryAddress(), newTreasury);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                    WAKU KEY REGISTRY                          */
+    /* ------------------------------------------------------------ */
+
+    function testRegisterWakuPublicKey() public {
+        // 65-byte uncompressed secp256k1 public key (0x04 prefix + 64 bytes)
+        bytes memory pubKey = new bytes(65);
+        pubKey[0] = 0x04;
+        for (uint256 i = 1; i < 65; i++) {
+            pubKey[i] = bytes1(uint8(i));
+        }
+
+        vm.prank(alice);
+        chainvoice.registerWakuPublicKey(pubKey);
+
+        bytes memory stored = chainvoice.getWakuPublicKey(alice);
+        assertEq(stored.length, 65);
+        assertEq(stored[0], pubKey[0]);
+        assertEq(stored[64], pubKey[64]);
+    }
+
+    function testRegisterWakuPublicKey_EmitsEvent() public {
+        bytes memory pubKey = hex"04aabbccdd";
+
+        vm.expectEmit(true, false, false, true);
+        emit Chainvoice.WakuKeyRegistered(alice, pubKey);
+
+        vm.prank(alice);
+        chainvoice.registerWakuPublicKey(pubKey);
+    }
+
+    function testUpdateWakuPublicKey() public {
+        bytes memory key1 = hex"04aaaa";
+        bytes memory key2 = hex"04bbbb";
+
+        vm.startPrank(alice);
+        chainvoice.registerWakuPublicKey(key1);
+
+        bytes memory stored1 = chainvoice.getWakuPublicKey(alice);
+        assertEq(keccak256(stored1), keccak256(key1));
+
+        // Update to a new key
+        chainvoice.registerWakuPublicKey(key2);
+        vm.stopPrank();
+
+        bytes memory stored2 = chainvoice.getWakuPublicKey(alice);
+        assertEq(keccak256(stored2), keccak256(key2));
+    }
+
+    function testGetWakuPublicKey_Unregistered() public {
+        bytes memory stored = chainvoice.getWakuPublicKey(address(0xDEAD));
+        assertEq(stored.length, 0);
+    }
+
+    function testMultipleUsersRegisterKeys() public {
+        bytes memory aliceKey = hex"04aaaa";
+        bytes memory bobKey = hex"04bbbb";
+
+        vm.prank(alice);
+        chainvoice.registerWakuPublicKey(aliceKey);
+
+        vm.prank(bob);
+        chainvoice.registerWakuPublicKey(bobKey);
+
+        assertEq(keccak256(chainvoice.getWakuPublicKey(alice)), keccak256(aliceKey));
+        assertEq(keccak256(chainvoice.getWakuPublicKey(bob)), keccak256(bobKey));
+    }
+
+    function testCreateInvoiceWithDataHash() public {
+        // Test that createInvoice works with the new hash-based field
+        vm.prank(alice);
+        chainvoice.createInvoice(
+            bob,
+            1 ether,
+            address(0),
+            "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+            ""
+        );
+
+        Chainvoice.InvoiceDetails memory inv = chainvoice.getInvoice(0);
+        assertEq(inv.from, alice);
+        assertEq(inv.to, bob);
+        assertEq(inv.amountDue, 1 ether);
     }
 }
