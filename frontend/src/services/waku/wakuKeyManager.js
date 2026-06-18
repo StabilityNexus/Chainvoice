@@ -3,6 +3,9 @@ import { ethers } from 'ethers';
 const DERIVATION_MESSAGE = 'ChainVoice Waku Key Derivation v1';
 const KEY_STORAGE_PREFIX = 'chainvoice_waku_keys_';
 
+/** In-memory cache for derived keys (keyed by lowercase address). */
+const memoryCache = new Map();
+
 /**
  * Convert hex string to Uint8Array.
  * @param {string} hex
@@ -35,12 +38,21 @@ function bytesToHex(bytes) {
  *
  * @param {import('ethers').Signer} signer - ethers v6 signer
  * @param {string} address - wallet address
+ * @param {boolean} [rememberSession=true] - if true, cache keys in sessionStorage; if false, keep in memory only
  * @returns {Promise<{privateKey: Uint8Array, publicKey: Uint8Array}>}
  */
-export async function deriveWakuKeyPair(signer, address) {
-  // Check session storage first for cached keys
-  const cached = getCachedKeys(address);
-  if (cached) return cached;
+export async function deriveWakuKeyPair(signer, address, rememberSession = true) {
+  // Check in-memory cache first (avoids re-derivation within the same page session)
+  const memCached = getMemoryCachedKeys(address);
+  if (memCached) return memCached;
+
+  // Then check sessionStorage
+  const sessionCached = getSessionCachedKeys(address);
+  if (sessionCached) {
+    // Populate memory cache so subsequent lookups are instant
+    setMemoryCachedKeys(address, sessionCached);
+    return sessionCached;
+  }
 
   // Sign deterministic message to derive keys
   const signature = await signer.signMessage(DERIVATION_MESSAGE);
@@ -54,10 +66,35 @@ export async function deriveWakuKeyPair(signer, address) {
   const publicKeyHex = signingKey.publicKey;
   const publicKey = hexToBytes(publicKeyHex);
 
-  // Cache in sessionStorage (cleared on browser/tab close)
-  cacheKeys(address, privateKey, publicKey);
+  const keyPair = { privateKey, publicKey };
 
-  return { privateKey, publicKey };
+  // Always store in memory cache
+  setMemoryCachedKeys(address, keyPair);
+
+  // Optionally persist to sessionStorage
+  if (rememberSession) {
+    cacheKeysToSession(address, privateKey, publicKey);
+  }
+
+  return keyPair;
+}
+
+/**
+ * Store a key pair in the in-memory cache.
+ * @param {string} address
+ * @param {{privateKey: Uint8Array, publicKey: Uint8Array}} keyPair
+ */
+function setMemoryCachedKeys(address, keyPair) {
+  memoryCache.set(address.toLowerCase(), keyPair);
+}
+
+/**
+ * Retrieve a key pair from the in-memory cache.
+ * @param {string} address
+ * @returns {{privateKey: Uint8Array, publicKey: Uint8Array}|null}
+ */
+function getMemoryCachedKeys(address) {
+  return memoryCache.get(address.toLowerCase()) || null;
 }
 
 /**
@@ -66,7 +103,7 @@ export async function deriveWakuKeyPair(signer, address) {
  * @param {Uint8Array} privateKey
  * @param {Uint8Array} publicKey
  */
-function cacheKeys(address, privateKey, publicKey) {
+function cacheKeysToSession(address, privateKey, publicKey) {
   try {
     const data = {
       privateKey: bytesToHex(privateKey),
@@ -86,7 +123,7 @@ function cacheKeys(address, privateKey, publicKey) {
  * @param {string} address
  * @returns {{privateKey: Uint8Array, publicKey: Uint8Array}|null}
  */
-function getCachedKeys(address) {
+function getSessionCachedKeys(address) {
   try {
     const raw = sessionStorage.getItem(
       KEY_STORAGE_PREFIX + address.toLowerCase()
@@ -99,6 +136,20 @@ function getCachedKeys(address) {
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Clear cached keys for a given address from both memory and sessionStorage.
+ * @param {string} address
+ */
+export function clearCachedKeys(address) {
+  const key = address.toLowerCase();
+  memoryCache.delete(key);
+  try {
+    sessionStorage.removeItem(KEY_STORAGE_PREFIX + key);
+  } catch {
+    // Ignore errors (e.g. SSR environments)
   }
 }
 

@@ -21,6 +21,7 @@ export function useWakuKeys() {
   const [isRegistered, setIsRegistered] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [rememberSession, setRememberSession] = useState(true);
 
   const getContract = useCallback(async () => {
     if (!walletClient || !chainId) return null;
@@ -33,14 +34,15 @@ export function useWakuKeys() {
   }, [walletClient, chainId]);
 
   /** Derive keys from wallet signature without registering on-chain. */
-  const deriveKeysOnly = useCallback(async () => {
+  const deriveKeysOnly = useCallback(async (remember) => {
     if (!walletClient || !address) throw new Error('Wallet not connected');
     const provider = new BrowserProvider(walletClient);
     const signer = await provider.getSigner();
-    const keyPair = await deriveWakuKeyPair(signer, address);
+    const shouldRemember = remember !== undefined ? remember : rememberSession;
+    const keyPair = await deriveWakuKeyPair(signer, address, shouldRemember);
     setKeys(keyPair);
     return keyPair;
-  }, [walletClient, address]);
+  }, [walletClient, address, rememberSession]);
 
   /** Check if the user's Waku public key is registered on-chain. */
   const checkRegistration = useCallback(async () => {
@@ -57,12 +59,12 @@ export function useWakuKeys() {
   }, [getContract, address]);
 
   /** Derive keys AND register the public key on-chain (if not already). */
-  const deriveAndRegister = useCallback(async () => {
+  const deriveAndRegister = useCallback(async (remember) => {
     try {
       setIsLoading(true);
       setError(null);
 
-      const keyPair = await deriveKeysOnly();
+      const keyPair = await deriveKeysOnly(remember);
 
       const contract = await getContract();
       if (!contract) throw new Error('Contract not available on this network');
@@ -100,6 +102,8 @@ export function useWakuKeys() {
     isRegistered,
     isLoading,
     error,
+    rememberSession,
+    setRememberSession,
     deriveAndRegister,
     deriveKeysOnly,
     checkRegistration,

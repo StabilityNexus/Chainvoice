@@ -51,8 +51,8 @@ export const ChainvoiceABI = [
       },
       {
         name: "invoiceDataHash",
-        type: "string",
-        internalType: "string",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
         name: "encryptedHash",
@@ -128,9 +128,9 @@ export const ChainvoiceABI = [
             internalType: "bool",
           },
           {
-            name: "encryptedInvoiceData",
-            type: "string",
-            internalType: "string",
+            name: "invoiceDataHash",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
             name: "encryptedHash",
@@ -228,9 +228,9 @@ export const ChainvoiceABI = [
             internalType: "bool",
           },
           {
-            name: "encryptedInvoiceData",
-            type: "string",
-            internalType: "string",
+            name: "invoiceDataHash",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
             name: "encryptedHash",
@@ -294,9 +294,9 @@ export const ChainvoiceABI = [
             internalType: "bool",
           },
           {
-            name: "encryptedInvoiceData",
-            type: "string",
-            internalType: "string",
+            name: "invoiceDataHash",
+            type: "bytes32",
+            internalType: "bytes32",
           },
           {
             name: "encryptedHash",
@@ -355,9 +355,9 @@ export const ChainvoiceABI = [
         internalType: "bool",
       },
       {
-        name: "encryptedInvoiceData",
-        type: "string",
-        internalType: "string",
+        name: "invoiceDataHash",
+        type: "bytes32",
+        internalType: "bytes32",
       },
       {
         name: "encryptedHash",

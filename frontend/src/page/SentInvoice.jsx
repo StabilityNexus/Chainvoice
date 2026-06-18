@@ -16,7 +16,9 @@ import { useRef } from "react";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
-import { getSentInvoices as getLocalSentInvoices } from "@/services/invoiceStorage/invoiceDB.js";
+import { getSentInvoices as getLocalSentInvoices, updateInvoiceStatus } from "@/services/invoiceStorage/invoiceDB.js";
+import { sendEncryptedInvoice } from "@/services/waku/wakuInvoiceMessaging.js";
+import { hexToBytes } from "@/services/waku/wakuKeyManager.js";
 import { toast } from "react-toastify";
 import {
   CircularProgress,
@@ -76,6 +78,7 @@ function SentInvoice() {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [invoiceToCancel, setInvoiceToCancel] = useState(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
+  const [wakuSending, setWakuSending] = useState(false);
 
   // Get tokens from the hook
   const { tokens } = useTokenList(chainId || 1);
@@ -192,6 +195,28 @@ function SentInvoice() {
         setSentInvoices(mergedInvoices);
         const fee = await contract.fee();
         setFee(fee);
+
+        // 4. Auto-retry Waku send for undelivered invoices (silent, no toast spam)
+        try {
+          for (const local of chainFiltered) {
+            if (local.wakuDelivered === false && local.data) {
+              try {
+                const receiverAddr = local.to;
+                const receiverKeyHex = await contract.getWakuPublicKey(receiverAddr);
+                if (receiverKeyHex && receiverKeyHex !== '0x' && receiverKeyHex.length > 2) {
+                  const receiverKeyBytes = hexToBytes(receiverKeyHex);
+                  await sendEncryptedInvoice(local.data, receiverKeyBytes, chainId, local.invoiceId);
+                  await updateInvoiceStatus(chainId, local.invoiceId, { wakuDelivered: true });
+                  console.log(`[SentInvoice] Auto-retried Waku send for invoice #${local.invoiceId}`);
+                }
+              } catch (retryErr) {
+                console.warn(`[SentInvoice] Auto-retry failed for invoice #${local.invoiceId}:`, retryErr);
+              }
+            }
+          }
+        } catch (autoRetryErr) {
+          console.warn('[SentInvoice] Auto-retry batch failed:', autoRetryErr);
+        }
       } catch (error) {
         console.error("Error loading invoices:", error);
         setError(
@@ -223,6 +248,39 @@ function SentInvoice() {
       open: !drawerState.open,
       selectedInvoice: invoice || null,
     });
+  };
+
+  // Manual Retry Send via Waku
+  const handleRetryWakuSend = async () => {
+    const invoice = drawerState.selectedInvoice;
+    if (!invoice || !walletClient) return;
+
+    setWakuSending(true);
+    try {
+      const provider = new BrowserProvider(walletClient);
+      const signer = await provider.getSigner();
+      const contractAddress = import.meta.env[`VITE_CONTRACT_ADDRESS_${chainId}`];
+      if (!contractAddress) throw new Error("Unsupported network");
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
+
+      const receiverAddr = invoice.client?.address || invoice.to;
+      const receiverKeyHex = await contract.getWakuPublicKey(receiverAddr);
+
+      if (!receiverKeyHex || receiverKeyHex === '0x' || receiverKeyHex.length <= 2) {
+        toast.error("Receiver still hasn't registered their Waku key.");
+        return;
+      }
+
+      const receiverKeyBytes = hexToBytes(receiverKeyHex);
+      await sendEncryptedInvoice(invoice, receiverKeyBytes, chainId, invoice.id.toString());
+      await updateInvoiceStatus(chainId, invoice.id.toString(), { wakuDelivered: true });
+      toast.success("Invoice data sent via Waku successfully!");
+    } catch (err) {
+      console.error("[SentInvoice] Retry Waku send failed:", err);
+      toast.error("Failed to send invoice via Waku. Please try again.");
+    } finally {
+      setWakuSending(false);
+    }
   };
 
   const handleExportClick = (event) => {
@@ -882,7 +940,17 @@ function SentInvoice() {
                 >
                   Close
                 </button>
-                <div className="relative">
+                <div className="flex gap-2 relative">
+                  <button
+                    type="button"
+                    onClick={handleRetryWakuSend}
+                    disabled={wakuSending}
+                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-md text-sm font-medium flex items-center"
+                    title="Resend invoice data via Waku"
+                  >
+                    {wakuSending ? <CircularProgress size={16} sx={{ color: 'white', mr: 1 }} /> : <DescriptionIcon className="mr-2" fontSize="small" />}
+                    Retry Send
+                  </button>
                   <button
                     type="button"
                     onClick={handleExportClick}

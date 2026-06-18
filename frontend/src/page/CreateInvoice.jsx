@@ -487,7 +487,7 @@ const validateClientAddress = useCallback((value) => {
           toast.success("Invoice created on-chain. Waku delivery will be retried.");
         }
       } else {
-        toast.success("Invoice created! Receiver hasn't registered their key yet — they'll see it from chain data.");
+        toast.success("Invoice created on-chain! Receiver hasn't registered their Waku key yet — they'll see basic invoice details. You can resend full data from Sent Invoices once they register.");
       }
 
       // 7. Store invoice locally in IndexedDB
@@ -498,6 +498,7 @@ const validateClientAddress = useCallback((value) => {
         to: data.clientAddress.toLowerCase(),
         isPaid: false,
         isCancelled: false,
+        wakuDelivered: hasReceiverKey,
         invoiceDataHash,
         data: invoicePayload,
       });

@@ -3,8 +3,11 @@ import {
   Alert,
   AlertTitle,
   Button,
+  Checkbox,
   CircularProgress,
   Collapse,
+  FormControlLabel,
+  Tooltip,
 } from '@mui/material';
 import VpnKeyIcon from '@mui/icons-material/VpnKey';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -15,7 +18,14 @@ import { useWakuKeys } from '@/hooks/useWakuKeys';
  * This is required before they can receive encrypted invoices.
  */
 export default function WakuKeyRegistration() {
-  const { isRegistered, isLoading, error, deriveAndRegister } = useWakuKeys();
+  const {
+    isRegistered,
+    isLoading,
+    error,
+    rememberSession,
+    setRememberSession,
+    deriveAndRegister,
+  } = useWakuKeys();
   const [dismissed, setDismissed] = useState(false);
 
   if (dismissed || isRegistered) return null;
@@ -42,6 +52,25 @@ export default function WakuKeyRegistration() {
             a small transaction.
           </span>
 
+          <Tooltip
+            title="If checked, the derived key will be cached in your browser's session storage for convenience. The key is cleared when you close this tab."
+            arrow
+            placement="right"
+          >
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={rememberSession}
+                  onChange={(e) => setRememberSession(e.target.checked)}
+                  size="small"
+                  sx={{ color: '#90caf9', '&.Mui-checked': { color: '#90caf9' } }}
+                />
+              }
+              label="Remember this signature until the end of this session"
+              sx={{ color: '#e0e0e0', fontSize: '0.85rem', mt: 0.5 }}
+            />
+          </Tooltip>
+
           {error && (
             <span style={{ color: '#ef5350', fontSize: '0.8rem' }}>
               Error: {error}
@@ -59,7 +88,7 @@ export default function WakuKeyRegistration() {
                   <CheckCircleIcon />
                 )
               }
-              onClick={deriveAndRegister}
+              onClick={() => deriveAndRegister(rememberSession)}
               disabled={isLoading}
               sx={{
                 backgroundColor: '#1976d2',

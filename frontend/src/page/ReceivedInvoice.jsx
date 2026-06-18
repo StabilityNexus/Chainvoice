@@ -705,8 +705,45 @@ function ReceivedInvoice() {
           return parsed;
         });
 
-        setReceivedInvoice(mergedInvoices);
-        const suggestions = findBatchSuggestions(mergedInvoices);
+        // 4. Add basic invoices from on-chain that aren't in local storage
+        const localInvoiceIds = new Set(chainFiltered.map(inv => inv.invoiceId));
+        const basicInvoices = [];
+
+        for (const inv of onChainInvoices) {
+          const id = inv[0].toString();
+          if (!localInvoiceIds.has(id)) {
+            const tokenAddr = inv[4];
+            const isNative = tokenAddr === ethers.ZeroAddress;
+            const tokenInfo = getTokenInfo(tokenAddr);
+            const decimals = tokenInfo?.decimals || 18;
+            const formattedAmount = ethers.formatUnits(inv[3], decimals);
+
+            basicInvoices.push({
+              id: BigInt(id),
+              from: inv[1],
+              to: inv[2],
+              amountDue: formattedAmount,
+              isPaid: inv[5],
+              isCancelled: inv[6],
+              isBasicInvoice: true,
+              user: { fname: 'Unknown', lname: '', address: inv[1].toString() },
+              client: { fname: 'You', lname: '', address: address },
+              paymentToken: {
+                address: tokenAddr,
+                symbol: tokenInfo?.symbol || (isNative ? 'ETH' : 'TOKEN'),
+                decimals: decimals,
+                logo: tokenInfo?.image || tokenInfo?.logo,
+                name: tokenInfo?.name || (isNative ? 'Ethereum' : 'Unknown Token'),
+              },
+              items: [],
+              issueDate: new Date().toISOString(),
+            });
+          }
+        }
+
+        const allInvoices = [...mergedInvoices, ...basicInvoices];
+        setReceivedInvoice(allInvoices);
+        const suggestions = findBatchSuggestions(allInvoices);
         setBatchSuggestions(suggestions);
         const fee = await contract.fee();
         setFee(fee);
@@ -1373,6 +1410,23 @@ function ReceivedInvoice() {
                                           height: "20px",
                                         }}
                                       />
+                                    </div>
+                                  )}
+                                  {invoice.isBasicInvoice && (
+                                    <div className="mt-1">
+                                      <Tooltip title="Waiting for full invoice details via Waku">
+                                        <Chip
+                                          icon={<WarningIcon />}
+                                          label="Basic"
+                                          size="small"
+                                          variant="outlined"
+                                          color="warning"
+                                          sx={{
+                                            fontSize: "0.7rem",
+                                            height: "20px",
+                                          }}
+                                        />
+                                      </Tooltip>
                                     </div>
                                   )}
                                 </div>

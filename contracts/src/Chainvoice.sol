@@ -185,7 +185,7 @@ contract Chainvoice {
         address[] calldata tos,
         uint256[] calldata amountsDue,
         address tokenAddress,
-        bytes32[] calldata encryptedPayloads,
+        bytes32[] calldata invoiceDataHashes,
         string[] calldata encryptedHashes
     ) external {
         uint256 n = tos.length;
@@ -193,7 +193,7 @@ contract Chainvoice {
         
         if (
             n != amountsDue.length ||
-            n != encryptedPayloads.length ||
+            n != invoiceDataHashes.length ||
             n != encryptedHashes.length
         ) revert ArrayLengthMismatch();
 
@@ -224,7 +224,7 @@ contract Chainvoice {
                     tokenAddress: tokenAddress,
                     isPaid: false,
                     isCancelled: false,
-                    invoiceDataHash: encryptedPayloads[i],
+                    invoiceDataHash: invoiceDataHashes[i],
                     encryptedHash: encryptedHashes[i]
                 })
             );

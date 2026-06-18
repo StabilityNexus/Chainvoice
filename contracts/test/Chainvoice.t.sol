@@ -27,7 +27,7 @@ contract ChainvoiceTest is Test {
             bob,
             1 ether,
             address(0),
-            "encryptedData",
+            keccak256("encryptedData"),
             "hash123"
         );
 
@@ -57,7 +57,7 @@ contract ChainvoiceTest is Test {
 
     function testPayInvoice_Native() public {
         vm.prank(alice);
-        chainvoice.createInvoice(bob, 1 ether, address(0), "encrypted", "hash");
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("encrypted"), "hash");
 
         uint256 fee = chainvoice.fee();
         uint256 bobStartBal = bob.balance;
@@ -81,7 +81,7 @@ contract ChainvoiceTest is Test {
 
     function testCancelInvoice() public {
         vm.prank(alice);
-        chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("data"), "hash");
 
         vm.prank(alice);
         chainvoice.cancelInvoice(0);
@@ -98,7 +98,7 @@ contract ChainvoiceTest is Test {
 
     function testPayInvoice_RevertIfWrongPayer() public {
         vm.prank(alice);
-        chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("data"), "hash");
         uint256 fee = chainvoice.fee();
         vm.expectRevert(Chainvoice.NotAuthorizedPayer.selector);
         vm.prank(alice);
@@ -107,7 +107,7 @@ contract ChainvoiceTest is Test {
 
     function testPayInvoice_RevertIfIncorrectValue() public {
         vm.prank(alice);
-        chainvoice.createInvoice(bob, 1 ether, address(0), "data", "hash");
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("data"), "hash");
 
         vm.expectRevert(Chainvoice.IncorrectPaymentAmount.selector);
         vm.prank(bob);
@@ -122,13 +122,13 @@ contract ChainvoiceTest is Test {
         uint256 batchSize = 51;
         address[] memory tos = new address[](batchSize);
         uint256[] memory amounts = new uint256[](batchSize);
-        string[] memory payloads = new string[](batchSize);
+        bytes32[] memory payloads = new bytes32[](batchSize);
         string[] memory hashes = new string[](batchSize);
 
         for (uint256 i = 0; i < batchSize; i++) {
             tos[i] = bob;
             amounts[i] = 1 ether;
-            payloads[i] = "";
+            payloads[i] = bytes32(0);
             hashes[i] = "";
         }
 
@@ -141,13 +141,13 @@ contract ChainvoiceTest is Test {
         uint256 batchSize = 3;
         address[] memory tos = new address[](batchSize);
         uint256[] memory amounts = new uint256[](batchSize);
-        string[] memory payloads = new string[](batchSize);
+        bytes32[] memory payloads = new bytes32[](batchSize);
         string[] memory hashes = new string[](batchSize);
 
         for (uint256 i = 0; i < batchSize; i++) {
             tos[i] = bob;
             amounts[i] = 1 ether;
-            payloads[i] = "batchData";
+            payloads[i] = keccak256("batchData");
             hashes[i] = "batchHash";
         }
 
@@ -164,8 +164,8 @@ contract ChainvoiceTest is Test {
 
     function testPayInvoicesBatch() public {
         vm.startPrank(alice);
-        chainvoice.createInvoice(bob, 1 ether, address(0), "", "");
-        chainvoice.createInvoice(bob, 2 ether, address(0), "", "");
+        chainvoice.createInvoice(bob, 1 ether, address(0), bytes32(0), "");
+        chainvoice.createInvoice(bob, 2 ether, address(0), bytes32(0), "");
         vm.stopPrank();
 
         uint256 fee = chainvoice.fee();
@@ -201,9 +201,10 @@ contract ChainvoiceTest is Test {
         vm.assume(recipient != address(0));
         vm.assume(recipient != alice);
         vm.assume(amount < 1000000 ether);
+        vm.assume(amount > 0);
 
         vm.prank(alice);
-        chainvoice.createInvoice(recipient, amount, address(0), "fuzz", "hash");
+        chainvoice.createInvoice(recipient, amount, address(0), keccak256("fuzz"), "hash");
 
         Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(alice);
         Chainvoice.InvoiceDetails memory latest = sent[sent.length - 1];
@@ -222,7 +223,7 @@ contract ChainvoiceTest is Test {
         chainvoice.setTreasuryAddress(treasury);
 
         vm.prank(alice);
-        chainvoice.createInvoice(bob, 1 ether, address(0), "", "");
+        chainvoice.createInvoice(bob, 1 ether, address(0), bytes32(0), "");
 
         uint256 fee = chainvoice.fee();
         vm.prank(bob);
@@ -328,7 +329,11 @@ contract ChainvoiceTest is Test {
     }
 
     function testRegisterWakuPublicKey_EmitsEvent() public {
-        bytes memory pubKey = hex"04aabbccdd";
+        bytes memory pubKey = new bytes(65);
+        pubKey[0] = 0x04;
+        for (uint256 i = 1; i < 65; i++) {
+            pubKey[i] = bytes1(uint8(i + 100));
+        }
 
         vm.expectEmit(true, false, false, true);
         emit Chainvoice.WakuKeyRegistered(alice, pubKey);
@@ -338,8 +343,13 @@ contract ChainvoiceTest is Test {
     }
 
     function testUpdateWakuPublicKey() public {
-        bytes memory key1 = hex"04aaaa";
-        bytes memory key2 = hex"04bbbb";
+        bytes memory key1 = new bytes(65);
+        key1[0] = 0x04;
+        for (uint256 i = 1; i < 65; i++) key1[i] = bytes1(uint8(i));
+
+        bytes memory key2 = new bytes(65);
+        key2[0] = 0x04;
+        for (uint256 i = 1; i < 65; i++) key2[i] = bytes1(uint8(i + 50));
 
         vm.startPrank(alice);
         chainvoice.registerWakuPublicKey(key1);
@@ -361,8 +371,13 @@ contract ChainvoiceTest is Test {
     }
 
     function testMultipleUsersRegisterKeys() public {
-        bytes memory aliceKey = hex"04aaaa";
-        bytes memory bobKey = hex"04bbbb";
+        bytes memory aliceKey = new bytes(65);
+        aliceKey[0] = 0x04;
+        for (uint256 i = 1; i < 65; i++) aliceKey[i] = bytes1(uint8(i));
+
+        bytes memory bobKey = new bytes(65);
+        bobKey[0] = 0x04;
+        for (uint256 i = 1; i < 65; i++) bobKey[i] = bytes1(uint8(i + 50));
 
         vm.prank(alice);
         chainvoice.registerWakuPublicKey(aliceKey);
@@ -374,14 +389,23 @@ contract ChainvoiceTest is Test {
         assertEq(keccak256(chainvoice.getWakuPublicKey(bob)), keccak256(bobKey));
     }
 
+    function testRegisterWakuPublicKey_RevertIfInvalidLength() public {
+        bytes memory shortKey = hex"04aabbccdd";
+
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.InvalidWakuKey.selector);
+        chainvoice.registerWakuPublicKey(shortKey);
+    }
+
     function testCreateInvoiceWithDataHash() public {
-        // Test that createInvoice works with the new hash-based field
+        // Test that createInvoice works with the new bytes32 hash field
+        bytes32 testHash = keccak256("test invoice data");
         vm.prank(alice);
         chainvoice.createInvoice(
             bob,
             1 ether,
             address(0),
-            "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890",
+            testHash,
             ""
         );
 
@@ -389,5 +413,6 @@ contract ChainvoiceTest is Test {
         assertEq(inv.from, alice);
         assertEq(inv.to, bob);
         assertEq(inv.amountDue, 1 ether);
+        assertEq(inv.invoiceDataHash, testHash);
     }
 }
