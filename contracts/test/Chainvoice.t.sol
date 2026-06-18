@@ -11,6 +11,8 @@ contract ChainvoiceTest is Test {
     address alice = address(0xA11CE);
     address bob = address(0xB0B);
 
+    event WakuKeyRegistered(address indexed user, bytes publicKey);
+
     function setUp() public {
         chainvoice = new Chainvoice();
         vm.deal(alice, 100 ether);
@@ -336,7 +338,7 @@ contract ChainvoiceTest is Test {
         }
 
         vm.expectEmit(true, false, false, true);
-        emit Chainvoice.WakuKeyRegistered(alice, pubKey);
+        emit WakuKeyRegistered(alice, pubKey);
 
         vm.prank(alice);
         chainvoice.registerWakuPublicKey(pubKey);
