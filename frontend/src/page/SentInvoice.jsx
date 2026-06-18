@@ -173,6 +173,7 @@ function SentInvoice() {
           const onChain = onChainStatusMap[local.invoiceId];
           const parsed = { ...local.data };
           parsed["id"] = BigInt(local.invoiceId);
+          parsed["chainId"] = local.chainId || chainId;
           parsed["isPaid"] = onChain ? onChain.isPaid : local.isPaid;
           parsed["isCancelled"] = onChain ? onChain.isCancelled : local.isCancelled;
 
@@ -189,6 +190,7 @@ function SentInvoice() {
               };
             }
           }
+          parsed["wakuDelivered"] = local.wakuDelivered ?? false;
           return parsed;
         });
 
@@ -274,6 +276,22 @@ function SentInvoice() {
       const receiverKeyBytes = hexToBytes(receiverKeyHex);
       await sendEncryptedInvoice(invoice, receiverKeyBytes, chainId, invoice.id.toString());
       await updateInvoiceStatus(chainId, invoice.id.toString(), { wakuDelivered: true });
+
+      // Update local state so the retry button disappears immediately
+      setDrawerState((prev) => ({
+        ...prev,
+        selectedInvoice: prev.selectedInvoice
+          ? { ...prev.selectedInvoice, wakuDelivered: true }
+          : null,
+      }));
+      setSentInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id?.toString() === invoice.id?.toString()
+            ? { ...inv, wakuDelivered: true }
+            : inv
+        )
+      );
+
       toast.success("Invoice data sent via Waku successfully!");
     } catch (err) {
       console.error("[SentInvoice] Retry Waku send failed:", err);
@@ -941,6 +959,7 @@ function SentInvoice() {
                   Close
                 </button>
                 <div className="flex gap-2 relative">
+                {!drawerState.selectedInvoice?.wakuDelivered && (
                   <button
                     type="button"
                     onClick={handleRetryWakuSend}
@@ -951,6 +970,7 @@ function SentInvoice() {
                     {wakuSending ? <CircularProgress size={16} sx={{ color: 'white', mr: 1 }} /> : <DescriptionIcon className="mr-2" fontSize="small" />}
                     Retry Send
                   </button>
+                )}
                   <button
                     type="button"
                     onClick={handleExportClick}

@@ -19,6 +19,7 @@ import { getReceivedInvoices as getLocalReceivedInvoices, storeInvoice } from "@
 import { verifyInvoiceHash } from "@/services/waku/invoiceHashUtils.js";
 import { subscribeToInvoices, queryStoredInvoices } from "@/services/waku/wakuInvoiceMessaging.js";
 import { deriveWakuKeyPair } from "@/services/waku/wakuKeyManager.js";
+import { useWakuKeys } from "@/hooks/useWakuKeys";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -682,6 +683,7 @@ function ReceivedInvoice() {
           const onChain = onChainStatusMap[local.invoiceId];
           const parsed = { ...local.data };
           parsed["id"] = BigInt(local.invoiceId);
+          parsed["chainId"] = local.chainId || chainId;
           parsed["isPaid"] = onChain ? onChain.isPaid : local.isPaid;
           parsed["isCancelled"] = onChain ? onChain.isCancelled : local.isCancelled;
 
@@ -720,6 +722,7 @@ function ReceivedInvoice() {
 
             basicInvoices.push({
               id: BigInt(id),
+              chainId: chainId,
               from: inv[1],
               to: inv[2],
               amountDue: formattedAmount,
@@ -760,10 +763,10 @@ function ReceivedInvoice() {
     fetchReceivedInvoices();
   }, [walletClient, address, tokens, chainId, refreshTrigger]);
 
-  // ========== Waku Filter Subscription ==========
-  // Listen for real-time incoming encrypted invoices via Waku
+  const { hasKeys } = useWakuKeys();
+
   useEffect(() => {
-    if (!walletClient || !address || !chainId) return;
+    if (!walletClient || !address || !chainId || !hasKeys) return;
 
     let cancelled = false;
 
@@ -773,6 +776,7 @@ function ReceivedInvoice() {
         const signer = await provider.getSigner();
 
         // Derive the user's Waku key pair (cached in sessionStorage)
+        // Since hasKeys is true, this will pull from cache and won't prompt Metamask again
         const { privateKey } = await deriveWakuKeyPair(signer, address);
 
         // Helper to store a Waku message into IndexedDB
@@ -851,7 +855,7 @@ function ReceivedInvoice() {
         wakuUnsubRef.current = null;
       }
     };
-  }, [walletClient, address, chainId]);
+  }, [walletClient, address, chainId, hasKeys]);
 
   const toggleDrawer = (invoice) => (event) => {
     if (

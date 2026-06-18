@@ -47,10 +47,12 @@ export async function sendEncryptedInvoice(
     publicKey: receiverPublicKey,
   });
 
-  const payload = new TextEncoder().encode(JSON.stringify(message));
+  const payload = new TextEncoder().encode(
+    JSON.stringify(message, (_, v) => (typeof v === 'bigint' ? v.toString() : v))
+  );
 
   const result = await node.lightPush.send(encoder, { payload });
-  console.log('[WakuInvoiceMessaging] Invoice sent via Waku:', result);
+  if (import.meta.env.DEV) console.log('[WakuInvoiceMessaging] Invoice sent via Waku:', result);
   return result;
 }
 
@@ -71,20 +73,31 @@ export async function subscribeToInvoices(privateKey, chainId, onMessage) {
 
   const decoder = createDecoder(contentTopic, privateKey);
 
-  const unsubscribe = await node.filter.subscribe([decoder], (wakuMessage) => {
-    try {
-      if (!wakuMessage.payload) return;
-      const text = new TextDecoder().decode(wakuMessage.payload);
-      const parsed = JSON.parse(text);
-      console.log('[WakuInvoiceMessaging] Received invoice message:', parsed);
-      onMessage(parsed);
-    } catch (err) {
-      console.error(
-        '[WakuInvoiceMessaging] Failed to parse incoming message:',
-        err
-      );
-    }
-  });
+  let unsubscribe;
+  try {
+    unsubscribe = await node.filter.subscribe([decoder], (wakuMessage) => {
+      try {
+        if (!wakuMessage.payload) return;
+        const text = new TextDecoder().decode(wakuMessage.payload);
+        const parsed = JSON.parse(text);
+        if (import.meta.env.DEV) console.log('[WakuInvoiceMessaging] Received invoice message:', parsed);
+        onMessage(parsed);
+      } catch (err) {
+        console.warn(
+          '[WakuInvoiceMessaging] Failed to parse incoming message:',
+          err.message
+        );
+      }
+    });
+  } catch (err) {
+    // Stream creation failures (peer disconnects, timeouts) are non-fatal
+    console.warn(
+      '[WakuInvoiceMessaging] Filter subscription failed (will work without real-time updates):',
+      err.message
+    );
+    // Return a no-op unsubscribe so callers don't break
+    return () => {};
+  }
 
   console.log(
     '[WakuInvoiceMessaging] Subscribed to invoices on chain',
@@ -120,9 +133,9 @@ export async function queryStoredInvoices(privateKey, chainId) {
           messages.push(parsed);
         }
       } catch (err) {
-        console.error(
+        console.warn(
           '[WakuInvoiceMessaging] Failed to process stored message:',
-          err
+          err.message
         );
       }
     }

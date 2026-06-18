@@ -7,6 +7,7 @@ import {
   registerPublicKeyOnChain,
   fetchPublicKeyFromChain,
   bytesToHex,
+  hasCachedKeys,
 } from '../services/waku/wakuKeyManager.js';
 
 /**
@@ -18,10 +19,18 @@ export function useWakuKeys() {
   const { data: walletClient } = useWalletClient();
   const { address, chainId } = useAccount();
   const [keys, setKeys] = useState(null);
+  const [hasKeys, setHasKeys] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const [rememberSession, setRememberSession] = useState(true);
+
+  // Initialize hasKeys on mount/address change
+  useEffect(() => {
+    if (address) {
+      setHasKeys(hasCachedKeys(address));
+    }
+  }, [address]);
 
   const getContract = useCallback(async () => {
     if (!walletClient || !chainId) return null;
@@ -41,6 +50,7 @@ export function useWakuKeys() {
     const shouldRemember = remember !== undefined ? remember : rememberSession;
     const keyPair = await deriveWakuKeyPair(signer, address, shouldRemember);
     setKeys(keyPair);
+    setHasKeys(true);
     return keyPair;
   }, [walletClient, address, rememberSession]);
 
@@ -83,7 +93,16 @@ export function useWakuKeys() {
       setIsRegistered(true);
     } catch (err) {
       console.error('[useWakuKeys] Failed to derive/register keys:', err);
-      setError(err.message || 'Failed to register Waku keys');
+      let errMsg = err.message || 'Failed to register Waku keys';
+      if (
+        errMsg.toLowerCase().includes('user rejected') || 
+        errMsg.toLowerCase().includes('rejected the request') ||
+        err.code === 'ACTION_REJECTED' || 
+        err.code === 4001
+      ) {
+        errMsg = 'Signature request rejected. You must sign the message to enable encrypted invoices.';
+      }
+      setError(errMsg);
       throw err;
     } finally {
       setIsLoading(false);
@@ -99,6 +118,7 @@ export function useWakuKeys() {
 
   return {
     keys,
+    hasKeys,
     isRegistered,
     isLoading,
     error,

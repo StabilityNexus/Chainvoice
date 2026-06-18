@@ -16,8 +16,9 @@ import FormControl from "@mui/material/FormControl";
 import Select from "@mui/material/Select";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { FileStack, CreditCard, Layers3, PlusCircle, FileStackIcon } from "lucide-react";
-import InvoiceBackupBanner from "@/components/InvoiceBackupBanner";
-import WakuKeyRegistration from "@/components/WakuKeyRegistration";
+import KeyRegistrationModal from "@/components/modals/KeyRegistrationModal";
+import IndexedDBInfoModal from "@/components/modals/IndexedDBInfoModal";
+import BackupReminderModal from "@/components/modals/BackupReminderModal";
 
 export default function Home() {
   const navigate = useNavigate();
@@ -76,8 +77,10 @@ export default function Home() {
           </h1>
         </header>
         
-        <InvoiceBackupBanner />
-        <WakuKeyRegistration />
+        {/* Popup modals — rendered here, they manage their own open/close */}
+        <IndexedDBInfoModal />
+        <KeyRegistrationModal />
+        <BackupReminderModal />
 
         <Box
           sx={{

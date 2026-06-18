@@ -84,7 +84,7 @@ function CreateInvoice() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { isReady: wakuReady } = useWaku();
-  const { keys: wakuKeys, deriveKeysOnly } = useWakuKeys();
+  const { keys: wakuKeys, deriveKeysOnly, isRegistered } = useWakuKeys();
   const itemRefsMobile = useRef([]);
   const itemRefsDesktop = useRef([]);
   const [clientAddress, setClientAddress] = useState("");
@@ -547,6 +547,58 @@ const validateClientAddress = useCallback((value) => {
       </div>
 
       <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
+        {/* Invoice creation gate — block if encryption key not registered */}
+        {!wakuKeys && !isRegistered && account?.isConnected && (
+          <div
+            className="mb-4 rounded-xl p-5 flex items-center gap-4"
+            style={{
+              backgroundColor: 'rgba(239, 68, 68, 0.06)',
+              border: '1px solid rgba(239, 68, 68, 0.15)',
+            }}
+          >
+            <div
+              className="flex items-center justify-center rounded-lg flex-shrink-0"
+              style={{
+                width: 40,
+                height: 40,
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              }}
+            >
+              <span style={{ fontSize: '1.25rem' }}>🔒</span>
+            </div>
+            <div className="flex-1">
+              <p className="text-sm font-semibold" style={{ color: '#fca5a5' }}>
+                Encryption Key Required
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: '#9ca3af' }}>
+                You must register your encryption key before creating invoices.
+                This ensures your invoices are securely encrypted.
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                // Open the key registration modal via the global handler
+                if (window.__chainvoiceKeyRegistration?.openModal) {
+                  window.__chainvoiceKeyRegistration.openModal();
+                }
+              }}
+              className="px-4 py-2 rounded-lg text-xs font-semibold text-white flex-shrink-0 transition-all duration-200"
+              style={{
+                background: 'linear-gradient(135deg, #22c55e, #10b981)',
+              }}
+              onMouseEnter={(e) =>
+                (e.target.style.background =
+                  'linear-gradient(135deg, #16a34a, #059669)')
+              }
+              onMouseLeave={(e) =>
+                (e.target.style.background =
+                  'linear-gradient(135deg, #22c55e, #10b981)')
+              }
+            >
+              Register Now
+            </button>
+          </div>
+        )}
         {(searchParams.get("clientAddress") ||
           searchParams.get("amount") ||
           searchParams.get("description")) && (

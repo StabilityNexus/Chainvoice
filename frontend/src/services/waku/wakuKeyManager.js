@@ -180,4 +180,16 @@ export async function fetchPublicKeyFromChain(contract, userAddress) {
   return hexToBytes(keyHex);
 }
 
+/**
+ * Check if the keys are already cached in memory or session storage.
+ * @param {string} address
+ * @returns {boolean}
+ */
+export function hasCachedKeys(address) {
+  if (!address) return false;
+  if (getMemoryCachedKeys(address)) return true;
+  if (getSessionCachedKeys(address)) return true;
+  return false;
+}
+
 export { hexToBytes, bytesToHex, DERIVATION_MESSAGE };
