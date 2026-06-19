@@ -347,6 +347,8 @@ function CreateInvoicesBatch() {
 
       toast(`Processing ${validInvoices.length} invoices...`);
 
+      const batchId = `batch_${Date.now()}`;
+
       // Process each invoice
       for (const [index, row] of validInvoices.entries()) {
         toast(
@@ -382,7 +384,7 @@ function CreateInvoicesBatch() {
           },
           items: row.itemData,
           batchInfo: {
-            batchId: `batch_${Date.now()}`,
+            batchId,
             batchSize: validInvoices.length,
             index: index,
             batchType: "user_created",
@@ -440,6 +442,21 @@ function CreateInvoicesBatch() {
               const invoiceId = parsed.args[0].toString();
               const payload = invoicePayloads[eventIndex];
 
+              // Try to send via Waku
+              let wakuDelivered = false;
+              try {
+                const receiverPubKey = await contract.getWakuPublicKey(payload.client.address);
+                if (receiverPubKey && receiverPubKey !== '0x' && receiverPubKey.length > 2) {
+                  const keyBytes = new Uint8Array(
+                    receiverPubKey.slice(2).match(/.{2}/g).map(b => parseInt(b, 16))
+                  );
+                  await sendEncryptedInvoice(payload, keyBytes, account.chainId, invoiceId);
+                  wakuDelivered = true;
+                }
+              } catch (wakuErr) {
+                console.warn(`Waku send for invoice ${invoiceId} failed (non-critical):`, wakuErr);
+              }
+
               // Store locally in IndexedDB
               await storeInvoice({
                 invoiceId,
@@ -448,22 +465,10 @@ function CreateInvoicesBatch() {
                 to: payload.client.address.toLowerCase(),
                 isPaid: false,
                 isCancelled: false,
+                wakuDelivered,
                 invoiceDataHash: invoiceDataHashes[eventIndex],
                 data: payload,
               });
-
-              // Try to send via Waku
-              try {
-                const receiverPubKey = await contract.getWakuPublicKey(payload.client.address);
-                if (receiverPubKey && receiverPubKey !== '0x' && receiverPubKey.length > 2) {
-                  const keyBytes = new Uint8Array(
-                    receiverPubKey.slice(2).match(/.{2}/g).map(b => parseInt(b, 16))
-                  );
-                  await sendEncryptedInvoice(payload, keyBytes, account.chainId, invoiceId);
-                }
-              } catch (wakuErr) {
-                console.warn(`Waku send for invoice ${invoiceId} failed (non-critical):`, wakuErr);
-              }
 
               eventIndex++;
             }

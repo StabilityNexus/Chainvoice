@@ -49,8 +49,8 @@ export default function IndexedDBInfoModal() {
   return (
     <Dialog open={open} onOpenChange={(o) => {
       // Only allow closing via the button
-      if (!o && !acknowledged) return;
-      if (!o) handleConfirm();
+      if (o === false && !acknowledged) return;
+      // Let the button's onClick handler manage the close
     }}>
       <DialogContent
         className="sm:max-w-[520px] p-0 overflow-hidden gap-0"

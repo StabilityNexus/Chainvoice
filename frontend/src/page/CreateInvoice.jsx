@@ -466,10 +466,13 @@ const validateClientAddress = useCallback((value) => {
         }
       } catch {}
       if (!invoiceId) {
-        invoiceId = Date.now().toString(); // fallback
+        throw new Error(
+          "Invoice created on-chain, but InvoiceCreated event was not found. Please check Sent Invoices."
+        );
       }
 
       // 6. Send encrypted data via Waku (if receiver has registered a key)
+      let wakuDelivered = false;
       if (hasReceiverKey) {
         try {
           const receiverKeyBytes = new Uint8Array(
@@ -481,6 +484,7 @@ const validateClientAddress = useCallback((value) => {
             account.chainId,
             invoiceId
           );
+          wakuDelivered = true;
           toast.success("Invoice encrypted and sent via Waku!");
         } catch (wakuErr) {
           console.warn("Waku send failed (non-critical):", wakuErr);
@@ -498,7 +502,7 @@ const validateClientAddress = useCallback((value) => {
         to: data.clientAddress.toLowerCase(),
         isPaid: false,
         isCancelled: false,
-        wakuDelivered: hasReceiverKey,
+        wakuDelivered,
         invoiceDataHash,
         data: invoicePayload,
       });

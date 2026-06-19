@@ -40,6 +40,7 @@ contract Chainvoice {
     error WithdrawFailed();
     error WakuKeyNotRegistered();
     error InvalidWakuKey();
+    error InvalidInvoiceHash();
 
     // ========== Storage ==========
     error InvalidNewOwner();
@@ -123,7 +124,7 @@ contract Chainvoice {
     /// @notice Register or update the caller's Waku ECIES public key.
     /// @param publicKey The uncompressed secp256k1 public key (65 bytes).
     function registerWakuPublicKey(bytes calldata publicKey) external {
-        if (publicKey.length != 65) revert InvalidWakuKey();
+        if (publicKey.length != 65 || publicKey[0] != 0x04) revert InvalidWakuKey();
         wakuPublicKeys[msg.sender] = publicKey;
         emit WakuKeyRegistered(msg.sender, publicKey);
     }
@@ -143,6 +144,7 @@ contract Chainvoice {
         bytes32 invoiceDataHash,
         string memory encryptedHash
     ) external {
+        if (invoiceDataHash == bytes32(0)) revert InvalidInvoiceHash();
         if (to == address(0)) revert ZeroAddress();
         if (to == msg.sender) revert SelfInvoicing();
         if (amountDue == 0) revert InvalidAmount();
@@ -208,6 +210,7 @@ contract Chainvoice {
         uint256[] memory ids = new uint256[](n);
         for (uint256 i = 0; i < n; i++) {
             address to = tos[i];
+            if (invoiceDataHashes[i] == bytes32(0)) revert InvalidInvoiceHash();
             if (to == address(0)) revert ZeroAddress();
             if (to == msg.sender) revert SelfInvoicing();
             uint256 amt = amountsDue[i];

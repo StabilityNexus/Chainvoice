@@ -13,6 +13,8 @@ const memoryCache = new Map();
  */
 function hexToBytes(hex) {
   const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
+  if (cleanHex.length % 2 !== 0) throw new Error('Invalid hex string: odd length');
+  if (!/^[0-9a-fA-F]*$/.test(cleanHex)) throw new Error('Invalid hex string: non-hex characters');
   const bytes = new Uint8Array(cleanHex.length / 2);
   for (let i = 0; i < cleanHex.length; i += 2) {
     bytes[i / 2] = parseInt(cleanHex.substr(i, 2), 16);

@@ -172,6 +172,7 @@ function SentInvoice() {
         const mergedInvoices = chainFiltered.map((local) => {
           const onChain = onChainStatusMap[local.invoiceId];
           const parsed = { ...local.data };
+          parsed.__rawInvoiceData = local.data;
           parsed["id"] = BigInt(local.invoiceId);
           parsed["chainId"] = local.chainId || chainId;
           parsed["isPaid"] = onChain ? onChain.isPaid : local.isPaid;
@@ -274,7 +275,8 @@ function SentInvoice() {
       }
 
       const receiverKeyBytes = hexToBytes(receiverKeyHex);
-      await sendEncryptedInvoice(invoice, receiverKeyBytes, chainId, invoice.id.toString());
+      const payload = invoice.__rawInvoiceData ?? invoice;
+      await sendEncryptedInvoice(payload, receiverKeyBytes, chainId, invoice.id.toString());
       await updateInvoiceStatus(chainId, invoice.id.toString(), { wakuDelivered: true });
 
       // Update local state so the retry button disappears immediately

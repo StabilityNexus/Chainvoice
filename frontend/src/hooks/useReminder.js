@@ -56,7 +56,11 @@ export function useReminder(reminderKey, walletAddress, options = {}) {
       opts.interval = customDate; // reuse param for interval name ('daily'|'weekly')
     }
 
-    setReminder(walletAddress, reminderKey, opts);
+    try {
+      setReminder(walletAddress, reminderKey, opts);
+    } catch (err) {
+      console.warn('[useReminder] Failed to set reminder:', err.message);
+    }
     setIsDue(false);
   }, [walletAddress, reminderKey]);
 

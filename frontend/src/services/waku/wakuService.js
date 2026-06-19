@@ -24,8 +24,8 @@ class WakuService {
    * @returns {Promise<import('@waku/sdk').LightNode>}
    */
   async initialize() {
-    if (this.node) return this.node;
     if (this._initPromise) return this._initPromise;
+    if (this.node) return this.node;
 
     this._initPromise = this._initWithRetry();
     return this._initPromise;

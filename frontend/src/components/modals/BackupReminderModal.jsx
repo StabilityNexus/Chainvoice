@@ -70,11 +70,16 @@ export default function BackupReminderModal() {
   // Don't show if not due or no wallet
   if (!isDue || !address) return null;
 
+  const toLocalDateTimeValue = (date) => {
+    const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+  };
+
   const now = new Date();
-  const minDateTime = now.toISOString().slice(0, 16);
-  const maxDateTime = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .slice(0, 16);
+  const minDateTime = toLocalDateTimeValue(now);
+  const maxDateTime = toLocalDateTimeValue(
+    new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
+  );
 
   return (
     <Dialog open={isDue} onOpenChange={(o) => {

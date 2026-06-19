@@ -122,13 +122,16 @@ export default function KeyRegistrationModal() {
   const isUnlockMode = isRegistered;
 
   // Minimum datetime for the picker (now)
+  const toLocalDateTimeValue = (date) => {
+    const offsetMs = date.getTimezoneOffset() * 60 * 1000;
+    return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+  };
+
   const now = new Date();
-  const minDateTime = now.toISOString().slice(0, 16);
-  const maxDateTime = new Date(
-    now.getTime() + 365 * 24 * 60 * 60 * 1000
-  )
-    .toISOString()
-    .slice(0, 16);
+  const minDateTime = toLocalDateTimeValue(now);
+  const maxDateTime = toLocalDateTimeValue(
+    new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000)
+  );
 
   return (
     <>
@@ -235,7 +238,10 @@ export default function KeyRegistrationModal() {
                     {isLoading ? 'Unlocking...' : 'Unlock Key'}
                   </button>
                   <button
-                    onClick={() => setInternalOpen(false)}
+                    onClick={() => {
+                      dismiss('tab');
+                      setInternalOpen(false);
+                    }}
                     className="px-4 py-2.5 rounded-lg text-sm text-gray-500 hover:text-gray-700 transition-colors duration-200"
                   >
                     Later

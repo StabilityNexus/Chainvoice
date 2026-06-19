@@ -35,6 +35,7 @@ export function verifyInvoiceHash(invoiceData, expectedHash) {
  */
 export function stableStringify(obj) {
   if (obj === null || obj === undefined) return JSON.stringify(obj);
+  if (typeof obj === 'bigint') return JSON.stringify(obj.toString());
   if (typeof obj !== 'object') return JSON.stringify(obj);
   if (Array.isArray(obj)) {
     return '[' + obj.map((item) => stableStringify(item)).join(',') + ']';

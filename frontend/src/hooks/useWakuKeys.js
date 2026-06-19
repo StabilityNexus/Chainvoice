@@ -27,9 +27,18 @@ export function useWakuKeys() {
 
   // Initialize hasKeys on mount/address change
   useEffect(() => {
-    if (address) {
-      setHasKeys(hasCachedKeys(address));
+    if (!address) {
+      setKeys(null);
+      setHasKeys(false);
+      setIsRegistered(false);
+      setError(null);
+      return;
     }
+    // Reset account-scoped runtime state before recalculating cache presence
+    setKeys(null);
+    setIsRegistered(false);
+    setError(null);
+    setHasKeys(hasCachedKeys(address));
   }, [address]);
 
   const getContract = useCallback(async () => {
@@ -57,13 +66,17 @@ export function useWakuKeys() {
   /** Check if the user's Waku public key is registered on-chain. */
   const checkRegistration = useCallback(async () => {
     const contract = await getContract();
-    if (!contract || !address) return false;
+    if (!contract || !address) {
+      setIsRegistered(false);
+      return false;
+    }
     try {
       const pubKey = await fetchPublicKeyFromChain(contract, address);
       const registered = pubKey !== null && pubKey.length > 0;
       setIsRegistered(registered);
       return registered;
     } catch {
+      setIsRegistered(false);
       return false;
     }
   }, [getContract, address]);

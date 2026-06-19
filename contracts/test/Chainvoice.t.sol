@@ -130,8 +130,8 @@ contract ChainvoiceTest is Test {
         for (uint256 i = 0; i < batchSize; i++) {
             tos[i] = bob;
             amounts[i] = 1 ether;
-            payloads[i] = bytes32(0);
-            hashes[i] = "";
+            payloads[i] = keccak256(abi.encodePacked("batch", i));
+            hashes[i] = "hash";
         }
 
         vm.prank(alice);
@@ -162,12 +162,16 @@ contract ChainvoiceTest is Test {
         assertEq(sent.length, 3);
         assertEq(received.length, 3);
         assertEq(sent[2].amountDue, 1 ether);
+        for (uint256 i = 0; i < batchSize; i++) {
+            assertEq(sent[i].invoiceDataHash, payloads[i]);
+            assertEq(received[i].invoiceDataHash, payloads[i]);
+        }
     }
 
     function testPayInvoicesBatch() public {
         vm.startPrank(alice);
-        chainvoice.createInvoice(bob, 1 ether, address(0), bytes32(0), "");
-        chainvoice.createInvoice(bob, 2 ether, address(0), bytes32(0), "");
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("pay1"), "");
+        chainvoice.createInvoice(bob, 2 ether, address(0), keccak256("pay2"), "");
         vm.stopPrank();
 
         uint256 fee = chainvoice.fee();
@@ -225,7 +229,7 @@ contract ChainvoiceTest is Test {
         chainvoice.setTreasuryAddress(treasury);
 
         vm.prank(alice);
-        chainvoice.createInvoice(bob, 1 ether, address(0), bytes32(0), "");
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("withdraw"), "");
 
         uint256 fee = chainvoice.fee();
         vm.prank(bob);

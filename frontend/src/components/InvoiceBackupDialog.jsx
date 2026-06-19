@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -27,6 +27,10 @@ export default function InvoiceBackupDialog({ open, onClose }) {
   const [importStatus, setImportStatus] = useState(null);
   const { exportBackup, importBackup, isExporting, isImporting } =
     useInvoiceStorage();
+
+  useEffect(() => {
+    if (open) setImportStatus(null);
+  }, [open]);
 
   const handleExport = async () => {
     try {
