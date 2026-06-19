@@ -10,10 +10,9 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@aossie-org/idb-backup": "^1.0.0",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
-    "@waku/sdk": "^0.0.32",
-    "@waku/message-encryption": "^0.0.31",
     "@mui/icons-material": "^6.4.6",
     "@mui/material": "^6.4.6",
     "@radix-ui/react-avatar": "^1.1.10",
@@ -25,6 +24,8 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@rainbow-me/rainbowkit": "^2.2.2",
     "@tanstack/react-query": "^5.64.1",
+    "@waku/message-encryption": "^0.0.31",
+    "@waku/sdk": "^0.0.32",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "crypto-convert": "^2.1.7",

@@ -1,7 +1,7 @@
 import {
   exportDB,
   importDB,
-} from '../../lib/aossie-idb-backup/index.js';
+} from '@aossie-org/idb-backup';
 import { DB_NAME } from './invoiceDB.js';
 
 /**

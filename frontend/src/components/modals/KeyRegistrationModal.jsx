@@ -194,8 +194,7 @@ export default function KeyRegistrationModal() {
               /* ============ UNLOCK MODE ============ */
               <div className="space-y-4">
                 <p className="text-sm text-gray-700" style={{ lineHeight: 1.6 }}>
-                  Your encryption key is already registered on the blockchain.
-                  Just sign a quick message to re-derive it locally.{' '}
+                  Your account is already set up. Just sign to unlock your dashboard.{' '}
                   <span className="text-green-600 font-semibold">
                     No gas fee required.
                   </span>
