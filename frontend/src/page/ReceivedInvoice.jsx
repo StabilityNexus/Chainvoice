@@ -825,7 +825,7 @@ function ReceivedInvoice() {
           chainId,
           async (message) => {
             if (cancelled) return;
-            console.log('[ReceivedInvoice] Waku real-time message received:', message);
+            if (import.meta.env.DEV) console.log('[ReceivedInvoice] Waku real-time message received:', message);
 
             const stored = await storeWakuMessage(message);
             if (stored) {

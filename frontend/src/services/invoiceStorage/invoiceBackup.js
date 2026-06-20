@@ -58,7 +58,7 @@ export async function importInvoiceBackup(file) {
   const backupData = await readFileAsJSON(file);
 
   // Validate it's a valid backup
-  if (!backupData || !backupData.databaseName) {
+  if (!backupData || backupData.databaseName !== DB_NAME) {
     throw new Error(
       'Invalid backup file format. Please select a valid ChainVoice backup.'
     );

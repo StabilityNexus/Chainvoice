@@ -16,11 +16,16 @@
 
 // Generate a unique tab ID so tab-scoped reminders survive page refreshes
 // but not tab closes.
-const TAB_ID_KEY = 'cv_tab_id';
-if (!sessionStorage.getItem(TAB_ID_KEY)) {
-  sessionStorage.setItem(TAB_ID_KEY, `tab_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+let TAB_ID = 'tab_fallback';
+try {
+  const TAB_ID_KEY = 'cv_tab_id';
+  if (!sessionStorage.getItem(TAB_ID_KEY)) {
+    sessionStorage.setItem(TAB_ID_KEY, `tab_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`);
+  }
+  TAB_ID = sessionStorage.getItem(TAB_ID_KEY);
+} catch (e) {
+  console.warn('[reminderService] sessionStorage not available, using fallback tab ID');
 }
-const TAB_ID = sessionStorage.getItem(TAB_ID_KEY);
 
 /** Build a namespaced storage key */
 function storageKey(walletAddress, reminderKey) {
@@ -61,13 +66,17 @@ export function setReminder(walletAddress, reminderKey, { type, until, interval 
     case 'custom':
       // Custom date: store in localStorage with expiry
       if (!until) throw new Error('Custom reminder requires an "until" date');
-      data.until = new Date(until).getTime();
+      const untilTs = new Date(until).getTime();
+      if (!Number.isFinite(untilTs)) throw new Error('Invalid "until" date format');
+      data.until = untilTs;
       localStorage.setItem(key, JSON.stringify(data));
       break;
 
     case 'recurring':
       // Recurring: store interval and last acknowledged time
-      if (!interval) throw new Error('Recurring reminder requires an "interval"');
+      if (!interval || !['daily', 'weekly'].includes(interval)) {
+        throw new Error('Recurring reminder requires interval "daily" or "weekly"');
+      }
       data.interval = interval;
       data.lastAcknowledged = Date.now();
       localStorage.setItem(key, JSON.stringify(data));

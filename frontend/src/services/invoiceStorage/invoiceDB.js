@@ -14,39 +14,23 @@ async function getDB() {
   try {
     const db = await openDB(DB_NAME, DB_VERSION, {
       upgrade(db) {
-        // Delete old stores if they exist with wrong schema
-        if (db.objectStoreNames.contains(STORE_NAME)) {
-          db.deleteObjectStore(STORE_NAME);
+        let store;
+        if (!db.objectStoreNames.contains(STORE_NAME)) {
+          store = db.createObjectStore(STORE_NAME, { keyPath: 'compositeKey' });
+        } else {
+          store = db.transaction.objectStore(STORE_NAME);
         }
-        const store = db.createObjectStore(STORE_NAME, {
-          keyPath: 'compositeKey',
-        });
-        store.createIndex('by-sender', 'from');
-        store.createIndex('by-receiver', 'to');
-        store.createIndex('by-chain', 'chainId');
-        store.createIndex('by-invoiceId', 'invoiceId');
+        
+        if (!store.indexNames.contains('by-sender')) store.createIndex('by-sender', 'from');
+        if (!store.indexNames.contains('by-receiver')) store.createIndex('by-receiver', 'to');
+        if (!store.indexNames.contains('by-chain')) store.createIndex('by-chain', 'chainId');
+        if (!store.indexNames.contains('by-invoiceId')) store.createIndex('by-invoiceId', 'invoiceId');
       },
     });
     return db;
   } catch (err) {
-    console.warn('[invoiceDB] DB open failed, deleting and retrying:', err);
-    // If the database is in a broken state, nuke and retry once
-    await new Promise((resolve, reject) => {
-      const req = indexedDB.deleteDatabase(DB_NAME);
-      req.onsuccess = resolve;
-      req.onerror = reject;
-    });
-    return openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        const store = db.createObjectStore(STORE_NAME, {
-          keyPath: 'compositeKey',
-        });
-        store.createIndex('by-sender', 'from');
-        store.createIndex('by-receiver', 'to');
-        store.createIndex('by-chain', 'chainId');
-        store.createIndex('by-invoiceId', 'invoiceId');
-      },
-    });
+    console.error('[invoiceDB] DB open failed:', err);
+    throw err;
   }
 }
 
@@ -67,6 +51,10 @@ function makeKey(chainId, invoiceId) {
  * @param {Object} invoice - invoice record with metadata + data
  */
 export async function storeInvoice(invoice) {
+  if (invoice.chainId === undefined || invoice.invoiceId === undefined) {
+    throw new Error('storeInvoice: chainId and invoiceId are required');
+  }
+
   const db = await getDB();
   const record = {
     ...invoice,

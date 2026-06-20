@@ -42,8 +42,11 @@ export function stableStringify(obj) {
     return '[' + obj.map((item) => stableStringify(item)).join(',') + ']';
   }
   const sortedKeys = Object.keys(obj).sort();
-  const parts = sortedKeys.map((key) => {
-    return JSON.stringify(key) + ':' + stableStringify(obj[key]);
-  });
+  const parts = [];
+  for (const key of sortedKeys) {
+    if (obj[key] !== undefined) {
+      parts.push(JSON.stringify(key) + ':' + stableStringify(obj[key]));
+    }
+  }
   return '{' + parts.join(',') + '}';
 }

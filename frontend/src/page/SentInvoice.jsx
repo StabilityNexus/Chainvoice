@@ -121,7 +121,7 @@ function SentInvoice() {
   };
 
   useEffect(() => {
-    if (!walletClient || !address) return;
+    if (!walletClient || !address || !chainId) return;
 
     const fetchSentInvoices = async () => {
       try {
@@ -199,27 +199,33 @@ function SentInvoice() {
         const fee = await contract.fee();
         setFee(fee);
 
-        // 4. Auto-retry Waku send for undelivered invoices (silent, no toast spam)
-        try {
-          for (const local of chainFiltered) {
-            if (local.wakuDelivered === false && local.data) {
-              try {
-                const receiverAddr = local.to;
-                const receiverKeyHex = await contract.getWakuPublicKey(receiverAddr);
-                if (receiverKeyHex && receiverKeyHex !== '0x' && receiverKeyHex.length > 2) {
-                  const receiverKeyBytes = hexToBytes(receiverKeyHex);
-                  await sendEncryptedInvoice(local.data, receiverKeyBytes, chainId, local.invoiceId);
-                  await updateInvoiceStatus(chainId, local.invoiceId, { wakuDelivered: true });
-                  console.log(`[SentInvoice] Auto-retried Waku send for invoice #${local.invoiceId}`);
+        // 4. Auto-retry Waku send for undelivered invoices in the background
+        (async () => {
+          try {
+            for (const local of chainFiltered) {
+              if (local.wakuDelivered === false && local.data) {
+                try {
+                  const receiverAddr = local.to;
+                  const receiverKeyHex = await contract.getWakuPublicKey(receiverAddr);
+                  if (receiverKeyHex && receiverKeyHex !== '0x' && receiverKeyHex.length > 2) {
+                    const receiverKeyBytes = hexToBytes(receiverKeyHex);
+                    await sendEncryptedInvoice(local.data, receiverKeyBytes, chainId, local.invoiceId);
+                    const updated = await updateInvoiceStatus(chainId, local.invoiceId, { wakuDelivered: true });
+                    if (updated) {
+                      console.log(`[SentInvoice] Auto-retried Waku send for invoice #${local.invoiceId}`);
+                    } else {
+                      console.warn(`[SentInvoice] Auto-retried Waku send, but failed to update local DB for invoice #${local.invoiceId}`);
+                    }
+                  }
+                } catch (retryErr) {
+                  console.warn(`[SentInvoice] Auto-retry failed for invoice #${local.invoiceId}:`, retryErr);
                 }
-              } catch (retryErr) {
-                console.warn(`[SentInvoice] Auto-retry failed for invoice #${local.invoiceId}:`, retryErr);
               }
             }
+          } catch (autoRetryErr) {
+            console.warn('[SentInvoice] Auto-retry batch failed:', autoRetryErr);
           }
-        } catch (autoRetryErr) {
-          console.warn('[SentInvoice] Auto-retry batch failed:', autoRetryErr);
-        }
+        })();
       } catch (error) {
         console.error("Error loading invoices:", error);
         setError(

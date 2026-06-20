@@ -40,10 +40,10 @@ function bytesToHex(bytes) {
  *
  * @param {import('ethers').Signer} signer - ethers v6 signer
  * @param {string} address - wallet address
- * @param {boolean} [rememberSession=true] - if true, cache keys in sessionStorage; if false, keep in memory only
+ * @param {boolean} [rememberSession=false] - if true, cache keys in sessionStorage; if false, keep in memory only
  * @returns {Promise<{privateKey: Uint8Array, publicKey: Uint8Array}>}
  */
-export async function deriveWakuKeyPair(signer, address, rememberSession = true) {
+export async function deriveWakuKeyPair(signer, address, rememberSession = false) {
   // Check in-memory cache first (avoids re-derivation within the same page session)
   const memCached = getMemoryCachedKeys(address);
   if (memCached) return memCached;

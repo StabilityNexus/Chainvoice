@@ -75,13 +75,13 @@ export async function subscribeToInvoices(privateKey, chainId, onMessage) {
 
   let unsubscribe;
   try {
-    unsubscribe = await node.filter.subscribe([decoder], (wakuMessage) => {
+    unsubscribe = await node.filter.subscribe([decoder], async (wakuMessage) => {
       try {
         if (!wakuMessage.payload) return;
         const text = new TextDecoder().decode(wakuMessage.payload);
         const parsed = JSON.parse(text);
         if (import.meta.env.DEV) console.log('[WakuInvoiceMessaging] Received invoice message:', parsed);
-        onMessage(parsed);
+        await onMessage(parsed);
       } catch (err) {
         console.warn(
           '[WakuInvoiceMessaging] Failed to parse incoming message:',
