@@ -437,4 +437,26 @@ contract ChainvoiceTest is Test {
         assertEq(inv.amountDue, 1 ether);
         assertEq(inv.invoiceDataHash, testHash);
     }
+
+    function testCreateInvoicesBatch_RevertIfZeroHash() public {
+        address[] memory tos = new address[](2);
+        tos[0] = bob;
+        tos[1] = charlie;
+
+        uint256[] memory amounts = new uint256[](2);
+        amounts[0] = 1 ether;
+        amounts[1] = 2 ether;
+
+        bytes32[] memory hashes = new bytes32[](2);
+        hashes[0] = keccak256("valid hash");
+        hashes[1] = bytes32(0); // This should cause a revert
+
+        string[] memory encHashes = new string[](2);
+        encHashes[0] = "";
+        encHashes[1] = "";
+
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.InvalidInvoiceHash.selector);
+        chainvoice.createInvoicesBatch(tos, amounts, address(0), hashes, encHashes);
+    }
 }
