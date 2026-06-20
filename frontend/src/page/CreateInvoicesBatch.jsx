@@ -431,51 +431,54 @@ function CreateInvoicesBatch() {
       toast("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
 
-      // Extract invoice IDs from events and store locally
-      try {
-        const iface = new ethers.Interface(ChainvoiceABI);
-        let eventIndex = 0;
-        for (const log of receipt.logs) {
-          try {
-            const parsed = iface.parseLog(log);
-            if (parsed?.name === 'InvoiceCreated' && eventIndex < invoicePayloads.length) {
-              const invoiceId = parsed.args[0].toString();
-              const payload = invoicePayloads[eventIndex];
+      // Extract invoice IDs from events before any best-effort Waku/storage work
+      const iface = new ethers.Interface(ChainvoiceABI);
+      const invoiceIds = [];
+      for (const log of receipt.logs) {
+        try {
+          const parsed = iface.parseLog(log);
+          if (parsed?.name === 'InvoiceCreated') {
+            invoiceIds.push(parsed.args[0].toString());
+          }
+        } catch {}
+      }
 
-              // Try to send via Waku
-              let wakuDelivered = false;
-              try {
-                const receiverPubKey = await contract.getWakuPublicKey(payload.client.address);
-                if (receiverPubKey && receiverPubKey !== '0x' && receiverPubKey.length > 2) {
-                  const keyBytes = new Uint8Array(
-                    receiverPubKey.slice(2).match(/.{2}/g).map(b => parseInt(b, 16))
-                  );
-                  await sendEncryptedInvoice(payload, keyBytes, account.chainId, invoiceId);
-                  wakuDelivered = true;
-                }
-              } catch (wakuErr) {
-                console.warn(`Waku send for invoice ${invoiceId} failed (non-critical):`, wakuErr);
-              }
+      if (invoiceIds.length !== invoicePayloads.length) {
+        throw new Error(
+          `Expected ${invoicePayloads.length} InvoiceCreated events, got ${invoiceIds.length}`
+        );
+      }
 
-              // Store locally in IndexedDB
-              await storeInvoice({
-                invoiceId,
-                chainId: account.chainId,
-                from: account.address.toLowerCase(),
-                to: payload.client.address.toLowerCase(),
-                isPaid: false,
-                isCancelled: false,
-                wakuDelivered,
-                invoiceDataHash: invoiceDataHashes[eventIndex],
-                data: payload,
-              });
+      for (const [eventIndex, invoiceId] of invoiceIds.entries()) {
+        const payload = invoicePayloads[eventIndex];
 
-              eventIndex++;
-            }
-          } catch {}
+        // Try to send via Waku
+        let wakuDelivered = false;
+        try {
+          const receiverPubKey = await contract.getWakuPublicKey(payload.client.address);
+          if (receiverPubKey && receiverPubKey !== '0x' && receiverPubKey.length > 2) {
+            const keyBytes = new Uint8Array(
+              receiverPubKey.slice(2).match(/.{2}/g).map((b) => parseInt(b, 16))
+            );
+            await sendEncryptedInvoice(payload, keyBytes, account.chainId, invoiceId);
+            wakuDelivered = true;
+          }
+        } catch (wakuErr) {
+          console.warn(`Waku send for invoice ${invoiceId} failed (non-critical):`, wakuErr);
         }
-      } catch (e) {
-        console.warn("Failed to extract invoice IDs from receipt:", e);
+
+        // Store locally in IndexedDB
+        await storeInvoice({
+          invoiceId,
+          chainId: account.chainId,
+          from: account.address.toLowerCase(),
+          to: payload.client.address.toLowerCase(),
+          isPaid: false,
+          isCancelled: false,
+          wakuDelivered,
+          invoiceDataHash: invoiceDataHashes[eventIndex],
+          data: payload,
+        });
       }
 
       toast.success(

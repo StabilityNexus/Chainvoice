@@ -100,13 +100,13 @@ export default function IndexedDBInfoModal() {
               icon={<HardDrive className="w-4 h-4" />}
               iconColor="#a78bfa"
               title="What's stored?"
-              desc="Invoice details, payment history, Waku message cache, and product catalogs. All encrypted data stays on your device."
+              desc="Invoice details and history are stored locally in your browser. Encrypted invoice messages are transmitted over Waku for recipient delivery."
             />
             <InfoCard
               icon={<ShieldCheck className="w-4 h-4" />}
               iconColor="#4ade80"
               title="Why local storage?"
-              desc="Your data never leaves your device. No centralized server can access, censor, or lose your invoices."
+              desc="Your invoices are encrypted end-to-end. Local copies stay in your browser, and encrypted payloads are shared over Waku without centralized custody of plaintext."
             />
             <InfoCard
               icon={<AlertTriangle className="w-4 h-4" />}

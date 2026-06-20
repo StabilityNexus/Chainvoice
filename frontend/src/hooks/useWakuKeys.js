@@ -23,7 +23,7 @@ export function useWakuKeys() {
   const [isRegistered, setIsRegistered] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
-  const [rememberSession, setRememberSession] = useState(true);
+  const [rememberSession, setRememberSession] = useState(false);
 
   // Initialize hasKeys on mount/address change
   useEffect(() => {

@@ -299,9 +299,22 @@ function BatchPayment() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
+  useEffect(() => {
+    setSelectedInvoices(new Set());
+    setBalanceErrors([]);
+  }, [address, chainId]);
+
   // Fetch invoices from local IndexedDB with batch awareness
   useEffect(() => {
-    if (!walletClient || !address) return;
+    let isCurrent = true;
+
+    if (!walletClient || !address || !chainId) {
+      setReceivedInvoices([]);
+      setBatchSuggestions([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
 
     const fetchReceivedInvoices = async () => {
       try {
@@ -369,20 +382,26 @@ function BatchPayment() {
           return parsed;
         });
 
+        if (!isCurrent) return;
         setReceivedInvoices(mergedInvoices);
         const suggestions = findBatchSuggestions(mergedInvoices);
         setBatchSuggestions(suggestions);
         const fee = await contract.fee();
-        setFee(fee);
+        if (isCurrent) setFee(fee);
       } catch (error) {
+        if (!isCurrent) return;
         console.error("Fetch error:", error);
         setError("Failed to fetch invoices. Please try again.");
       } finally {
-        setLoading(false);
+        if (isCurrent) setLoading(false);
       }
     };
 
     fetchReceivedInvoices();
+
+    return () => {
+      isCurrent = false;
+    };
   }, [walletClient, address, tokens, chainId]);
 
   // ENHANCED Batch payment function with pre-checks

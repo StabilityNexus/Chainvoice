@@ -740,6 +740,7 @@ function ReceivedInvoice() {
               },
               items: [],
               issueDate: new Date().toISOString(),
+              dueDate: null,
             });
           }
         }
@@ -1880,9 +1881,11 @@ function ReceivedInvoice() {
                     </span>
                     <span>
                       Due:{" "}
-                      {new Date(
-                        drawerState.selectedInvoice.dueDate
-                      ).toLocaleDateString()}
+                      {drawerState.selectedInvoice.dueDate
+                        ? new Date(
+                            drawerState.selectedInvoice.dueDate
+                          ).toLocaleDateString()
+                        : "Unavailable"}
                     </span>
                   </div>
                 </div>

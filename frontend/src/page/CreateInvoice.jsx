@@ -416,10 +416,16 @@ const validateClientAddress = useCallback((value) => {
       // 2. Compute hash of invoice data for on-chain storage
       const invoiceDataHash = computeInvoiceHash(invoicePayload);
 
-      // 3. Derive Waku keys if not already derived
-      let currentKeys = wakuKeys;
-      if (!currentKeys) {
-        currentKeys = await deriveKeysOnly();
+      // 3. Require the sender's Waku public key to be registered before creation
+      if (!isRegistered) {
+        toast.error("Please register your encryption key before creating invoices.");
+        window.__chainvoiceKeyRegistration?.openModal?.();
+        return;
+      }
+
+      // Derive local keys if not already available for this session
+      if (!wakuKeys) {
+        await deriveKeysOnly();
       }
 
       if (!account?.chainId) {
@@ -495,17 +501,25 @@ const validateClientAddress = useCallback((value) => {
       }
 
       // 7. Store invoice locally in IndexedDB
-      await storeInvoice({
-        invoiceId,
-        chainId: account.chainId,
-        from: account.address.toLowerCase(),
-        to: data.clientAddress.toLowerCase(),
-        isPaid: false,
-        isCancelled: false,
-        wakuDelivered,
-        invoiceDataHash,
-        data: invoicePayload,
-      });
+      try {
+        await storeInvoice({
+          invoiceId,
+          chainId: account.chainId,
+          from: account.address.toLowerCase(),
+          to: data.clientAddress.toLowerCase(),
+          isPaid: false,
+          isCancelled: false,
+          wakuDelivered,
+          invoiceDataHash,
+          data: invoicePayload,
+        });
+      } catch (storageErr) {
+        console.error("Invoice created, but local persistence failed:", storageErr);
+        toast.error(
+          "Invoice was created on-chain, but could not be saved locally. Please do not leave this page until you back up the invoice details."
+        );
+        return;
+      }
 
       setTimeout(() => navigate("/dashboard/sent"), 4000);
     } catch (err) {
