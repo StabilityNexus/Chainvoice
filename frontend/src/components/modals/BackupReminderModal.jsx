@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -9,6 +9,7 @@ import {
 import { useReminder } from '@/hooks/useReminder';
 import { useInvoiceStorage } from '@/hooks/useInvoiceStorage';
 import { useAccount } from 'wagmi';
+import { getLocalInvoiceCount } from '@/services/invoiceStorage/invoiceBackup';
 import { DIALOG_HEADER_STYLE } from './modalStyles';
 import {
   Download,
@@ -35,6 +36,13 @@ export default function BackupReminderModal() {
     address,
     { requiresAction: false }
   );
+
+  const [invoiceCount, setInvoiceCount] = useState(0);
+  useEffect(() => {
+    if (address) {
+      getLocalInvoiceCount().then(setInvoiceCount).catch(() => setInvoiceCount(0));
+    }
+  }, [address]);
 
   const [showSchedule, setShowSchedule] = useState(false);
   const [customDate, setCustomDate] = useState('');
@@ -68,7 +76,7 @@ export default function BackupReminderModal() {
   );
 
   // Don't show if not due or no wallet
-  if (!isDue || !address) return null;
+  if (!isDue || !address || invoiceCount === 0) return null;
 
   const toLocalDateTimeValue = (date) => {
     const offsetMs = date.getTimezoneOffset() * 60 * 1000;

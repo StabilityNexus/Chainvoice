@@ -357,8 +357,8 @@ function CreateInvoicesBatch() {
 
         const invoicePayload = {
           amountDue: row.totalAmountDue.toString(),
-          dueDate,
-          issueDate,
+          dueDate: dueDate instanceof Date ? dueDate.toISOString() : dueDate,
+          issueDate: issueDate instanceof Date ? issueDate.toISOString() : issueDate,
           paymentToken: {
             address: paymentToken.address,
             symbol: paymentToken.symbol,

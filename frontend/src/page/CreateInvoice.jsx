@@ -383,8 +383,8 @@ const validateClientAddress = useCallback((value) => {
 
       const invoicePayload = {
         amountDue: totalAmountDue.toString(),
-        dueDate,
-        issueDate,
+        dueDate: dueDate instanceof Date ? dueDate.toISOString() : dueDate,
+        issueDate: issueDate instanceof Date ? issueDate.toISOString() : issueDate,
         paymentToken: {
           address: paymentToken.address,
           symbol: paymentToken.symbol,

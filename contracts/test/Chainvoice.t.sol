@@ -403,6 +403,22 @@ contract ChainvoiceTest is Test {
         chainvoice.registerWakuPublicKey(shortKey);
     }
 
+    function testCreateInvoice_RevertIfZeroHash() public {
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.InvalidInvoiceHash.selector);
+        chainvoice.createInvoice(bob, 1 ether, address(0), bytes32(0), "");
+    }
+
+    function testRegisterWakuPublicKey_RevertIfInvalidPrefix() public {
+        bytes memory badPrefixKey = new bytes(65);
+        badPrefixKey[0] = 0x03; // wrong prefix, should be 0x04
+        for (uint256 i = 1; i < 65; i++) badPrefixKey[i] = bytes1(uint8(i));
+
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.InvalidWakuKey.selector);
+        chainvoice.registerWakuPublicKey(badPrefixKey);
+    }
+
     function testCreateInvoiceWithDataHash() public {
         // Test that createInvoice works with the new bytes32 hash field
         bytes32 testHash = keccak256("test invoice data");
