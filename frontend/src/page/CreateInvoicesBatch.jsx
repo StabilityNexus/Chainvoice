@@ -38,14 +38,7 @@ import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 
-import { LitNodeClient } from "@lit-protocol/lit-node-client";
-import { encryptString } from "@lit-protocol/encryption/src/lib/encryption.js";
-import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
-import {
-  createSiweMessageWithRecaps,
-  generateAuthSig,
-  LitAccessControlConditionResource,
-} from "@lit-protocol/auth-helpers";
+
 
 import TokenIntegrationRequest from "@/components/TokenIntegrationRequest";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
@@ -69,7 +62,7 @@ function CreateInvoicesBatch() {
   const [issueDate, setIssueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const litClientRef = useRef(null);
+
   const itemRefs = useRef({});
 
   // Token selection state
@@ -132,20 +125,7 @@ function CreateInvoicesBatch() {
     );
   }, [invoiceRows.map((r) => JSON.stringify(r.itemData)).join(",")]);
 
-  // Initialize Lit
-  useEffect(() => {
-    const initLit = async () => {
-      if (!litClientRef.current) {
-        const client = new LitNodeClient({
-          litNetwork: LIT_NETWORK.DatilDev,
-          debug: false,
-        });
-        await client.connect();
-        litClientRef.current = client;
-      }
-    };
-    initLit();
-  }, []);
+
 
   useEffect(() => {
     setShowWalletAlert(!isConnected);
@@ -353,11 +333,7 @@ function CreateInvoicesBatch() {
       const encryptedPayloads = [];
       const encryptedHashes = [];
 
-      const litNodeClient = litClientRef.current;
-      if (!litNodeClient) {
-        toast.error("Encryption service not ready. Please try again.");
-        return;
-      }
+
 
       toast(`Processing ${validInvoices.length} invoices...`);
 
@@ -406,71 +382,8 @@ function CreateInvoicesBatch() {
 
         const invoiceString = JSON.stringify(invoicePayload);
 
-        const accessControlConditions = [
-          {
-            contractAddress: "",
-            standardContractType: "",
-            chain: "ethereum",
-            method: "",
-            parameters: [":userAddress"],
-            returnValueTest: {
-              comparator: "=",
-              value: account.address.toLowerCase(),
-            },
-          },
-          { operator: "or" },
-          {
-            contractAddress: "",
-            standardContractType: "",
-            chain: "ethereum",
-            method: "",
-            parameters: [":userAddress"],
-            returnValueTest: {
-              comparator: "=",
-              value: row.clientAddress.toLowerCase(),
-            },
-          },
-        ];
-
-        const { ciphertext, dataToEncryptHash } = await encryptString(
-          {
-            accessControlConditions,
-            dataToEncrypt: invoiceString,
-          },
-          litNodeClient
-        );
-
-        const sessionSigs = await litNodeClient.getSessionSigs({
-          chain: "ethereum",
-          resourceAbilityRequests: [
-            {
-              resource: new LitAccessControlConditionResource("*"),
-              ability: LIT_ABILITY.AccessControlConditionDecryption,
-            },
-          ],
-          authNeededCallback: async ({
-            uri,
-            expiration,
-            resourceAbilityRequests,
-          }) => {
-            const nonce = await litNodeClient.getLatestBlockhash();
-            const toSign = await createSiweMessageWithRecaps({
-              uri,
-              expiration,
-              resources: resourceAbilityRequests,
-              walletAddress: account.address,
-              nonce,
-              litNodeClient,
-            });
-
-            return await generateAuthSig({
-              signer,
-              toSign,
-            });
-          },
-        });
-
-        const encryptedStringBase64 = btoa(ciphertext);
+        const encryptedStringBase64 = btoa(invoiceString);
+        const dataToEncryptHash = "";
 
         // Add to batch arrays
         tos.push(row.clientAddress);
