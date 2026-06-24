@@ -7,8 +7,7 @@ import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import html2canvas from "html2canvas";
 
 import { ERC20_ABI } from "../contractsABI/ERC20_ABI";
-import { toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import toast from "react-hot-toast";
 import {
   CheckCircle2,
   Loader2,

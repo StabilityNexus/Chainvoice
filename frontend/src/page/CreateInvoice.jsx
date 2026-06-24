@@ -42,6 +42,7 @@ import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
 import { useTokenList } from "@/hooks/useTokenList";
 import toast from "react-hot-toast";
+import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
 
 import ProductCatalogImport from "@/components/ProductCatalogImport";
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
@@ -432,6 +433,43 @@ const validateClientAddress = useCallback((value) => {
       );
 
       const receipt = await tx.wait();
+
+      const iface = new ethers.Interface(ChainvoiceABI);
+      let invoiceId = null;
+      for (const log of receipt.logs) {
+        try {
+          const parsed = iface.parseLog(log);
+          if (parsed?.name === 'InvoiceCreated') {
+            invoiceId = parsed.args[0].toString();
+            break;
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (invoiceId) {
+        try {
+          await storeInvoice({
+            invoiceId,
+            chainId: account.chainId,
+            from: account.address.toLowerCase(),
+            to: data.clientAddress.toLowerCase(),
+            isPaid: false,
+            isCancelled: false,
+            wakuDelivered: false,
+            invoiceDataHash: dataToEncryptHash,
+            data: invoicePayload,
+          });
+        } catch (storageErr) {
+          console.error("Invoice created, but local persistence failed:", storageErr);
+          toast.error(
+            "Invoice was created on-chain, but could not be saved locally. Please do not leave this page until you back up the invoice details."
+          );
+          return;
+        }
+      }
+
       setTimeout(() => navigate("/dashboard/sent"), 4000);
     } catch (err) {
       console.error("Encryption or transaction failed:", err);

@@ -37,6 +37,7 @@ import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
 
 
 
@@ -337,6 +338,8 @@ function CreateInvoicesBatch() {
 
       toast(`Processing ${validInvoices.length} invoices...`);
 
+      const invoicePayloads = [];
+
       // Process each invoice
       for (const [index, row] of validInvoices.entries()) {
         toast(
@@ -381,6 +384,7 @@ function CreateInvoicesBatch() {
         };
 
         const invoiceString = JSON.stringify(invoicePayload);
+        invoicePayloads.push(invoicePayload);
 
         const encryptedStringBase64 = btoa(invoiceString);
         const dataToEncryptHash = "";
@@ -421,6 +425,44 @@ function CreateInvoicesBatch() {
 
       toast("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
+
+      const iface = new ethers.Interface(ChainvoiceABI);
+      const invoiceIds = [];
+      for (const log of receipt.logs) {
+        try {
+          const parsed = iface.parseLog(log);
+          if (parsed?.name === 'InvoiceCreated') {
+            invoiceIds.push(parsed.args[0].toString());
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (invoiceIds.length !== invoicePayloads.length) {
+        console.warn(`Expected ${invoicePayloads.length} InvoiceCreated events, got ${invoiceIds.length}`);
+      }
+
+      for (const [eventIndex, invoiceId] of invoiceIds.entries()) {
+        const payload = invoicePayloads[eventIndex];
+        if (!payload) continue;
+
+        try {
+          await storeInvoice({
+            invoiceId,
+            chainId: account.chainId,
+            from: account.address.toLowerCase(),
+            to: payload.client.address.toLowerCase(),
+            isPaid: false,
+            isCancelled: false,
+            wakuDelivered: false,
+            invoiceDataHash: "",
+            data: payload,
+          });
+        } catch (err) {
+          console.error(`Failed to store invoice ${invoiceId} locally:`, err);
+        }
+      }
 
       toast.success(
         `Successfully created ${validInvoices.length} invoices in batch!`
