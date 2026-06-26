@@ -77,9 +77,9 @@ export const ChainvoiceABI = [
         "internalType": "address"
       },
       {
-        "name": "invoiceDataHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "encryptedInvoiceData",
+        "type": "string",
+        "internalType": "string"
       },
       {
         "name": "encryptedHash",
@@ -110,9 +110,9 @@ export const ChainvoiceABI = [
         "internalType": "address"
       },
       {
-        "name": "invoiceDataHashes",
-        "type": "bytes32[]",
-        "internalType": "bytes32[]"
+        "name": "encryptedPayloads",
+        "type": "string[]",
+        "internalType": "string[]"
       },
       {
         "name": "encryptedHashes",
@@ -188,9 +188,9 @@ export const ChainvoiceABI = [
             "internalType": "bool"
           },
           {
-            "name": "invoiceDataHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "encryptedInvoiceData",
+            "type": "string",
+            "internalType": "string"
           },
           {
             "name": "encryptedHash",
@@ -288,9 +288,9 @@ export const ChainvoiceABI = [
             "internalType": "bool"
           },
           {
-            "name": "invoiceDataHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "encryptedInvoiceData",
+            "type": "string",
+            "internalType": "string"
           },
           {
             "name": "encryptedHash",
@@ -354,9 +354,9 @@ export const ChainvoiceABI = [
             "internalType": "bool"
           },
           {
-            "name": "invoiceDataHash",
-            "type": "bytes32",
-            "internalType": "bytes32"
+            "name": "encryptedInvoiceData",
+            "type": "string",
+            "internalType": "string"
           },
           {
             "name": "encryptedHash",
@@ -447,9 +447,9 @@ export const ChainvoiceABI = [
         "internalType": "bool"
       },
       {
-        "name": "invoiceDataHash",
-        "type": "bytes32",
-        "internalType": "bytes32"
+        "name": "encryptedInvoiceData",
+        "type": "string",
+        "internalType": "string"
       },
       {
         "name": "encryptedHash",
