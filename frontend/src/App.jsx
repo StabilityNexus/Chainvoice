@@ -7,7 +7,8 @@ import {
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import * as chains from "wagmi/chains";
-import { mainnet, classic, base, bsc, polygon, sepolia } from "wagmi/chains";
+import { mainnet as wagmiMainnet, classic, base, bsc, polygon, sepolia } from "wagmi/chains";
+
 import { HashRouter as Router, Route, Routes } from "react-router-dom";
 
 import { lazy, Suspense } from "react";
@@ -23,6 +24,16 @@ const Treasure = lazy(() => import("./page/Treasure"));
 const CreateInvoice = lazy(() => import("./page/CreateInvoice"));
 const SentInvoice = lazy(() => import("./page/SentInvoice"));
 const ReceivedInvoice = lazy(() => import("./page/ReceivedInvoice"));
+
+const mainnet = {
+  ...wagmiMainnet,
+  rpcUrls: {
+    ...wagmiMainnet.rpcUrls,
+    default: {
+      http: ["https://cloudflare-eth.com", ...wagmiMainnet.rpcUrls.default.http],
+    },
+  },
+};
 
 const AllChains = [mainnet, classic, base, bsc, polygon, sepolia, citreaTestnet];
 
