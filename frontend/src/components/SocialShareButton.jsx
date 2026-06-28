@@ -1,8 +1,10 @@
 import React, { useRef, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 
 const SocialShareButton = (props) => {
   const containerRef = useRef(null);
   const shareButtonRef = useRef(null);
+  const location = useLocation();
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.SocialShareButton) {
@@ -23,7 +25,7 @@ const SocialShareButton = (props) => {
         shareButtonRef.current = null;
       }
     };
-  }, []);
+  }, [location.pathname, location.search, props.url, props.title]);
 
   return <div ref={containerRef} className={props.customClass || ''}></div>;
 };
