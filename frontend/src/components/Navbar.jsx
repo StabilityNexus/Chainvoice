@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import CloseIcon from "@mui/icons-material/Close";
 import MenuIcon from "@mui/icons-material/Menu";
 import InfoIcon from "@mui/icons-material/Info";
+import SocialShareButton from "./SocialShareButton";
 
 function Navbar() {
   const { address, isConnected } = useAccount();
@@ -205,6 +206,20 @@ function Navbar() {
                   )}
                 </motion.div>
               ))}
+            
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="flex items-center"
+            >
+              <SocialShareButton 
+                theme="dark" 
+                buttonText="" 
+                title="Chainvoice - Web3 Invoicing Made Simple"
+                description="End-to-end encrypted, multi-chain invoicing with Lit Protocol and support for 1000+ ERC20 tokens."
+              />
+            </motion.div>
+
             {publicItems.map((item) => (
               <motion.div
                 key={item.name}
