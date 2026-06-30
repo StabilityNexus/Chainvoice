@@ -38,6 +38,8 @@ contract Chainvoice {
     error TreasuryNotSet();
     error NoFeesAvailable();
     error WithdrawFailed();
+    error InvalidWakuKey();
+    error InvalidInvoiceHash();
 
     // ========== Storage ==========
     error InvalidNewOwner();
@@ -52,13 +54,15 @@ contract Chainvoice {
         address tokenAddress;     // address(0) == native
         bool isPaid;
         bool isCancelled;
-        string encryptedInvoiceData; // Base64-encoded ciphertext
-        string encryptedHash; // Content hash or integrity ref
+        bytes32 invoiceDataHash;  // keccak256 hash of plaintext invoice data
      }
 
     InvoiceDetails[] public invoices;
     mapping(address => uint256[]) public sentInvoices;
     mapping(address => uint256[]) public receivedInvoices;
+
+    // ========== Waku Public Key Registry ==========
+    mapping(address => bytes) private wakuPublicKeys;
 
     address public owner;
     address public treasuryAddress;
@@ -72,6 +76,7 @@ contract Chainvoice {
     event InvoiceCancelled(uint256 indexed id, address indexed from, address indexed to, address tokenAddress);
     event InvoiceBatchCreated(address indexed creator, address indexed token, uint256 count, uint256[] ids);
     event InvoiceBatchPaid(address indexed payer, address indexed token, uint256 count, uint256 totalAmount, uint256[] ids);
+    event WakuKeyRegistered(address indexed user, bytes publicKey);
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferInitiated(address indexed currentOwner, address indexed pendingOwner);
@@ -113,14 +118,30 @@ contract Chainvoice {
         return success;
     }
 
+    // ========== Waku Key Management ==========
+    /// @notice Register or update the caller's Waku ECIES public key.
+    /// @param publicKey The uncompressed secp256k1 public key (65 bytes).
+    function registerWakuPublicKey(bytes calldata publicKey) external {
+        if (publicKey.length != 65 || publicKey[0] != 0x04) revert InvalidWakuKey();
+        wakuPublicKeys[msg.sender] = publicKey;
+        emit WakuKeyRegistered(msg.sender, publicKey);
+    }
+
+    /// @notice Get a user's registered Waku public key.
+    /// @param user The address to look up.
+    /// @return The public key bytes (empty if not registered).
+    function getWakuPublicKey(address user) external view returns (bytes memory) {
+        return wakuPublicKeys[user];
+    }
+
     // ========== Single-invoice create ==========
     function createInvoice(
         address to,
         uint256 amountDue,
         address tokenAddress,
-        string memory encryptedInvoiceData,
-        string memory encryptedHash
+        bytes32 invoiceDataHash
     ) external {
+        if (invoiceDataHash == bytes32(0)) revert InvalidInvoiceHash();
         if (to == address(0)) revert ZeroAddress();
         if (to == msg.sender) revert SelfInvoicing();
         if (amountDue == 0) revert InvalidAmount();
@@ -148,8 +169,7 @@ contract Chainvoice {
                 tokenAddress: tokenAddress,
                 isPaid: false,
                 isCancelled: false,
-                encryptedInvoiceData: encryptedInvoiceData,
-                encryptedHash: encryptedHash
+                invoiceDataHash: invoiceDataHash
             })
         );
         sentInvoices[msg.sender].push(invoiceId);
@@ -163,16 +183,14 @@ contract Chainvoice {
         address[] calldata tos,
         uint256[] calldata amountsDue,
         address tokenAddress,
-        string[] calldata encryptedPayloads,
-        string[] calldata encryptedHashes
+        bytes32[] calldata invoiceDataHashes
     ) external {
         uint256 n = tos.length;
         if (n == 0 || n > MAX_BATCH) revert InvalidBatchSize();
         
         if (
             n != amountsDue.length ||
-            n != encryptedPayloads.length ||
-            n != encryptedHashes.length
+            n != invoiceDataHashes.length
         ) revert ArrayLengthMismatch();
 
         if (tokenAddress != address(0)) {
@@ -186,6 +204,7 @@ contract Chainvoice {
         uint256[] memory ids = new uint256[](n);
         for (uint256 i = 0; i < n; i++) {
             address to = tos[i];
+            if (invoiceDataHashes[i] == bytes32(0)) revert InvalidInvoiceHash();
             if (to == address(0)) revert ZeroAddress();
             if (to == msg.sender) revert SelfInvoicing();
             uint256 amt = amountsDue[i];
@@ -202,8 +221,7 @@ contract Chainvoice {
                     tokenAddress: tokenAddress,
                     isPaid: false,
                     isCancelled: false,
-                    encryptedInvoiceData: encryptedPayloads[i],
-                    encryptedHash: encryptedHashes[i]
+                    invoiceDataHash: invoiceDataHashes[i]
                 })
             );
             sentInvoices[msg.sender].push(invoiceId);
