@@ -32,14 +32,6 @@ import { format } from "date-fns";
 import { Label } from "../components/ui/label";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-import { LitNodeClient } from "@lit-protocol/lit-node-client";
-import { encryptString } from "@lit-protocol/encryption/src/lib/encryption.js";
-import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
-import {
-  createSiweMessageWithRecaps,
-  generateAuthSig,
-  LitAccessControlConditionResource,
-} from "@lit-protocol/auth-helpers";
 
 import TokenIntegrationRequest from "@/components/TokenIntegrationRequest";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
@@ -85,7 +77,7 @@ function CreateInvoice() {
   const [issueDate, setIssueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const litClientRef = useRef(null);
+
   const itemRefsMobile = useRef([]);
   const itemRefsDesktop = useRef([]);
   const [clientAddress, setClientAddress] = useState("");
@@ -279,19 +271,6 @@ function CreateInvoice() {
     setTotalAmountDue(formatUnits(total, 18));
   }, [itemData]);
 
-  useEffect(() => {
-    const initLit = async () => {
-      if (!litClientRef.current) {
-        const client = new LitNodeClient({
-          litNetwork: LIT_NETWORK.DatilDev,
-          debug: false,
-        });
-        await client.connect();
-        litClientRef.current = client;
-      }
-    };
-    initLit();
-  }, []);
 
   useEffect(() => {
     setShowWalletAlert(!isConnected);
@@ -426,77 +405,9 @@ const validateClientAddress = useCallback((value) => {
 
       const invoiceString = JSON.stringify(invoicePayload);
 
-      // 2. Setup Lit
-      const litNodeClient = litClientRef.current;
-      if (!litNodeClient) {
-        toast.error("Lit client not initialized");
-        return;
-      }
-      const accessControlConditions = [
-        {
-          contractAddress: "",
-          standardContractType: "",
-          chain: "ethereum",
-          method: "",
-          parameters: [":userAddress"],
-          returnValueTest: {
-            comparator: "=",
-            value: account.address.toLowerCase(),
-          },
-        },
-        { operator: "or" },
-        {
-          contractAddress: "",
-          standardContractType: "",
-          chain: "ethereum",
-          method: "",
-          parameters: [":userAddress"],
-          returnValueTest: {
-            comparator: "=",
-            value: data.clientAddress.toLowerCase(),
-          },
-        },
-      ];
-
-      const { ciphertext, dataToEncryptHash } = await encryptString(
-        {
-          accessControlConditions,
-          dataToEncrypt: invoiceString,
-        },
-        litNodeClient
-      );
-
-      const sessionSigs = await litNodeClient.getSessionSigs({
-        chain: "ethereum",
-        resourceAbilityRequests: [
-          {
-            resource: new LitAccessControlConditionResource("*"),
-            ability: LIT_ABILITY.AccessControlConditionDecryption,
-          },
-        ],
-        authNeededCallback: async ({
-          uri,
-          expiration,
-          resourceAbilityRequests,
-        }) => {
-          const nonce = await litNodeClient.getLatestBlockhash();
-          const toSign = await createSiweMessageWithRecaps({
-            uri,
-            expiration,
-            resources: resourceAbilityRequests,
-            walletAddress: account.address,
-            nonce,
-            litNodeClient,
-          });
-
-          return await generateAuthSig({
-            signer,
-            toSign,
-          });
-        },
-      });
-
-      const encryptedStringBase64 = btoa(ciphertext);
+      // 2. Base64 Encode Payload
+      const encryptedStringBase64 = btoa(invoiceString);
+      const dataToEncryptHash = "";
 
       if (!account?.chainId) {
         throw new Error("Missing chainId: wallet connected but chain not configured");
