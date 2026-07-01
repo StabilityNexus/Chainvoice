@@ -3,7 +3,7 @@
 
 <!-- Logos -->
 <p align="center">
-  <img alt="Stability Nexus" src="docs/assets/nexus.png" width="140">
+  <img alt="Stability Nexus" src="frontend/public/nexus.png" width="140">
   &nbsp;&nbsp;&nbsp;&nbsp;
   <img alt="Chainvoice" src="frontend/public/logo.png" width="140">
 </p>
@@ -40,6 +40,7 @@ Chainvoice is a decentralized invoicing platform that enables secure, transparen
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
 - [Frontend Setup](#frontend-setup)
+- [Frontend Testing (Jest)](#frontend-testing-jest)
 - [Smart Contract Testing](#smart-contract-testing)
 - [Deploy to Ethereum Classic](#deploy-to-ethereum-classic)
 - [Environment Variables](#environment-variables)
@@ -100,6 +101,7 @@ npm test
 
 3. **Run tests with coverage (CI mode)**
 npm run test:ci
+
 ## Smart Contract Testing
 
 > **Prerequisites:** [Foundry](https://getfoundry.sh/) must be installed
