@@ -30,6 +30,7 @@ import {
   AlertTriangle,
   Users,
   Receipt,
+  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -216,7 +217,7 @@ function CreateInvoicesBatch() {
                 name === "discount" ||
                 name === "tax"
               ) {
-                const { valid, amountWei } = getLineAmountDetails(updatedItem);
+                const { valid } = getLineAmountDetails(updatedItem);
                 if (!valid) {
                   updatedItem.amount = "";
                 } else {
@@ -1125,7 +1126,7 @@ function CreateInvoicesBatch() {
                                         ...r,
                                         itemData: r.itemData.map((item) => {
                                           const updated = { ...item, discountType: newType };
-                                          const { valid, amountWei } = getLineAmountDetails(updated);
+                                          const { valid } = getLineAmountDetails(updated);
                                           updated.amount = valid ? getSafeLineAmountDisplay(updated) : "";
                                           return updated;
                                         })
@@ -1151,7 +1152,7 @@ function CreateInvoicesBatch() {
                                         ...r,
                                         itemData: r.itemData.map((item) => {
                                           const updated = { ...item, taxType: newType };
-                                          const { valid, amountWei } = getLineAmountDetails(updated);
+                                          const { valid } = getLineAmountDetails(updated);
                                           updated.amount = valid ? getSafeLineAmountDisplay(updated) : "";
                                           return updated;
                                         })
@@ -1256,7 +1257,7 @@ function CreateInvoicesBatch() {
                                               ...r,
                                               itemData: r.itemData.map((it) => {
                                                 const updated = { ...it, discountType: newType };
-                                                const { valid, amountWei } = getLineAmountDetails(updated);
+                                                const { valid } = getLineAmountDetails(updated);
                                                 updated.amount = valid ? getSafeLineAmountDisplay(updated) : "";
                                                 return updated;
                                               })
@@ -1299,7 +1300,7 @@ function CreateInvoicesBatch() {
                                               ...r,
                                               itemData: r.itemData.map((it) => {
                                                 const updated = { ...it, taxType: newType };
-                                                const { valid, amountWei } = getLineAmountDetails(updated);
+                                                const { valid } = getLineAmountDetails(updated);
                                                 updated.amount = valid ? getSafeLineAmountDisplay(updated) : "";
                                                 return updated;
                                               })

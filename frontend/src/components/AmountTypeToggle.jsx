@@ -19,10 +19,10 @@ export const AmountTypeToggle = ({ value, onChange, className = "" }) => {
       <button
         type="button"
         onClick={() => onChange(value === "amount" ? "percentage" : "amount")}
-        className="p-1 text-gray-400 hover:text-gray-600 transition-colors rounded-full hover:bg-gray-200 flex-shrink-0"
+        className="p-1 text-gray-700 hover:text-gray-900 transition-colors rounded-full hover:bg-gray-200 flex-shrink-0"
         title="Toggle type"
       >
-        <ArrowRightLeft className="w-3.5 h-3.5" />
+        <ArrowRightLeft className="w-4 h-4" />
       </button>
 
       <button

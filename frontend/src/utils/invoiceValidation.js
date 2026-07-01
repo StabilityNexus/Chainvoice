@@ -262,7 +262,6 @@ export const validateBatchInvoiceData = ({
       globalHasErrors = true;
     }
 
-    const tokenDecimals = Number(paymentToken?.decimals);
     const decimalsError = getTokenDecimalsError(row.totalAmountDue, paymentToken);
     if (decimalsError) {
       pendingTotalErrors[rowIndex] = decimalsError;
