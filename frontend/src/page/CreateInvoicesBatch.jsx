@@ -7,7 +7,6 @@ import {
   Contract,
   ethers,
   formatUnits,
-  parseUnits,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
@@ -44,8 +43,18 @@ import TokenIntegrationRequest from "@/components/TokenIntegrationRequest";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
+import { AmountTypeToggle } from "../components/AmountTypeToggle";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
+import {
+  getLineAmountDetails,
+  getSafeLineAmountDisplay,
+  INVOICE_DECIMALS,
+} from "@/utils/invoiceCalculations";
+import {
+  getClientAddressError,
+  validateBatchInvoiceData,
+} from "@/utils/invoiceValidation";
 import ProductCatalogImport from "@/components/ProductCatalogImport";
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
 import { useProductCatalog } from "@/hooks/useProductCatalog";
@@ -72,6 +81,10 @@ function CreateInvoicesBatch() {
   const [tokenVerificationState, setTokenVerificationState] = useState("idle");
   const [verifiedToken, setVerifiedToken] = useState(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
+  const [clientAddressErrors, setClientAddressErrors] = useState({});
+  const [rowTotalErrors, setRowTotalErrors] = useState({});
+  const [rowItemErrors, setRowItemErrors] = useState({});
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // UI state for collapsible invoices
   const [expandedInvoice, setExpandedInvoice] = useState(0);
@@ -108,18 +121,16 @@ function CreateInvoicesBatch() {
     setInvoiceRows((prev) =>
       prev.map((row) => {
         const total = row.itemData.reduce((sum, item) => {
-          const qty = parseUnits(item.qty || "0", 18);
-          const unitPrice = parseUnits(item.unitPrice || "0", 18);
-          const discount = parseUnits(item.discount || "0", 18);
-          const tax = parseUnits(item.tax || "0", 18);
-          const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-          const adjusted = lineTotal - discount + tax;
+          const { valid, amountWei } = getLineAmountDetails(item);
+          if (!valid) return sum;
+          let adjusted = amountWei;
+          if (adjusted < 0n) adjusted = 0n;
           return sum + adjusted;
         }, 0n);
 
         return {
           ...row,
-          totalAmountDue: formatUnits(total, 18),
+          totalAmountDue: formatUnits(total, INVOICE_DECIMALS),
         };
       })
     );
@@ -149,16 +160,23 @@ function CreateInvoicesBatch() {
       },
     ]);
     setExpandedInvoice(newIndex);
-    toast.success("New invoice added to batch");
   };
 
   const removeInvoiceRow = (index) => {
     if (invoiceRows.length > 1) {
       setInvoiceRows((prev) => prev.filter((_, i) => i !== index));
+      setClientAddressErrors((prev) => {
+        const next = {};
+        Object.entries(prev).forEach(([key, value]) => {
+          const numericKey = Number(key);
+          if (numericKey < index) next[numericKey] = value;
+          if (numericKey > index) next[numericKey - 1] = value;
+        });
+        return next;
+      });
       if (expandedInvoice === index) {
         setExpandedInvoice(0);
       }
-      toast.success("Invoice removed from batch");
     }
   };
 
@@ -172,6 +190,20 @@ function CreateInvoicesBatch() {
   const handleItemData = (e, rowIndex, itemIndex) => {
     const { name, value } = e.target;
 
+    if (["qty", "unitPrice", "discount", "tax"].includes(name) && value !== "") {
+      if (/[^0-9.]/.test(value)) return;
+      const parts = value.split(".");
+      if (parts.length > 2) return;
+      
+      const numValue = parseFloat(value);
+      if (
+        (name === "discount" && invoiceRows[rowIndex]?.itemData[itemIndex]?.discountType === "percentage" && (numValue < 0 || numValue > 100)) ||
+        (name === "tax" && invoiceRows[rowIndex]?.itemData[itemIndex]?.taxType === "percentage" && (numValue < 0 || numValue > 100))
+      ) {
+        return;
+      }
+    }
+
     setInvoiceRows((prevRows) =>
       prevRows.map((row, rIndex) => {
         if (rIndex === rowIndex) {
@@ -184,15 +216,12 @@ function CreateInvoicesBatch() {
                 name === "discount" ||
                 name === "tax"
               ) {
-                const qty = parseUnits(updatedItem.qty || "0", 18);
-                const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
-                const discount = parseUnits(updatedItem.discount || "0", 18);
-                const tax = parseUnits(updatedItem.tax || "0", 18);
-
-                const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-                const finalAmount = lineTotal - discount + tax;
-
-                updatedItem.amount = formatUnits(finalAmount, 18);
+                const { valid, amountWei } = getLineAmountDetails(updatedItem);
+                if (!valid) {
+                  updatedItem.amount = "";
+                } else {
+                  updatedItem.amount = getSafeLineAmountDisplay(updatedItem);
+                }
               }
               return updatedItem;
             }
@@ -279,19 +308,100 @@ function CreateInvoicesBatch() {
 
   // Enhanced error handling for batch creation
   const getErrorMessage = (error) => {
-    if (error.code === "ACTION_REJECTED") {
+    if (error?.code === "ACTION_REJECTED") {
       return "Transaction was cancelled by user";
-    } else if (error.message?.includes("insufficient")) {
-      return "Insufficient balance to complete transaction";
-    } else if (error.message?.includes("network")) {
-      return "Network error. Please check your connection and try again";
-    } else if (error.reason) {
-      return `Transaction failed: ${error.reason}`;
-    } else if (error.message) {
-      return error.message;
-    } else {
-      return "Failed to create invoice batch. Please try again.";
     }
+
+    if (error?.message?.toLowerCase().includes("insufficient")) {
+      return "Insufficient balance to complete transaction";
+    }
+
+    if (error?.message?.toLowerCase().includes("network")) {
+      return "Network error. Please check your connection and try again";
+    }
+
+    if (error?.reason) {
+      return `Transaction failed: ${error.reason}`;
+    }
+
+    if (error?.message) {
+      return error.message;
+    }
+
+    return "Failed to create invoice batch. Please try again.";
+  };
+
+  const handleFieldChange = (name, value) => {
+    setUserInfo((prev) => ({ ...prev, [name]: value }));
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
+
+  const handleFieldBlur = (name, value) => {
+    let error = "";
+    if (name === "userFname") {
+      if (!value.trim()) error = "First name is required";
+    } else if (name === "userEmail") {
+      if (!value.trim()) error = "Email is required";
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) error = "Invalid email address";
+    }
+    
+    if (error) {
+      setFieldErrors((prev) => ({ ...prev, [name]: error }));
+    }
+  };
+
+  const validateClientAddress = (rowIndex, value, options = {}) => {
+    const error = getClientAddressError(value, {
+      ...options,
+      ownerAddress: account.address,
+    });
+    setClientAddressErrors((prev) => {
+      if (!error && !prev[rowIndex]) return prev;
+      const next = { ...prev };
+      if (error) {
+        next[rowIndex] = error;
+      } else {
+        delete next[rowIndex];
+      }
+      return next;
+    });
+    return !error;
+  };
+
+  const validateInvoicesBeforeSubmit = (rows, paymentToken) => {
+    const validation = validateBatchInvoiceData({
+      rows,
+      paymentToken,
+      ownerAddress: account.address,
+      userInfo: userInfo,
+    });
+
+    if (!validation.isValid) {
+      setClientAddressErrors(validation.addressErrors || {});
+      setRowTotalErrors(validation.totalErrors || {});
+      setRowItemErrors(validation.itemErrors || {});
+      setFieldErrors(validation.fieldErrors || {});
+      
+      const hasFieldErrors = Object.keys(validation.addressErrors || {}).length > 0 || 
+                             Object.keys(validation.totalErrors || {}).length > 0 ||
+                             Object.keys(validation.itemErrors || {}).length > 0 ||
+                             Object.keys(validation.fieldErrors || {}).length > 0;
+                             
+      toast.error(validation.errorMessage || "Please fix the required fields");
+      return null;
+    }
+
+    setClientAddressErrors({});
+    setRowTotalErrors({});
+    setRowItemErrors({});
+    setFieldErrors({});
+    return { validInvoices: validation.validInvoices };
   };
 
   // Create batch invoices
@@ -315,17 +425,20 @@ function CreateInvoicesBatch() {
         return;
       }
 
-      // Validate invoices
-      const validInvoices = invoiceRows.filter(
-        (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
-      );
-
-      if (validInvoices.length === 0) {
-        toast.error(
-          "Please add at least one valid invoice with client address and amount"
-        );
+      const tokenDecimals = Number(paymentToken?.decimals);
+      if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0) {
+        toast.error("Selected token has invalid decimals");
         return;
       }
+
+      const validationResult = validateInvoicesBeforeSubmit(
+        invoiceRows,
+        paymentToken
+      );
+      if (!validationResult) {
+        return;
+      }
+      const { validInvoices } = validationResult;
 
       // Prepare batch arrays
       const tos = [];
@@ -350,7 +463,7 @@ function CreateInvoicesBatch() {
           paymentToken: {
             address: paymentToken.address,
             symbol: paymentToken.symbol,
-            decimals: Number(paymentToken.decimals),
+            decimals: tokenDecimals,
           },
           user: {
             address: account?.address.toString(),
@@ -370,7 +483,10 @@ function CreateInvoicesBatch() {
             city: row.clientCity,
             postalcode: row.clientPostalcode,
           },
-          items: row.itemData,
+          items: row.itemData.map((item) => ({
+            ...item,
+            amount: getSafeLineAmountDisplay(item),
+          })),
           // Add batch metadata
           batchInfo: {
             batchId: `batch_${Date.now()}`,
@@ -387,12 +503,20 @@ function CreateInvoicesBatch() {
 
         // Add to batch arrays
         tos.push(row.clientAddress);
-        amounts.push(
-          ethers.parseUnits(
+        let amountForContract;
+        try {
+          amountForContract = ethers.parseUnits(
             row.totalAmountDue.toString(),
-            paymentToken.decimals
-          )
-        );
+            tokenDecimals
+          );
+        } catch {
+          toast.error(
+            `Invoice #${index + 1} total exceeds ${tokenDecimals} decimals for ${paymentToken.symbol || "selected token"}`
+          );
+          return;
+        }
+
+        amounts.push(amountForContract);
         encryptedPayloads.push(encryptedStringBase64);
         encryptedHashes.push(dataToEncryptHash);
       }
@@ -425,11 +549,7 @@ function CreateInvoicesBatch() {
       toast.success(
         `Successfully created ${validInvoices.length} invoices in batch!`
       );
-      toast.success(
-        `Gas saved: ~${
-          (validInvoices.length - 1) * 75
-        }% compared to individual transactions!`
-      );
+      toast.success(`Estimated gas savings: ~${(validInvoices.length - 1) * 75}%`);
 
       setTimeout(() => navigate("/dashboard/sent"), 3000);
     } catch (err) {
@@ -604,19 +724,18 @@ function CreateInvoicesBatch() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
-                    First Name *
+                    First Name <span className="text-red-500">*</span>
                   </Label>
                   <Input
                     placeholder="Your First Name"
-                    className="w-full mt-1 border-gray-300 text-black"
+                    className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.userFname ? "border-red-500" : ""}`}
                     value={userInfo.userFname}
-                    onChange={(e) =>
-                      setUserInfo((prev) => ({
-                        ...prev,
-                        userFname: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => handleFieldChange("userFname", e.target.value)}
+                    onBlur={(e) => handleFieldBlur("userFname", e.target.value)}
                   />
+                  {fieldErrors.userFname && (
+                    <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.userFname}</span></div>
+                  )}
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
@@ -636,20 +755,19 @@ function CreateInvoicesBatch() {
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
-                    Email *
+                    Email <span className="text-red-500">*</span>
                   </Label>
                   <Input
                     type="email"
                     placeholder="your.email@example.com"
-                    className="w-full mt-1 border-gray-300 text-black"
+                    className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.userEmail ? "border-red-500" : ""}`}
                     value={userInfo.userEmail}
-                    onChange={(e) =>
-                      setUserInfo((prev) => ({
-                        ...prev,
-                        userEmail: e.target.value,
-                      }))
-                    }
+                    onChange={(e) => handleFieldChange("userEmail", e.target.value)}
+                    onBlur={(e) => handleFieldBlur("userEmail", e.target.value)}
                   />
+                  {fieldErrors.userEmail && (
+                    <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.userEmail}</span></div>
+                  )}
                 </div>
                 <div>
                   <Label className="text-sm font-medium text-gray-700">
@@ -906,75 +1024,58 @@ function CreateInvoicesBatch() {
                         Client Information
                       </h4>
                       <div className="mb-4">
-                        <Label className="text-sm font-medium text-gray-700 mb-1 block">
-                          Client Wallet Address *
+                        <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                          Client Wallet Address <span className="text-red-500">*</span>
                         </Label>
                         <Input
-                          placeholder="0x... (Client's wallet address)"
-                          className="w-full border-gray-300 text-black font-mono"
+                          placeholder="Client Wallet Address"
+                          className={`w-full bg-white border-gray-300 text-black ${clientAddressErrors[rowIndex] ? "border-red-500" : ""}`}
                           value={row.clientAddress}
-                          onChange={(e) =>
-                            updateInvoiceRow(
-                              rowIndex,
-                              "clientAddress",
-                              e.target.value
-                            )
-                          }
+                          onChange={(e) => handleInvoiceChange(rowIndex, "clientAddress", e.target.value)}
+                          onBlur={(e) => validateClientAddress(rowIndex, e.target.value)}
                         />
+                        {clientAddressErrors[rowIndex] && (
+                          <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
+                            <AlertCircle className="h-4 w-4" />
+                            <span>{clientAddressErrors[rowIndex]}</span>
+                          </div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                          <Label className="text-sm font-medium text-gray-700">
-                            First Name
-                          </Label>
+                          <Label className="text-sm font-medium text-gray-700">First Name <span className="text-red-500">*</span></Label>
                           <Input
                             placeholder="Client First Name"
-                            className="w-full mt-1 border-gray-300 text-black"
+                            className={`w-full mt-1 border-gray-300 text-black ${fieldErrors[`${rowIndex}_clientFname`] ? "border-red-500" : ""}`}
                             value={row.clientFname}
-                            onChange={(e) =>
-                              updateInvoiceRow(
-                                rowIndex,
-                                "clientFname",
-                                e.target.value
-                              )
-                            }
+                            onChange={(e) => handleInvoiceChange(rowIndex, "clientFname", e.target.value)}
                           />
+                          {fieldErrors[`${rowIndex}_clientFname`] && (
+                            <div className="text-red-600 text-xs mt-1">{fieldErrors[`${rowIndex}_clientFname`]}</div>
+                          )}
                         </div>
                         <div>
-                          <Label className="text-sm font-medium text-gray-700">
-                            Last Name
-                          </Label>
+                          <Label className="text-sm font-medium text-gray-700">Last Name</Label>
                           <Input
                             placeholder="Client Last Name"
                             className="w-full mt-1 border-gray-300 text-black"
                             value={row.clientLname}
-                            onChange={(e) =>
-                              updateInvoiceRow(
-                                rowIndex,
-                                "clientLname",
-                                e.target.value
-                              )
-                            }
+                            onChange={(e) => handleInvoiceChange(rowIndex, "clientLname", e.target.value)}
                           />
                         </div>
                         <div>
-                          <Label className="text-sm font-medium text-gray-700">
-                            Email
-                          </Label>
+                          <Label className="text-sm font-medium text-gray-700">Email <span className="text-red-500">*</span></Label>
                           <Input
                             type="email"
                             placeholder="client@example.com"
-                            className="w-full mt-1 border-gray-300 text-black"
+                            className={`w-full mt-1 border-gray-300 text-black ${fieldErrors[`${rowIndex}_clientEmail`] ? "border-red-500" : ""}`}
                             value={row.clientEmail}
-                            onChange={(e) =>
-                              updateInvoiceRow(
-                                rowIndex,
-                                "clientEmail",
-                                e.target.value
-                              )
-                            }
+                            onChange={(e) => handleInvoiceChange(rowIndex, "clientEmail", e.target.value)}
                           />
+                          {fieldErrors[`${rowIndex}_clientEmail`] && (
+                            <div className="text-red-600 text-xs mt-1">{fieldErrors[`${rowIndex}_clientEmail`]}</div>
+                          )}
                         </div>
                         <div>
                           <Label className="text-sm font-medium text-gray-700">
@@ -1007,12 +1108,62 @@ function CreateInvoicesBatch() {
                         </h4>
                       </div>
 
-                      <div className="hidden md:grid grid-cols-12 bg-gray-50 text-gray-700 py-3 px-4 font-medium text-sm border-b">
+                      <div className="hidden md:grid bg-gray-50 text-gray-700 py-3 px-4 font-medium text-sm border-b items-center" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
                         <div className="col-span-4">DESCRIPTION</div>
                         <div className="col-span-1">QTY</div>
                         <div className="col-span-2">UNIT PRICE</div>
-                        <div className="col-span-1">DISCOUNT</div>
-                        <div className="col-span-1">TAX(%)</div>
+                        <div className="col-span-3">
+                          <div className="flex flex-row gap-1 items-center whitespace-nowrap">
+                            DISCOUNT
+                            <AmountTypeToggle
+                              value={row.itemData[0]?.discountType || "amount"}
+                              onChange={(newType) => {
+                                setInvoiceRows((prev) =>
+                                  prev.map((r, ri) => {
+                                    if (ri === rowIndex) {
+                                      return {
+                                        ...r,
+                                        itemData: r.itemData.map((item) => {
+                                          const updated = { ...item, discountType: newType };
+                                          const { valid, amountWei } = getLineAmountDetails(updated);
+                                          updated.amount = valid ? getSafeLineAmountDisplay(updated) : "";
+                                          return updated;
+                                        })
+                                      };
+                                    }
+                                    return r;
+                                  })
+                                );
+                              }}
+                            />
+                          </div>
+                        </div>
+                        <div className="col-span-3">
+                          <div className="flex flex-row gap-1 items-center whitespace-nowrap">
+                            TAX
+                            <AmountTypeToggle
+                              value={row.itemData[0]?.taxType || "percentage"}
+                              onChange={(newType) => {
+                                setInvoiceRows((prev) =>
+                                  prev.map((r, ri) => {
+                                    if (ri === rowIndex) {
+                                      return {
+                                        ...r,
+                                        itemData: r.itemData.map((item) => {
+                                          const updated = { ...item, taxType: newType };
+                                          const { valid, amountWei } = getLineAmountDetails(updated);
+                                          updated.amount = valid ? getSafeLineAmountDisplay(updated) : "";
+                                          return updated;
+                                        })
+                                      };
+                                    }
+                                    return r;
+                                  })
+                                );
+                              }}
+                            />
+                          </div>
+                        </div>
                         <div className="col-span-2">AMOUNT</div>
                         <div className="col-span-1">ACTION</div>
                       </div>
@@ -1020,18 +1171,21 @@ function CreateInvoicesBatch() {
                       <div className="p-2 sm:p-4">
                         {row.itemData.map((item, itemIndex) => (
                           <div
-                            className="relative flex flex-col md:grid md:grid-cols-12 gap-2 mb-3 pb-3 md:pb-0 border-b md:border-b-0 border-gray-200 md:items-center"
-                            style={{ zIndex: Math.max(1, row.itemData.length - itemIndex) }}
+                            className="flex flex-col md:grid gap-3 md:gap-2 items-start py-3 px-4 border-b border-gray-100 last:border-0 relative"
+                            style={{ 
+                              gridTemplateColumns: 'repeat(16, minmax(0, 1fr))',
+                              zIndex: Math.max(1, row.itemData.length - itemIndex) 
+                            }}
                             key={item.id}
                           >
                             <div className="md:col-span-4 w-full">
                               <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
-                                Description
+                                Description <span className="text-red-500">*</span>
                               </label>
                               <ProductAutocompleteInput
                                 inputRef={(el) => (itemRefs.current[`${rowIndex}-${itemIndex}`] = el)}
                                 placeholder="Enter Description"
-                                className="w-full border-gray-300 text-black"
+                                className={`w-full border-gray-300 text-black ${rowItemErrors[`${rowIndex}_${itemIndex}`]?.description ? "border-red-500" : ""}`}
                                 name="description"
                                 value={item.description}
                                 onChange={(e) =>
@@ -1042,64 +1196,128 @@ function CreateInvoicesBatch() {
                                 }
                                 catalogMetadata={catalogMetadata}
                               />
+                              {rowItemErrors[`${rowIndex}_${itemIndex}`]?.description && (
+                                <div className="text-red-600 text-xs mt-1">{rowItemErrors[`${rowIndex}_${itemIndex}`].description}</div>
+                              )}
                             </div>
                             <div className="grid grid-cols-2 gap-2 md:contents">
                               <div className="md:col-span-1">
                                 <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
-                                  Qty
+                                  Qty <span className="text-red-500">*</span>
                                 </label>
                                 <Input
                                   type="number"
                                   placeholder="0"
-                                  className="w-full border-gray-300 text-black"
+                                  className={`w-full border-gray-300 text-black ${rowItemErrors[`${rowIndex}_${itemIndex}`]?.qty ? "border-red-500" : ""}`}
                                   name="qty"
+                                  min="0"
+                                  step="any"
                                   value={item.qty}
                                   onChange={(e) =>
                                     handleItemData(e, rowIndex, itemIndex)
                                   }
                                 />
+                                {rowItemErrors[`${rowIndex}_${itemIndex}`]?.qty && (
+                                  <div className="text-red-600 text-xs mt-1">{rowItemErrors[`${rowIndex}_${itemIndex}`].qty}</div>
+                                )}
                               </div>
                               <div className="md:col-span-2">
                                 <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
-                                  Unit Price
+                                  Unit Price <span className="text-red-500">*</span>
                                 </label>
                                 <Input
-                                  type="text"
+                                  type="number"
                                   placeholder="0"
-                                  className="w-full border-gray-300 text-black"
+                                  className={`w-full border-gray-300 text-black ${rowItemErrors[`${rowIndex}_${itemIndex}`]?.unitPrice ? "border-red-500" : ""}`}
                                   name="unitPrice"
+                                  min="0"
+                                  step="any"
                                   value={item.unitPrice}
                                   onChange={(e) =>
                                     handleItemData(e, rowIndex, itemIndex)
                                   }
                                 />
+                                {rowItemErrors[`${rowIndex}_${itemIndex}`]?.unitPrice && (
+                                  <div className="text-red-600 text-xs mt-1">{rowItemErrors[`${rowIndex}_${itemIndex}`].unitPrice}</div>
+                                )}
                               </div>
                             </div>
                             <div className="grid grid-cols-2 gap-2 md:contents">
-                              <div className="md:col-span-1">
-                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
+                              <div className="md:col-span-3">
+                                <label className="text-xs font-medium text-gray-600 mb-1 flex items-center justify-between md:hidden">
                                   Discount
+                                  <AmountTypeToggle
+                                    value={item.discountType || "amount"}
+                                    onChange={(newType) => {
+                                      setInvoiceRows((prev) =>
+                                        prev.map((r, ri) => {
+                                          if (ri === rowIndex) {
+                                            return {
+                                              ...r,
+                                              itemData: r.itemData.map((it) => {
+                                                const updated = { ...it, discountType: newType };
+                                                const { valid, amountWei } = getLineAmountDetails(updated);
+                                                updated.amount = valid ? getSafeLineAmountDisplay(updated) : "";
+                                                return updated;
+                                              })
+                                            };
+                                          }
+                                          return r;
+                                        })
+                                      );
+                                    }}
+                                  />
                                 </label>
                                 <Input
-                                  type="text"
-                                  placeholder="0"
+                                  type="number"
+                                  placeholder={item.discountType === "percentage" ? "0" : "Flat amount"}
                                   className="w-full border-gray-300 text-black"
                                   name="discount"
+                                  min="0"
+                                  step="any"
                                   value={item.discount}
                                   onChange={(e) =>
                                     handleItemData(e, rowIndex, itemIndex)
                                   }
+                                  onKeyDown={(e) => {
+                                    if (['e', 'E', '+', '-'].includes(e.key)) {
+                                      e.preventDefault();
+                                    }
+                                  }}
                                 />
                               </div>
-                              <div className="md:col-span-1">
-                                <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
-                                  Tax (%)
+                              <div className="md:col-span-3">
+                                <label className="text-xs font-medium text-gray-600 mb-1 flex items-center justify-between md:hidden">
+                                  Tax
+                                  <AmountTypeToggle
+                                    value={item.taxType || "percentage"}
+                                    onChange={(newType) => {
+                                      setInvoiceRows((prev) =>
+                                        prev.map((r, ri) => {
+                                          if (ri === rowIndex) {
+                                            return {
+                                              ...r,
+                                              itemData: r.itemData.map((it) => {
+                                                const updated = { ...it, taxType: newType };
+                                                const { valid, amountWei } = getLineAmountDetails(updated);
+                                                updated.amount = valid ? getSafeLineAmountDisplay(updated) : "";
+                                                return updated;
+                                              })
+                                            };
+                                          }
+                                          return r;
+                                        })
+                                      );
+                                    }}
+                                  />
                                 </label>
                                 <Input
-                                  type="text"
-                                  placeholder="0"
+                                  type="number"
+                                  placeholder={item.taxType === "amount" ? "Flat amount" : "0"}
                                   className="w-full border-gray-300 text-black"
                                   name="tax"
+                                  min="0"
+                                  step="any"
                                   value={item.tax}
                                   onChange={(e) =>
                                     handleItemData(e, rowIndex, itemIndex)
@@ -1113,12 +1331,7 @@ function CreateInvoicesBatch() {
                                   Amount
                                 </label>
                                 <div className="bg-gray-100 px-3 py-2 rounded border text-gray-700 font-mono text-sm">
-                                  {(
-                                    (parseFloat(item.qty) || 0) *
-                                      (parseFloat(item.unitPrice) || 0) -
-                                    (parseFloat(item.discount) || 0) +
-                                    (parseFloat(item.tax) || 0)
-                                  ).toFixed(4)}
+                                  {item.amount === "" ? "-" : (Number(item.amount) || 0).toFixed(4)}
                                 </div>
                               </div>
                               <div className="md:col-span-1 flex justify-center md:justify-center">
@@ -1175,6 +1388,12 @@ function CreateInvoicesBatch() {
                                 : selectedToken?.symbol || "TOKEN"}
                             </span>
                           </div>
+                          {rowTotalErrors[rowIndex] && (
+                            <div className="flex items-center gap-1.5 mt-1 text-red-600">
+                              <AlertCircle className="w-4 h-4" />
+                              <span className="text-sm font-medium">{rowTotalErrors[rowIndex]}</span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>

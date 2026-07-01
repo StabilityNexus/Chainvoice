@@ -7,7 +7,6 @@ import {
   ethers,
   formatUnits,
   JsonRpcProvider,
-  parseUnits,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
@@ -41,9 +40,19 @@ import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
 import { useTokenList } from "@/hooks/useTokenList";
+import {
+  getLineAmountDetails,
+  getSafeLineAmountDisplay,
+  INVOICE_DECIMALS,
+} from "@/utils/invoiceCalculations";
+import {
+  getClientAddressError,
+  validateSingleInvoiceData,
+} from "@/utils/invoiceValidation";
 import toast from "react-hot-toast";
 
-import ProductCatalogImport from "@/components/ProductCatalogImport";
+import ProductCatalogImport from "../components/ProductCatalogImport";
+import { AmountTypeToggle } from "../components/AmountTypeToggle";
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
 import { useProductCatalog } from "@/hooks/useProductCatalog";
 import {
@@ -96,6 +105,9 @@ function CreateInvoice() {
   // Holds inline validation error for client wallet address
 // Used instead of browser alerts for better, non blocking UX
   const [clientAddressError, setClientAddressError] = useState("");
+  const [totalAmountError, setTotalAmountError] = useState("");
+  const [itemErrors, setItemErrors] = useState([]);
+  const [fieldErrors, setFieldErrors] = useState({});
 
   // const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"]; //sepolia based chainvoice test token (CIN)
 
@@ -171,6 +183,40 @@ function CreateInvoice() {
     }
   }, []);
 
+  const resolveTokenDecimals = useCallback(
+    async (tokenAddress, fallbackDecimals) => {
+      if (
+        fallbackDecimals !== undefined &&
+        fallbackDecimals !== null &&
+        !Number.isNaN(Number(fallbackDecimals))
+      ) {
+        return Number(fallbackDecimals);
+      }
+
+      try {
+        let provider;
+        const rpcUrl =
+          chainIdForTokens && CHAIN_ID_TO_PUBLIC_RPC[Number(chainIdForTokens)];
+
+        if (rpcUrl) {
+          provider = new JsonRpcProvider(rpcUrl);
+        } else if (typeof window !== "undefined" && window.ethereum) {
+          provider = new BrowserProvider(window.ethereum);
+        } else {
+          return null;
+        }
+
+        const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+        const decimals = await contract.decimals();
+        return Number(decimals);
+      } catch (error) {
+        console.warn("Failed to resolve token decimals:", error);
+        return null;
+      }
+    },
+    [chainIdForTokens]
+  );
+
   useEffect(() => {
     const urlClientAddress = searchParams.get("clientAddress");
     const urlTokenAddress = searchParams.get("tokenAddress");
@@ -195,6 +241,7 @@ function CreateInvoice() {
           ...(urlDescription && { description: urlDescription }),
           ...(urlAmount && { qty: "1", unitPrice: urlAmount }),
         };
+        updatedFirst.amount = getSafeLineAmountDisplay(updatedFirst);
         return [updatedFirst, ...prev.slice(1)];
       });
     }
@@ -258,17 +305,12 @@ function CreateInvoice() {
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
-      const qty = parseUnits(item.qty || "0", 18);
-      const unitPrice = parseUnits(item.unitPrice || "0", 18);
-      const discount = parseUnits(item.discount || "0", 18);
-      const tax = parseUnits(item.tax || "0", 18);
-      const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-      const adjusted = lineTotal - discount + tax;
-
-      return sum + adjusted;
+      const { valid, amountWei } = getLineAmountDetails(item);
+      if (!valid || amountWei < 0n) return sum;
+      return sum + amountWei;
     }, 0n);
 
-    setTotalAmountDue(formatUnits(total, 18));
+    setTotalAmountDue(formatUnits(total, INVOICE_DECIMALS));
   }, [itemData]);
 
 
@@ -278,6 +320,20 @@ function CreateInvoice() {
 
   const handleItemData = (e, index) => {
     const { name, value } = e.target;
+
+    if (["qty", "unitPrice", "discount", "tax"].includes(name) && value !== "") {
+      if (/[^0-9.]/.test(value)) return;
+      const parts = value.split(".");
+      if (parts.length > 2) return;
+      
+      const numValue = parseFloat(value);
+      if (
+        (name === "discount" && itemData[index]?.discountType === "percentage" && (numValue < 0 || numValue > 100)) ||
+        (name === "tax" && itemData[index]?.taxType === "percentage" && (numValue < 0 || numValue > 100))
+      ) {
+        return;
+      }
+    }
 
     setItemData((prevItemData) =>
       prevItemData.map((item, i) => {
@@ -289,15 +345,7 @@ function CreateInvoice() {
             name === "discount" ||
             name === "tax"
           ) {
-            const qty = parseUnits(updatedItem.qty || "0", 18);
-            const unitPrice = parseUnits(updatedItem.unitPrice || "0", 18);
-            const discount = parseUnits(updatedItem.discount || "0", 18);
-            const tax = parseUnits(updatedItem.tax || "0", 18);
-
-            const lineTotal = (qty * unitPrice) / parseUnits("1", 18);
-            const finalAmount = lineTotal - discount + tax;
-
-            updatedItem.amount = formatUnits(finalAmount, 18);
+            updatedItem.amount = getSafeLineAmountDisplay(updatedItem);
           }
           return updatedItem;
         }
@@ -310,36 +358,89 @@ function CreateInvoice() {
     setItemData((prev) => [...prev, createEmptyInvoiceItem()]);
   };
 
-  
+  const handleFieldChange = (e) => {
+    const { name } = e.target;
+    if (fieldErrors[name]) {
+      setFieldErrors((prev) => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
+  };
 
-const validateClientAddress = useCallback((value) => {
-  // Empty input, no error
-  if (!value) {
-    setClientAddressError("");
-    return;
-  }
+  const handleFieldBlur = (e) => {
+    const { name, value } = e.target;
+    let error = "";
+    if (name === "userFname" || name === "clientFname") {
+      if (!value.trim()) error = "First name is required";
+    } else if (name === "userEmail" || name === "clientEmail") {
+      if (!value.trim()) error = "Email is required";
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) error = "Invalid email address";
+    }
+    
+    if (error) {
+      setFieldErrors((prev) => ({ ...prev, [name]: error }));
+    }
+  };
+  const validateClientAddress = useCallback((value, options = {}) => {
+    const error = getClientAddressError(value, {
+      ...options,
+      ownerAddress: account.address,
+    });
+    setClientAddressError(error);
+    return !error;
+  }, [account.address]);
 
-  // Do not validate until it looks like a full EVM address
-  if (!value.startsWith("0x") || value.length < 42) {
-    setClientAddressError("");
-    return;
-  }
+  const validateInvoiceBeforeSubmit = useCallback((data, paymentToken) => {
+    const validation = validateSingleInvoiceData({
+      clientAddress: data.clientAddress,
+      itemData,
+      totalAmountDue,
+      paymentToken,
+      ownerAddress: account.address,
+    });
 
-  // Invalid EVM address
-  if (!ethers.isAddress(value)) {
-    setClientAddressError("Please enter a valid wallet address");
-    return;
-  }
+    if (!validation.isValid) {
+      let hasFieldError = false;
+      if (validation.fieldErrors.clientAddress) {
+        setClientAddressError(validation.fieldErrors.clientAddress);
+        hasFieldError = true;
+      } else {
+        setClientAddressError("");
+      }
 
-  // Self-invoicing check
-  if (value.toLowerCase() === account.address?.toLowerCase()) {
-    setClientAddressError("You cannot create an invoice for your own wallet");
-    return;
-  }
+      if (validation.fieldErrors.totalAmountDue) {
+        setTotalAmountError(validation.fieldErrors.totalAmountDue);
+        hasFieldError = true;
+      } else {
+        setTotalAmountError("");
+      }
 
-  // Valid other wallet
-  setClientAddressError("");
-}, [account.address]);
+      const newItemErrors = [];
+      const newFieldErrors = {};
+      Object.keys(validation.fieldErrors).forEach(key => {
+        if (key.startsWith("item_")) {
+           const idx = parseInt(key.split("_")[1]);
+           newItemErrors[idx] = validation.fieldErrors[key];
+           hasFieldError = true;
+        } else {
+           newFieldErrors[key] = validation.fieldErrors[key];
+        }
+      });
+      setItemErrors(newItemErrors);
+      setFieldErrors(newFieldErrors);
+
+      toast.error(validation.errorMessage || "Please fix the required fields");
+      return false;
+    }
+
+    setTotalAmountError("");
+    setItemErrors([]);
+    setFieldErrors({});
+
+    return true;
+  }, [account.address, itemData, totalAmountDue]);
 
   const createInvoiceRequest = async (data) => {
     if (!isConnected || !walletClient) {
@@ -347,16 +448,24 @@ const validateClientAddress = useCallback((value) => {
       return;
     }
 
-    if (!data.clientAddress) {
-      setClientAddressError("Client address is required");
+    const paymentToken = useCustomToken ? verifiedToken : selectedToken;
+    if (!paymentToken?.address) {
+      toast.error("Please select or verify a payment token.");
       return;
     }
-    if (!ethers.isAddress(data.clientAddress)) {
-      setClientAddressError("Please enter a valid wallet address");
+
+    const tokenDecimals = Number(paymentToken?.decimals);
+    if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0) {
+      toast.error("Selected token has invalid decimals");
       return;
     }
-    if (data.clientAddress.toLowerCase() === account.address?.toLowerCase()) {
-      setClientAddressError("You cannot create an invoice for your own wallet");
+
+    const normalizedData = {
+      ...data,
+      clientAddress: (data.clientAddress || "").trim(),
+    };
+
+    if (!validateInvoiceBeforeSubmit(normalizedData, paymentToken)) {
       return;
     }
 
@@ -365,13 +474,6 @@ const validateClientAddress = useCallback((value) => {
       setLoading(true);
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
-
-      const paymentToken = useCustomToken ? verifiedToken : selectedToken;
-      if (!paymentToken?.address) {
-        toast.error("Please select or verify a payment token.");
-        setLoading(false);
-        return;
-      }
 
       const invoicePayload = {
         amountDue: totalAmountDue.toString(),
@@ -392,15 +494,18 @@ const validateClientAddress = useCallback((value) => {
           postalcode: data.userPostalcode,
         },
         client: {
-          address: data.clientAddress,
-          fname: data.clientFname,
-          lname: data.clientLname,
-          email: data.clientEmail,
-          country: data.clientCountry,
-          city: data.clientCity,
-          postalcode: data.clientPostalcode,
+          address: normalizedData.clientAddress,
+          fname: normalizedData.clientFname,
+          lname: normalizedData.clientLname,
+          email: normalizedData.clientEmail,
+          country: normalizedData.clientCountry,
+          city: normalizedData.clientCity,
+          postalcode: normalizedData.clientPostalcode,
         },
-        items: itemData,
+        items: itemData.map((item) => ({
+          ...item,
+          amount: getSafeLineAmountDisplay(item),
+        })),
       };
 
       const invoiceString = JSON.stringify(invoicePayload);
@@ -424,8 +529,8 @@ const validateClientAddress = useCallback((value) => {
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
       const tx = await contract.createInvoice(
-        data.clientAddress,
-        ethers.parseUnits(totalAmountDue.toString(), paymentToken.decimals),
+        normalizedData.clientAddress,
+        ethers.parseUnits(totalAmountDue.toString(), tokenDecimals),
         paymentToken.address,
         encryptedStringBase64,
         dataToEncryptHash
@@ -584,14 +689,19 @@ const validateClientAddress = useCallback((value) => {
                 <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
-                      First Name
+                      First Name <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       type="text"
                       placeholder="Your First Name"
-                      className="w-full mt-1 border-gray-300 text-black "
+                      className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.userFname ? "border-red-500" : ""}`}
                       name="userFname"
+                      onChange={handleFieldChange}
+                      onBlur={handleFieldBlur}
                     />
+                    {fieldErrors.userFname && (
+                      <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.userFname}</span></div>
+                    )}
                   </div>
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
@@ -609,14 +719,19 @@ const validateClientAddress = useCallback((value) => {
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
-                      Email
+                      Email <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       type="email"
                       placeholder="Email"
-                      className="w-full mt-1 border-gray-300 text-black"
+                      className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.userEmail ? "border-red-500" : ""}`}
                       name="userEmail"
+                      onChange={handleFieldChange}
+                      onBlur={handleFieldBlur}
                     />
+                    {fieldErrors.userEmail && (
+                      <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.userEmail}</span></div>
+                    )}
                   </div>
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
@@ -670,9 +785,12 @@ const validateClientAddress = useCallback((value) => {
               <h3 className="text-lg font-semibold mb-4 text-gray-800">
                 Client Information
               </h3>
+              <Label className="text-sm font-medium text-gray-700 mb-2 block">
+                Client Wallet Address <span className="text-red-500">*</span>
+              </Label>
               <Input
                 placeholder="Client Wallet Address"
-                className="w-full mb-4 border-gray-300 text-black"
+                className={`w-full mb-4 border-gray-300 text-black ${clientAddressError ? "border-red-500" : ""}`}
                 name="clientAddress"
                 value={clientAddress}
                 onChange={(e) => {const value = e.target.value;
@@ -693,14 +811,19 @@ const validateClientAddress = useCallback((value) => {
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
-                      First Name
+                      First Name <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       type="text"
                       placeholder="Client First Name"
-                      className="w-full mt-1 border-gray-300 text-black"
+                      className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.clientFname ? "border-red-500" : ""}`}
                       name="clientFname"
+                      onChange={handleFieldChange}
+                      onBlur={handleFieldBlur}
                     />
+                    {fieldErrors.clientFname && (
+                      <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.clientFname}</span></div>
+                    )}
                   </div>
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
@@ -715,17 +838,23 @@ const validateClientAddress = useCallback((value) => {
                   </div>
                 </div>
 
+
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
-                      Email
+                      Email <span className="text-red-500">*</span>
                     </Label>
                     <Input
                       type="email"
-                      placeholder="Email"
-                      className="w-full mt-1 border-gray-300 text-black"
+                      placeholder="Client Email"
+                      className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.clientEmail ? "border-red-500" : ""}`}
                       name="clientEmail"
+                      onChange={handleFieldChange}
+                      onBlur={handleFieldBlur}
                     />
+                    {fieldErrors.clientEmail && (
+                      <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.clientEmail}</span></div>
+                    )}
                   </div>
                   <div className="flex-1">
                     <Label className="text-sm font-medium text-gray-700">
@@ -822,14 +951,29 @@ const validateClientAddress = useCallback((value) => {
                       )}
                       <TokenPicker
                         selected={selectedToken}
-                        onSelect={(token) => {
+                        onSelect={async (token) => {
+                          const address = token.contract_address || token.address;
+                          const decimals = await resolveTokenDecimals(
+                            address,
+                            token.decimals
+                          );
+
+                          if (decimals === null) {
+                            toast.error(
+                              "Failed to fetch token decimals for selected token"
+                            );
+                            return false;
+                          }
+
                           setSelectedToken({
-                            address: token.contract_address,
+                            address,
                             symbol: token.symbol,
                             name: token.name,
                             logo: token.image,
-                            decimals: 18,
+                            decimals,
                           });
+
+                          return true;
                         }}
                         chainId={chainIdForTokens}
                         disabled={loading}
@@ -1006,13 +1150,46 @@ const validateClientAddress = useCallback((value) => {
           {/* Invoice Items Section */}
           <div className="mb-6 sm:mb-8">
             {/* Desktop Header - Hidden on mobile */}
-            <div className="hidden md:grid grid-cols-12 bg-green-500 text-white py-3 px-4 rounded-t-lg font-medium text-sm gap-2">
+            <div className="hidden md:grid bg-green-500 text-white py-3 px-4 rounded-t-lg font-medium text-sm gap-2 items-center" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
               <div className="col-span-4">DESCRIPTION</div>
               <div className="col-span-1">QTY</div>
               <div className="col-span-2">UNIT PRICE</div>
-              <div className="col-span-1">DISCOUNT</div>
-              <div className="col-span-1">TAX(%)</div>
+              <div className="col-span-3">
+                <div className="flex flex-row gap-1 items-center whitespace-nowrap">
+                  DISCOUNT
+                  <AmountTypeToggle
+                    value={itemData[0]?.discountType || "amount"}
+                    onChange={(newType) => {
+                      setItemData((prev) =>
+                        prev.map((item) => {
+                          const updated = { ...item, discountType: newType };
+                          updated.amount = getSafeLineAmountDisplay(updated);
+                          return updated;
+                        })
+                      );
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="col-span-3">
+                <div className="flex flex-row gap-1 items-center whitespace-nowrap">
+                  TAX
+                  <AmountTypeToggle
+                    value={itemData[0]?.taxType || "percentage"}
+                    onChange={(newType) => {
+                      setItemData((prev) =>
+                        prev.map((item) => {
+                          const updated = { ...item, taxType: newType };
+                          updated.amount = getSafeLineAmountDisplay(updated);
+                          return updated;
+                        })
+                      );
+                    }}
+                  />
+                </div>
+              </div>
               <div className="col-span-2">AMOUNT</div>
+              <div className="col-span-1"></div>
             </div>
 
             {/* Mobile Header */}
@@ -1028,72 +1205,118 @@ const validateClientAddress = useCallback((value) => {
                     <div className="md:hidden space-y-3 pb-4 border-b border-gray-200 last:border-b-0">
                       <div>
                         <Label className="text-xs font-medium text-gray-600 mb-1 block">
-                          Description
+                          Description <span className="text-red-500">*</span>
                         </Label>
                         <ProductAutocompleteInput
                           inputRef={(el) => (itemRefsMobile.current[index] = el)}
                           placeholder="Enter Description"
-                          className="w-full border-gray-300 text-black"
+                          className={`w-full border-gray-300 text-black ${itemErrors[index]?.description ? "border-red-500" : ""}`}
                           name="description"
                           value={itemData[index]?.description ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                           onSelectProduct={(product) => handleProductSelect(product, index)}
                           catalogMetadata={catalogMetadata}
                         />
+                        {itemErrors[index]?.description && (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{itemErrors[index].description}</span></div>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
                           <Label className="text-xs font-medium text-gray-600 mb-1 block">
-                            Qty
+                            Qty <span className="text-red-500">*</span>
+                          </Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            className={`w-full border-gray-300 text-black ${itemErrors[index]?.qty ? "border-red-500" : ""}`}
+                            name="qty"
+                            min="0"
+                            step="any"
+                            value={itemData[index]?.qty ?? ""}
+                            onChange={(e) => handleItemData(e, index)}
+                          />
+                          {itemErrors[index]?.qty && (
+                            <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{itemErrors[index].qty}</span></div>
+                          )}
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 block">
+                            Unit Price <span className="text-red-500">*</span>
+                          </Label>
+                          <Input
+                            type="number"
+                            placeholder="0"
+                            className={`w-full border-gray-300 text-black ${itemErrors[index]?.unitPrice ? "border-red-500" : ""}`}
+                            name="unitPrice"
+                            min="0"
+                            step="any"
+                            value={itemData[index]?.unitPrice ?? ""}
+                            onChange={(e) => handleItemData(e, index)}
+                          />
+                          {itemErrors[index]?.unitPrice && (
+                            <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{itemErrors[index].unitPrice}</span></div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 flex items-center justify-between">
+                            Discount
+                            <AmountTypeToggle
+                              value={itemData[index]?.discountType || "amount"}
+                              onChange={(newType) => {
+                                setItemData((prev) =>
+                                  prev.map((item) => {
+                                    const updated = { ...item, discountType: newType };
+                                    updated.amount = getSafeLineAmountDisplay(updated);
+                                    return updated;
+                                  })
+                                );
+                              }}
+                            />
+                          </Label>
+                          <Input
+                            type="number"
+                            placeholder={itemData[index]?.discountType === "percentage" ? "0" : "Flat amount"}
+                            className="w-full border-gray-300 text-black"
+                            name="discount"
+                            min="0"
+                            step="any"
+                            value={itemData[index]?.discount ?? ""}
+                            onChange={(e) => handleItemData(e, index)}
+                            onKeyDown={(e) => {
+                              if (['e', 'E', '+', '-'].includes(e.key)) {
+                                e.preventDefault();
+                              }
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <Label className="text-xs font-medium text-gray-600 mb-1 flex items-center justify-between">
+                            Tax
+                            <AmountTypeToggle
+                              value={itemData[index]?.taxType || "percentage"}
+                              onChange={(newType) => {
+                                setItemData((prev) =>
+                                  prev.map((item) => {
+                                    const updated = { ...item, taxType: newType };
+                                    updated.amount = getSafeLineAmountDisplay(updated);
+                                    return updated;
+                                  })
+                                );
+                              }}
+                            />
                           </Label>
                           <Input
                             type="number"
                             placeholder="0"
                             className="w-full border-gray-300 text-black"
-                            name="qty"
-                            value={itemData[index]?.qty ?? ""}
-                            onChange={(e) => handleItemData(e, index)}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-gray-600 mb-1 block">
-                            Unit Price
-                          </Label>
-                          <Input
-                            type="text"
-                            placeholder="0"
-                            className="w-full border-gray-300 text-black"
-                            name="unitPrice"
-                            value={itemData[index]?.unitPrice ?? ""}
-                            onChange={(e) => handleItemData(e, index)}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <Label className="text-xs font-medium text-gray-600 mb-1 block">
-                            Discount
-                          </Label>
-                          <Input
-                            type="text"
-                            placeholder="0"
-                            className="w-full border-gray-300 text-black"
-                            name="discount"
-                            value={itemData[index]?.discount ?? ""}
-                            onChange={(e) => handleItemData(e, index)}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs font-medium text-gray-600 mb-1 block">
-                            Tax (%)
-                          </Label>
-                          <Input
-                            type="text"
-                            placeholder="0"
-                            className="w-full border-gray-300 text-black"
                             name="tax"
+                            min="0"
+                            step="any"
                             value={itemData[index]?.tax ?? ""}
                             onChange={(e) => handleItemData(e, index)}
                           />
@@ -1110,12 +1333,7 @@ const validateClientAddress = useCallback((value) => {
                           className="w-full bg-gray-100 border-gray-300 text-gray-700 font-semibold"
                           name="amount"
                           disabled
-                          value={String(
-                            (parseFloat(itemData[index]?.qty) || 0) *
-                              (parseFloat(itemData[index]?.unitPrice) || 0) -
-                              (parseFloat(itemData[index]?.discount) || 0) +
-                              (parseFloat(itemData[index]?.tax) || 0)
-                          )}
+                          value={getSafeLineAmountDisplay(itemData[index]) || "0"}
                         />
                       </div>
 
@@ -1148,56 +1366,77 @@ const validateClientAddress = useCallback((value) => {
                       )}
                     </div>
 
-                    {/* Desktop Layout - Grid */}
-                    <div className="hidden md:grid grid-cols-12 gap-2 items-center">
+                    <div className="hidden md:grid gap-2 items-start" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
                       <div className="col-span-4">
                         <ProductAutocompleteInput
                           inputRef={(el) => (itemRefsDesktop.current[index] = el)}
                           placeholder="Enter Description"
-                          className="w-full border-gray-300 text-black py-2"
+                          className={`w-full border-gray-300 text-black py-2 ${itemErrors[index]?.description ? "border-red-500" : ""}`}
                           name="description"
                           value={itemData[index]?.description ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                           onSelectProduct={(product) => handleProductSelect(product, index)}
                           catalogMetadata={catalogMetadata}
                         />
+                        {itemErrors[index]?.description && (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{itemErrors[index].description}</span></div>
+                        )}
                       </div>
                       <div className="col-span-1">
                         <Input
                           type="number"
                           placeholder="0"
-                          className="w-full border-gray-300 text-black py-2"
+                          className={`w-full border-gray-300 text-black py-2 ${itemErrors[index]?.qty ? "border-red-500" : ""}`}
                           name="qty"
+                          min="0"
+                          step="any"
                           value={itemData[index]?.qty ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
+                        {itemErrors[index]?.qty && (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{itemErrors[index].qty}</span></div>
+                        )}
                       </div>
                       <div className="col-span-2">
                         <Input
-                          type="text"
+                          type="number"
                           placeholder="0"
-                          className="w-full border-gray-300 text-black py-2"
+                          className={`w-full border-gray-300 text-black py-2 ${itemErrors[index]?.unitPrice ? "border-red-500" : ""}`}
                           name="unitPrice"
+                          min="0"
+                          step="any"
                           value={itemData[index]?.unitPrice ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
+                        {itemErrors[index]?.unitPrice && (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{itemErrors[index].unitPrice}</span></div>
+                        )}
                       </div>
-                      <div className="col-span-1">
+                      <div className="col-span-3">
                         <Input
-                          type="text"
-                          placeholder="0"
+                          type="number"
+                          placeholder={itemData[index]?.discountType === "percentage" ? "0" : "Flat amount"}
                           className="w-full border-gray-300 text-black py-2"
                           name="discount"
+                          min="0"
+                          step="any"
                           value={itemData[index]?.discount ?? ""}
                           onChange={(e) => handleItemData(e, index)}
+                          onKeyDown={(e) => {
+                            if (['e', 'E', '+', '-'].includes(e.key)) {
+                              e.preventDefault();
+                            }
+                          }}
                         />
                       </div>
-                      <div className="col-span-1">
+                      <div className="col-span-3">
                         <Input
-                          type="text"
-                          placeholder="0"
+                          type="number"
+                          placeholder={itemData[index]?.taxType === "amount" ? "Flat amount" : "0"}
                           className="w-full border-gray-300 text-black py-2"
                           name="tax"
+                          min="0"
+                          step="any"
                           value={itemData[index]?.tax ?? ""}
                           onChange={(e) => handleItemData(e, index)}
                         />
@@ -1209,12 +1448,7 @@ const validateClientAddress = useCallback((value) => {
                           className="w-full bg-gray-50 border-gray-300 text-gray-700 py-2"
                           name="amount"
                           disabled
-                          value={String(
-                            (parseFloat(itemData[index]?.qty) || 0) *
-                              (parseFloat(itemData[index]?.unitPrice) || 0) -
-                              (parseFloat(itemData[index]?.discount) || 0) +
-                              (parseFloat(itemData[index]?.tax) || 0)
-                          )}
+                          value={getSafeLineAmountDisplay(itemData[index]) || "0"}
                         />
                       </div>
 
@@ -1268,6 +1502,12 @@ const validateClientAddress = useCallback((value) => {
                       : selectedToken?.symbol || "TOKEN"}
                   </span>
                 </div>
+                {totalAmountError && (
+                  <div className="flex items-center justify-end gap-1.5 mt-1 text-red-600">
+                    <AlertCircle className="w-4 h-4" />
+                    <span className="text-sm font-medium">{totalAmountError}</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
