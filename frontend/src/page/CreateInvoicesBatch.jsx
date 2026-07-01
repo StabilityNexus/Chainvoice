@@ -234,6 +234,20 @@ function CreateInvoicesBatch() {
         return row;
       })
     );
+
+    if (rowItemErrors[`${rowIndex}_${itemIndex}`]?.[name]) {
+      setRowItemErrors((prev) => {
+        const next = { ...prev };
+        const itemErr = { ...next[`${rowIndex}_${itemIndex}`] };
+        delete itemErr[name];
+        if (Object.keys(itemErr).length === 0) {
+          delete next[`${rowIndex}_${itemIndex}`];
+        } else {
+          next[`${rowIndex}_${itemIndex}`] = itemErr;
+        }
+        return next;
+      });
+    }
   };
 
   const addItem = (rowIndex) => {
@@ -340,6 +354,30 @@ function CreateInvoicesBatch() {
         delete newErrors[name];
         return newErrors;
       });
+    }
+  };
+
+  const handleInvoiceChange = (rowIndex, field, value) => {
+    setInvoiceRows((prev) =>
+      prev.map((row, i) => (i === rowIndex ? { ...row, [field]: value } : row))
+    );
+
+    if (field === "clientAddress") {
+      if (clientAddressErrors[rowIndex]) {
+        setClientAddressErrors((prev) => {
+          const next = { ...prev };
+          delete next[rowIndex];
+          return next;
+        });
+      }
+    } else {
+      if (fieldErrors[`${rowIndex}_${field}`]) {
+        setFieldErrors((prev) => {
+          const next = { ...prev };
+          delete next[`${rowIndex}_${field}`];
+          return next;
+        });
+      }
     }
   };
 
