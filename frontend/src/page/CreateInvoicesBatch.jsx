@@ -1235,10 +1235,10 @@ function CreateInvoicesBatch() {
                                 }
                                 catalogMetadata={catalogMetadata}
                               />
-                              {rowItemErrors[`${rowIndex}_${itemIndex}`]?.description && (
-                                <div className="text-red-600 text-xs mt-1">{rowItemErrors[`${rowIndex}_${itemIndex}`].description}</div>
-                              )}
-                            </div>
+                                {rowItemErrors[`${rowIndex}_${itemIndex}`]?.description && (
+                                  <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{rowItemErrors[`${rowIndex}_${itemIndex}`].description}</span></div>
+                                )}
+                              </div>
                             <div className="grid grid-cols-2 gap-2 md:contents">
                               <div className="md:col-span-1">
                                 <label className="text-xs font-medium text-gray-600 mb-1 block md:hidden">
@@ -1257,7 +1257,7 @@ function CreateInvoicesBatch() {
                                   }
                                 />
                                 {rowItemErrors[`${rowIndex}_${itemIndex}`]?.qty && (
-                                  <div className="text-red-600 text-xs mt-1">{rowItemErrors[`${rowIndex}_${itemIndex}`].qty}</div>
+                                  <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{rowItemErrors[`${rowIndex}_${itemIndex}`].qty}</span></div>
                                 )}
                               </div>
                               <div className="md:col-span-2">
@@ -1277,7 +1277,7 @@ function CreateInvoicesBatch() {
                                   }
                                 />
                                 {rowItemErrors[`${rowIndex}_${itemIndex}`]?.unitPrice && (
-                                  <div className="text-red-600 text-xs mt-1">{rowItemErrors[`${rowIndex}_${itemIndex}`].unitPrice}</div>
+                                  <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{rowItemErrors[`${rowIndex}_${itemIndex}`].unitPrice}</span></div>
                                 )}
                               </div>
                             </div>

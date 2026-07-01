@@ -352,6 +352,17 @@ function CreateInvoice() {
         return item;
       })
     );
+
+    setItemErrors((prev) => {
+      if (prev[index] && prev[index][name]) {
+        const newErrors = [...prev];
+        const rowErrors = { ...newErrors[index] };
+        delete rowErrors[name];
+        newErrors[index] = rowErrors;
+        return newErrors;
+      }
+      return prev;
+    });
   };
 
   const addItem = () => {
