@@ -61,6 +61,20 @@ describe("invoiceCalculations.getLineAmountDetails", () => {
     expect(result.valid).toBe(false);
     expect(result.amountWei).toBe(0n);
   });
+
+  test("calculates with percentage discount and flat tax", () => {
+    const result = getLineAmountDetails({
+      qty: "10",
+      unitPrice: "10",
+      discount: "10",
+      discountType: "percentage",
+      tax: "15",
+      taxType: "amount"
+    });
+
+    expect(result.valid).toBe(true);
+    expect(result.amountWei).toBe(105000000000000000000n);
+  });
 });
 
 describe("invoiceCalculations.getSafeLineAmountDisplay", () => {

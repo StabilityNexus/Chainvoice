@@ -158,6 +158,112 @@ describe("invoiceValidation.validateSingleInvoiceData", () => {
       "Invoice total supports up to 6 decimals for USDC"
     );
   });
+
+  test("blocks missing required fields", () => {
+    const result = validateSingleInvoiceData({
+      ...validBasePayload,
+      clientFname: "",
+      clientEmail: "",
+      userFname: "",
+      userEmail: "",
+      clientAddress: CLIENT_1,
+      itemData: [
+        {
+          description: "",
+          qty: "",
+          unitPrice: "",
+          discount: "200",
+          discountType: "percentage",
+          tax: "200",
+          taxType: "percentage"
+        }
+      ],
+      totalAmountDue: "100",
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+    });
+    expect(result.isValid).toBe(false);
+    expect(result.fieldErrors.clientFname).toBe("First name is required");
+    expect(result.fieldErrors.clientEmail).toBe("Email is required");
+    expect(result.fieldErrors.userFname).toBe("First name is required");
+    expect(result.fieldErrors.userEmail).toBe("Email is required");
+    expect(result.fieldErrors.item_0.description).toBe("Required");
+    expect(result.fieldErrors.item_0.qty).toBe("Required");
+    expect(result.fieldErrors.item_0.unitPrice).toBe("Required");
+    expect(result.fieldErrors.item_0.discount).toBe("Cannot exceed 100%");
+    expect(result.fieldErrors.item_0.tax).toBe("Cannot exceed 100%");
+  });
+
+  test("blocks invalid email format", () => {
+    const result = validateSingleInvoiceData({
+      ...validBasePayload,
+      clientEmail: "invalid-email",
+      userEmail: "invalid-email",
+      clientAddress: CLIENT_1,
+      itemData: [validItem],
+      totalAmountDue: "100",
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+    });
+    expect(result.isValid).toBe(false);
+    expect(result.fieldErrors.clientEmail).toBe("Invalid email address");
+    expect(result.fieldErrors.userEmail).toBe("Invalid email address");
+  });
+
+  test("invalid token decimals returns null initially", () => {
+    // Tests getTokenDecimalsError for invalid decimals
+    const result = validateSingleInvoiceData({
+      ...validBasePayload,
+      clientAddress: CLIENT_1,
+      itemData: [validItem],
+      totalAmountDue: "100",
+      paymentToken: { symbol: "USDT", decimals: "invalid" },
+      ownerAddress: OWNER,
+    });
+    // the decimal check gets skipped if decimals is invalid, falling back to valid if total amount > 0
+    expect(result.isValid).toBe(true);
+  });
+  
+  test("invalid number format returns error", () => {
+    const result = validateSingleInvoiceData({
+      ...validBasePayload,
+      clientAddress: CLIENT_1,
+      itemData: [{ ...validItem, qty: "invalid" }],
+      totalAmountDue: "100",
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+    });
+    expect(result.isValid).toBe(false);
+    expect(result.fieldErrors.item_0.amount).toBe("Invalid number format");
+  });
+
+  test("invalid client address", () => {
+    const result = validateSingleInvoiceData({
+      ...validBasePayload,
+      clientAddress: "0xinvalid",
+      itemData: [validItem],
+      totalAmountDue: "100",
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+    });
+    expect(result.isValid).toBe(false);
+    expect(result.fieldErrors.clientAddress).toBe("Please enter a valid wallet address");
+  });
+
+  test("skips blank line items", () => {
+    const result = validateSingleInvoiceData({
+      ...validBasePayload,
+      clientAddress: CLIENT_1,
+      itemData: [
+        validItem,
+        { description: "", qty: "", unitPrice: "", discount: "", tax: "" }
+      ],
+      totalAmountDue: "100",
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+    });
+    expect(result.isValid).toBe(true);
+  });
 });
 
 describe("invoiceValidation.validateBatchInvoiceData", () => {
@@ -257,5 +363,92 @@ describe("invoiceValidation.validateBatchInvoiceData", () => {
     expect(result.errorMessage).toBe(
       "Please add at least one valid invoice with client address and amount"
     );
+  });
+
+  test("blocks missing required fields in batch", () => {
+    const result = validateBatchInvoiceData({
+      rows: [
+        makeRow({
+          clientFname: "",
+          clientEmail: "",
+        })
+      ],
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+      userInfo: { userFname: "", userEmail: "" }
+    });
+
+    expect(result.isValid).toBe(false);
+    expect(result.fieldErrors["userFname"]).toBe("First name is required");
+    expect(result.fieldErrors["userEmail"]).toBe("Email is required");
+    expect(result.fieldErrors["0_clientFname"]).toBe("First name is required");
+    expect(result.fieldErrors["0_clientEmail"]).toBe("Email is required");
+  });
+
+  test("blocks invalid email format in batch", () => {
+    const result = validateBatchInvoiceData({
+      rows: [
+        makeRow({
+          clientEmail: "bad",
+        })
+      ],
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+      userInfo: { userFname: "Admin", userEmail: "bad" }
+    });
+
+    expect(result.isValid).toBe(false);
+    expect(result.fieldErrors["userEmail"]).toBe("Invalid email address");
+    expect(result.fieldErrors["0_clientEmail"]).toBe("Invalid email address");
+  });
+
+  test("blocks invalid client address in batch", () => {
+    const result = validateBatchInvoiceData({
+      rows: [
+        makeRow({
+          clientAddress: "0xinvalid",
+        })
+      ],
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+      userInfo: { userFname: "Admin", userEmail: "admin@example.com" }
+    });
+
+    expect(result.isValid).toBe(false);
+    expect(result.addressErrors[0]).toBe("Please enter a valid wallet address");
+  });
+
+  test("skips blank line items in batch", () => {
+    const result = validateBatchInvoiceData({
+      rows: [
+        makeRow({
+          itemData: [
+            validItem,
+            { description: "", qty: "", unitPrice: "", discount: "", tax: "" }
+          ]
+        })
+      ],
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+      userInfo: { userFname: "Admin", userEmail: "admin@example.com" }
+    });
+
+    expect(result.isValid).toBe(true);
+  });
+
+  test("blocks zero or invalid total in batch", () => {
+    const result = validateBatchInvoiceData({
+      rows: [
+        makeRow({ totalAmountDue: "0" }),
+        makeRow({ totalAmountDue: "invalid", clientAddress: CLIENT_2 })
+      ],
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+      userInfo: { userFname: "Admin", userEmail: "admin@example.com" }
+    });
+
+    expect(result.isValid).toBe(false);
+    expect(result.totalErrors[0]).toBe("Invoice total must be greater than 0");
+    expect(result.totalErrors[1]).toBe("Invoice total supports up to 6 decimals for USDT");
   });
 });
