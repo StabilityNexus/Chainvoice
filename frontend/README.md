@@ -18,25 +18,25 @@ Before running the frontend locally, make sure you have:
 cd frontend
 ```
 
-2. Install dependencies:
+1. Install dependencies:
 
 ```bash
 npm install
 ```
 
-3. Create your local environment file:
+1. Create your local environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-4. Add your WalletConnect Project ID to `.env`:
+1. Add your WalletConnect Project ID to `.env`:
 
 ```env
 VITE_WALLETCONNECT_PROJECT_ID=your_reown_project_id
 ```
 
-5. Start the development server:
+1. Start the development server:
 
 ```bash
 npm run dev
