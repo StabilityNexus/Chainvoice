@@ -229,9 +229,24 @@ function CreateInvoicesBatch() {
         return next;
       };
 
+      const reindexFieldErrors = (prev) => {
+        const next = {};
+        Object.entries(prev).forEach(([key, value]) => {
+          if (!key.includes("_")) {
+            next[key] = value;
+          } else {
+            const [rowStr, fieldStr] = key.split("_");
+            const rowIndex = Number(rowStr);
+            if (rowIndex < index) next[key] = value;
+            if (rowIndex > index) next[`${rowIndex - 1}_${fieldStr}`] = value;
+          }
+        });
+        return next;
+      };
+
       setClientAddressErrors(reindexSimpleErrors);
       setRowTotalErrors(reindexSimpleErrors);
-      setFieldErrors(reindexSimpleErrors);
+      setFieldErrors(reindexFieldErrors);
       setRowItemErrors(reindexItemErrors);
       if (expandedInvoice === index) {
         setExpandedInvoice(0);

@@ -55,15 +55,17 @@ const getLineItemError = (lineLabel, item) => {
     errors.unitPrice = "Cannot be negative";
   }
   
+  const HUNDRED_PERCENT_WEI = 100000000000000000000n; // 100 * 10^18
+
   if (discountWei < 0n) {
     errors.discount = "Cannot be negative";
-  } else if (item.discountType === "percentage" && Number(item.discount || 0) > 100) {
+  } else if (item.discountType === "percentage" && discountWei > HUNDRED_PERCENT_WEI) {
     errors.discount = "Cannot exceed 100%";
   }
   
   if (taxRateWei < 0n) {
     errors.tax = "Cannot be negative";
-  } else if (item.taxType === "percentage" && Number(item.tax || 0) > 100) {
+  } else if (item.taxType === "percentage" && taxRateWei > HUNDRED_PERCENT_WEI) {
     errors.tax = "Cannot exceed 100%";
   }
   
