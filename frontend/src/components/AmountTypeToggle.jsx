@@ -7,6 +7,7 @@ export const AmountTypeToggle = ({ value, onChange, className = "" }) => {
       <button
         type="button"
         onClick={() => onChange("amount")}
+        aria-pressed={value === "amount"}
         className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-200 ${
           value === "amount" 
             ? "bg-white text-gray-900 shadow-sm border border-gray-200" 
@@ -19,6 +20,7 @@ export const AmountTypeToggle = ({ value, onChange, className = "" }) => {
       <button
         type="button"
         onClick={() => onChange(value === "amount" ? "percentage" : "amount")}
+        aria-label={`Toggle type, currently ${value}`}
         className="p-1 text-slate-800 bg-gray-200 hover:bg-gray-300 hover:text-black transition-colors rounded-full flex-shrink-0"
         title="Toggle type"
       >
@@ -28,6 +30,7 @@ export const AmountTypeToggle = ({ value, onChange, className = "" }) => {
       <button
         type="button"
         onClick={() => onChange("percentage")}
+        aria-pressed={value === "percentage"}
         className={`px-2.5 py-1 text-xs font-medium rounded-md transition-all duration-200 ${
           value === "percentage" 
             ? "bg-white text-gray-900 shadow-sm border border-gray-200" 

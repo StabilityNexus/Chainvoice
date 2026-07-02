@@ -410,6 +410,10 @@ function CreateInvoice() {
       totalAmountDue,
       paymentToken,
       ownerAddress: account.address,
+      userFname: data.userFname,
+      userEmail: data.userEmail,
+      clientFname: data.clientFname,
+      clientEmail: data.clientEmail,
     });
 
     if (!validation.isValid) {
@@ -1280,7 +1284,8 @@ function CreateInvoice() {
                               value={itemData[index]?.discountType || "amount"}
                               onChange={(newType) => {
                                 setItemData((prev) =>
-                                  prev.map((item) => {
+                                  prev.map((item, i) => {
+                                    if (i !== index) return item;
                                     const updated = { ...item, discountType: newType };
                                     updated.amount = getSafeLineAmountDisplay(updated);
                                     return updated;
@@ -1312,7 +1317,8 @@ function CreateInvoice() {
                               value={itemData[index]?.taxType || "percentage"}
                               onChange={(newType) => {
                                 setItemData((prev) =>
-                                  prev.map((item) => {
+                                  prev.map((item, i) => {
+                                    if (i !== index) return item;
                                     const updated = { ...item, taxType: newType };
                                     updated.amount = getSafeLineAmountDisplay(updated);
                                     return updated;

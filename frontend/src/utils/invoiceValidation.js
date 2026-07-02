@@ -57,10 +57,14 @@ const getLineItemError = (lineLabel, item) => {
   
   if (discountWei < 0n) {
     errors.discount = "Cannot be negative";
+  } else if (item.discountType === "percentage" && Number(item.discount || 0) > 100) {
+    errors.discount = "Cannot exceed 100%";
   }
   
   if (taxRateWei < 0n) {
     errors.tax = "Cannot be negative";
+  } else if (item.taxType === "percentage" && Number(item.tax || 0) > 100) {
+    errors.tax = "Cannot exceed 100%";
   }
   
   if (!valid) {
@@ -129,7 +133,14 @@ export const validateSingleInvoiceData = ({
   let hasItemErrors = false;
   const itemErrorsObj = {};
   
+  const isItemBlank = (item) => {
+    return !item.description && !item.qty && !item.unitPrice && !item.discount && !item.tax;
+  };
+
   for (let i = 0; i < itemData.length; i += 1) {
+    if (itemData.length > 1 && isItemBlank(itemData[i])) {
+      continue;
+    }
     const itemErrors = getLineItemError(`Line item ${i + 1}`, itemData[i]);
     if (itemErrors) {
       itemErrorsObj[`item_${i}`] = itemErrors;
@@ -248,7 +259,14 @@ export const validateBatchInvoiceData = ({
       }
     }
 
+    const isItemBlank = (item) => {
+      return !item.description && !item.qty && !item.unitPrice && !item.discount && !item.tax;
+    };
+
     for (let itemIndex = 0; itemIndex < row.itemData.length; itemIndex += 1) {
+      if (row.itemData.length > 1 && isItemBlank(row.itemData[itemIndex])) {
+        continue;
+      }
       const itemErrors = getLineItemError(`${rowLabel}, line item ${itemIndex + 1}`, row.itemData[itemIndex]);
       if (itemErrors) {
         pendingItemErrors[`${rowIndex}_${itemIndex}`] = itemErrors;

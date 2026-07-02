@@ -7,6 +7,7 @@ import {
   Contract,
   ethers,
   formatUnits,
+  JsonRpcProvider,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
@@ -63,6 +64,17 @@ import {
   applyProductToInvoiceItem,
   createEmptyInvoiceItem,
 } from "@/utils/productCatalogInvoiceHelpers";
+
+/** Public RPC URLs by chain ID for token verification when visitor has no wallet. */
+const CHAIN_ID_TO_PUBLIC_RPC = {
+  1: "https://eth.llamarpc.com",
+  61: "https://etc.blockscout.com",
+  137: "https://polygon-rpc.com",
+  56: "https://bsc-dataseed.binance.org",
+  8453: "https://mainnet.base.org",
+  11155111: "https://rpc.ankr.com/eth_sepolia",
+  5115: "https://rpc.testnet.citrea.xyz",
+};
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
@@ -143,6 +155,36 @@ function CreateInvoicesBatch() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
+  const resolveTokenDecimals = async (tokenAddress, fallbackDecimals) => {
+    if (
+      fallbackDecimals !== undefined &&
+      fallbackDecimals !== null &&
+      !Number.isNaN(Number(fallbackDecimals))
+    ) {
+      return Number(fallbackDecimals);
+    }
+
+    try {
+      let provider;
+      const rpcUrl = chainId && CHAIN_ID_TO_PUBLIC_RPC[Number(chainId)];
+
+      if (rpcUrl) {
+        provider = new JsonRpcProvider(rpcUrl);
+      } else if (typeof window !== "undefined" && window.ethereum) {
+        provider = new BrowserProvider(window.ethereum);
+      } else {
+        return null;
+      }
+
+      const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+      const decimals = await contract.decimals();
+      return Number(decimals);
+    } catch (error) {
+      console.warn("Failed to resolve token decimals:", error);
+      return null;
+    }
+  };
+
   // Invoice management
   const addInvoiceRow = () => {
     const newIndex = invoiceRows.length;
@@ -166,7 +208,7 @@ function CreateInvoicesBatch() {
   const removeInvoiceRow = (index) => {
     if (invoiceRows.length > 1) {
       setInvoiceRows((prev) => prev.filter((_, i) => i !== index));
-      setClientAddressErrors((prev) => {
+      const reindexSimpleErrors = (prev) => {
         const next = {};
         Object.entries(prev).forEach(([key, value]) => {
           const numericKey = Number(key);
@@ -174,7 +216,23 @@ function CreateInvoicesBatch() {
           if (numericKey > index) next[numericKey - 1] = value;
         });
         return next;
-      });
+      };
+
+      const reindexItemErrors = (prev) => {
+        const next = {};
+        Object.entries(prev).forEach(([key, value]) => {
+          const [rowStr, itemStr] = key.split("_");
+          const rowIndex = Number(rowStr);
+          if (rowIndex < index) next[key] = value;
+          if (rowIndex > index) next[`${rowIndex - 1}_${itemStr}`] = value;
+        });
+        return next;
+      };
+
+      setClientAddressErrors(reindexSimpleErrors);
+      setRowTotalErrors(reindexSimpleErrors);
+      setFieldErrors(reindexSimpleErrors);
+      setRowItemErrors(reindexItemErrors);
       if (expandedInvoice === index) {
         setExpandedInvoice(0);
       }
@@ -853,15 +911,29 @@ function CreateInvoicesBatch() {
                     </Label>
                     <TokenPicker
                       selected={selectedToken}
-                      onSelect={(token) => {
+                      onSelect={async (token) => {
+                        const address = token.contract_address || token.address;
+                        const decimals = await resolveTokenDecimals(
+                          address,
+                          token.decimals
+                        );
+
+                        if (decimals === null) {
+                          toast.error(
+                            "Failed to fetch token decimals for selected token"
+                          );
+                          return false;
+                        }
+
                         setSelectedToken({
-                          address: token.contract_address,
+                          address,
                           symbol: token.symbol,
                           name: token.name,
                           logo: token.image,
-                          decimals: 18,
+                          decimals,
                         });
                         toast.success(`Selected ${token.symbol}`);
+                        return true;
                       }}
                       chainId={account?.chainId || 1}
                       disabled={loading}
@@ -1293,7 +1365,8 @@ function CreateInvoicesBatch() {
                                           if (ri === rowIndex) {
                                             return {
                                               ...r,
-                                              itemData: r.itemData.map((it) => {
+                                              itemData: r.itemData.map((it, idx) => {
+                                                if (idx !== itemIndex) return it;
                                                 const updated = { ...it, discountType: newType };
                                                 const { valid } = getLineAmountDetails(updated);
                                                 updated.amount = valid ? getSafeLineAmountDisplay(updated) : "";
@@ -1336,7 +1409,8 @@ function CreateInvoicesBatch() {
                                           if (ri === rowIndex) {
                                             return {
                                               ...r,
-                                              itemData: r.itemData.map((it) => {
+                                              itemData: r.itemData.map((it, idx) => {
+                                                if (idx !== itemIndex) return it;
                                                 const updated = { ...it, taxType: newType };
                                                 const { valid } = getLineAmountDetails(updated);
                                                 updated.amount = valid ? getSafeLineAmountDisplay(updated) : "";

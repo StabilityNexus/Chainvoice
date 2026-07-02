@@ -211,8 +211,11 @@ export function TokenPicker({
     }
   }, [open, setQuery]);
 
+  const isOnTestnet = isTestnet(chainId);
+  const isInteractionDisabled = disabled || isOnTestnet || isSelecting;
+
   const handleSelect = async (token) => {
-    if (isSelecting) return;
+    if (isInteractionDisabled) return;
 
     const tokenAddress = token.contract_address || token.address;
     setIsSelecting(true);
@@ -232,21 +235,19 @@ export function TokenPicker({
   };
 
   const handleCustomTokenClick = () => {
-    if (isSelecting) return;
+    if (isInteractionDisabled) return;
     if (onCustomTokenClick) {
       onCustomTokenClick();
     }
     setOpen(false);
   };
 
-  const isOnTestnet = isTestnet(chainId);
-
   return (
     <>
       <Button
           type="button"
           variant="outline"
-          disabled={disabled || isOnTestnet || isSelecting}
+          disabled={isInteractionDisabled}
           onClick={() => setOpen(true)}
           className={cn(
             "h-12 px-4 justify-between bg-white hover:bg-gray-50 border border-gray-300 text-gray-900",
@@ -327,15 +328,16 @@ export function TokenPicker({
                 ref={inputRef}
                 placeholder={placeholder}
                 value={query}
-                disabled={isSelecting}
+                disabled={isInteractionDisabled}
                 onChange={(e) => setQuery(e.target.value)}
                 className="pl-10 pr-10 h-12 border-gray-300 text-black"
               />
               {query && (
                 <button
                   type="button"
+                  disabled={isInteractionDisabled}
                   onClick={() => setQuery("")}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full transition-colors"
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 hover:bg-gray-100 rounded-full transition-colors disabled:opacity-50"
                 >
                   <X className="w-4 h-4 text-gray-400" />
                 </button>
