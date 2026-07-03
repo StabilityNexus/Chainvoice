@@ -1,6 +1,6 @@
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import NetworkSwitcher from "./NetworkSwitcher";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAccount } from "wagmi";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
@@ -18,6 +18,8 @@ function Navbar() {
   const [hasConnected, setHasConnected] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const shareButtonRef = useRef(null);
+  const initRef = useRef(false);
 
   // Improved active route detection
   const isActive = (path) => {
@@ -42,6 +44,44 @@ function Navbar() {
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, [isConnected, hasConnected, navigate, location.pathname, address]);
+  useEffect(() => {
+    const initButton = () => {
+      if (initRef.current || !window.SocialShareButton) return;
+
+      shareButtonRef.current = new window.SocialShareButton({
+        container: "#share-button",
+      });
+      initRef.current = true;
+    };
+
+    if (window.SocialShareButton) {
+      initButton();
+    }
+
+    const checkInterval = setInterval(() => {
+      if (window.SocialShareButton) {
+        clearInterval(checkInterval);
+        initButton();
+      }
+    }, 100);
+
+    return () => {
+      clearInterval(checkInterval);
+      if (shareButtonRef.current?.destroy) {
+        shareButtonRef.current.destroy();
+      }
+      initRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (shareButtonRef.current?.updateOptions) {
+      shareButtonRef.current.updateOptions({
+        url: window.location.href,
+        title: document.title,
+      });
+    }
+  }, [location.pathname, location.hash]);
 
   const handleScroll = (sectionId) => {
     if (location.pathname !== "/") {
@@ -223,6 +263,15 @@ function Navbar() {
                 </Link>
               </motion.div>
             ))}
+
+            {/* ADD THIS: Social share button container left of About */}
+            <motion.div
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              className="mr-2"
+            >
+              <div id="share-button"></div>
+            </motion.div>
 
             <motion.div
               whileHover={{ scale: 1.05 }}
