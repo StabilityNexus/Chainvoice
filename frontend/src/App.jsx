@@ -49,6 +49,7 @@ const GenerateLink = lazy(() => import("./page/GenerateLink"));
 const CreateInvoicesBatch = lazy(() => import("./page/CreateInvoicesBatch"));
 const BatchPayment = lazy(() => import("./page/BatchPayment"));
 const NotFound = lazy(() => import("./page/NotFound"));
+const Settings = lazy(() => import("./page/Settings"));
 
 function App() {
   return (
@@ -107,6 +108,7 @@ function App() {
                           path="batch-invoice"
                           element={<CreateInvoicesBatch />}
                         />
+                        <Route path="settings" element={<Settings />} />
                       </Route>
                       <Route path="feature" element={<Feature />} />
                       <Route path="about" element={<About />} />

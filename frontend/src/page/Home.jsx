@@ -11,6 +11,7 @@ import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import DraftsIcon from "@mui/icons-material/Drafts";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import LinkIcon from "@mui/icons-material/Link";
+import SettingsIcon from "@mui/icons-material/Settings";
 import MenuItem from "@mui/material/MenuItem";
 import FormControl from "@mui/material/FormControl";
 import Select from "@mui/material/Select";
@@ -62,6 +63,12 @@ export default function Home() {
       icon: <DraftsIcon />,
       route: "pending",
       color: "#60a5fa",
+    },
+    {
+      text: "Settings",
+      icon: <SettingsIcon />,
+      route: "settings",
+      color: "#9ca3af",
     },
   ];
 
