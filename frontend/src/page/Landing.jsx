@@ -31,19 +31,15 @@ function Landing() {
               </motion.h1>
 
               <p className="text-xl text-gray-300 leading-relaxed">
-                End-to-end encrypted, multi-chain invoicing with Lit Protocol
+                End-to-end encrypted, multi-chain invoicing
                 and support for 1000+ ERC20 tokens.
               </p>
 
               <div className="flex flex-col space-y-6">
                 <div className="flex flex-wrap justify-center md:justify-start gap-4 text-sm">
                   <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-full">
-                    <img
-                      src={`${import.meta.env.BASE_URL}lit-protocol-logo.png`}
-                      alt="Lit Protocol"
-                      className="h-4 w-4"
-                    />
-                    <span>Lit Protocol Encrypted</span>
+                    <FiShield className="text-green-400" />
+                    <span>End-to-End Encrypted</span>
                   </div>
                   <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-full">
                     <SiEthereum className="text-green-400" />
@@ -71,13 +67,9 @@ function Landing() {
                 />
                 <div className="absolute -bottom-6 -right-6 bg-gradient-to-r from-green-500 to-emerald-600 p-2 rounded-lg shadow-lg">
                   <div className="bg-black/80 p-3 rounded flex items-center">
-                    <img
-                      src={`${import.meta.env.BASE_URL}lit-protocol-logo.png`}
-                      alt="Lit Protocol"
-                      className="h-4 mr-2"
-                    />
+                    <FiShield className="text-green-400 mr-2" />
                     <p className="text-xs font-mono">
-                      Encrypted with Lit Protocol
+                      End-to-End Encrypted
                     </p>
                   </div>
                 </div>
@@ -97,8 +89,7 @@ function Landing() {
               viewport={{ once: true }}
               className="text-4xl font-bold mb-6"
             >
-              <span className="text-green-400">Military-Grade Security</span>{" "}
-              Powered by Lit Protocol
+              <span className="text-green-400">Military-Grade Security</span>
             </motion.h2>
           </div>
 
@@ -108,7 +99,7 @@ function Landing() {
                 icon: <FiShield className="w-8 h-8" />,
                 title: "Decentralized Encryption",
                 description:
-                  "Invoice data is encrypted using Lit Protocol's distributed key management system, ensuring no single party can access sensitive information without proper authorization.",
+                  "Invoice data is encrypted using a distributed key management system, ensuring no single party can access sensitive information without proper authorization.",
               },
               {
                 icon: <FiLock className="w-8 h-8" />,
@@ -120,7 +111,7 @@ function Landing() {
                 icon: <FiZap className="w-8 h-8" />,
                 title: "Cross-Chain Compatibility",
                 description:
-                  "Our Lit Protocol integration works seamlessly across all supported chains, maintaining security consistency throughout the ecosystem.",
+                  "Our encryption integration works seamlessly across all supported chains, maintaining security consistency throughout the ecosystem.",
               },
             ].map((feature, index) => (
               <motion.div
@@ -157,8 +148,7 @@ function Landing() {
               Universal <span className="text-green-400">Token Support</span>
             </motion.h2>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
-              Accept payments in any ERC20 token while maintaining full
-              encryption and security through Lit Protocol
+              encryption and security
             </p>
           </div>
 
@@ -178,8 +168,8 @@ function Landing() {
 
               <p className="text-gray-400 mb-6 leading-relaxed">
                 Chainvoice's smart contract architecture automatically handles
-                token conversions and verifications, while Lit Protocol ensures
-                all payment details remain encrypted until settlement. Our
+                token conversions and verifications, while end-to-end encryption ensures
+                all payment details remain secure until settlement. Our
                 system supports:
               </p>
 
