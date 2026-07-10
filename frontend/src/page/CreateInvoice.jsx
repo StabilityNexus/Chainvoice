@@ -468,6 +468,11 @@ const validateClientAddress = useCallback((value) => {
           );
           return;
         }
+      } else {
+        console.warn("InvoiceCreated event not found in transaction logs");
+        toast.error(
+          "Invoice was created on-chain, but could not be detected in the transaction. Please check your Sent Invoices page."
+        );
       }
 
       setTimeout(() => navigate("/dashboard/sent"), 4000);

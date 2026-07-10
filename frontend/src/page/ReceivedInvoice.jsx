@@ -358,7 +358,7 @@ function ReceivedInvoice() {
     }
 
     setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
-    toast.info(
+    toast(
       `Selected ${batchInvoices.length} invoices from batch #${batchId}`
     );
 
@@ -431,7 +431,7 @@ function ReceivedInvoice() {
         const amountDueInWei = ethers.parseUnits(String(amountDue), decimals);
 
         if (currentAllowance < amountDueInWei) {
-          toast.info(`Requesting approval for ${tokenSymbol}...`);
+          toast(`Requesting approval for ${tokenSymbol}...`);
           const contractAddress = import.meta.env[
             `VITE_CONTRACT_ADDRESS_${chainId}`
           ];
@@ -443,16 +443,16 @@ function ReceivedInvoice() {
             contractAddress,
             amountDueInWei
           );
-          toast.info("Approval transaction submitted. Please wait...");
+          toast("Approval transaction submitted. Please wait...");
           await approveTx.wait();
           toast.success(`${tokenSymbol} approval completed successfully!`);
         }
 
-        toast.info("Submitting payment transaction...");
+        toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
           value: fee,
         });
-        toast.info(
+        toast(
           "Payment transaction submitted. Please wait for confirmation..."
         );
         await tx.wait();
@@ -461,11 +461,11 @@ function ReceivedInvoice() {
         const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
         const total = amountDueInWei + BigInt(fee);
 
-        toast.info("Submitting payment transaction...");
+        toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
           value: total,
         });
-        toast.info(
+        toast(
           "Payment transaction submitted. Please wait for confirmation..."
         );
         await tx.wait();
@@ -511,7 +511,7 @@ function ReceivedInvoice() {
       const grouped = getGroupedInvoices();
 
       // BALANCE CHECK (same as individual)
-      toast.info("Checking balances...");
+      toast("Checking balances...");
 
       for (const [tokenKey, group] of grouped.entries()) {
         try {
@@ -574,7 +574,7 @@ function ReceivedInvoice() {
           );
 
           if (currentAllowance < totalAmount) {
-            toast.info(`Approving ${symbol} for spending...`);
+            toast(`Approving ${symbol} for spending...`);
             const approveTx = await tokenContract.approve(
               contractAddress,
               totalAmount
@@ -836,7 +836,7 @@ function ReceivedInvoice() {
     }
 
     try {
-      toast.info("Generating PDF...");
+      toast("Generating PDF...");
       const pdf = await generateInvoicePDF(drawerState.selectedInvoice, fee);
       const fileName = `invoice-${drawerState.selectedInvoice.id.toString().padStart(6, "0")}.pdf`;
       pdf.save(fileName);

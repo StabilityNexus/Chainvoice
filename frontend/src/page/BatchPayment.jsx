@@ -227,7 +227,7 @@ function BatchPayment() {
     }
 
     setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
-    toast.info(
+    toast(
       `Selected ${batchInvoices.length} invoices from batch #${batchId}`
     );
 
@@ -458,7 +458,7 @@ function BatchPayment() {
       const grouped = getGroupedInvoices();
 
       // PRE-CHECK ALL BALANCES BEFORE ANY TRANSACTIONS
-      toast.info("Checking balances...");
+      toast("Checking balances...");
       const errors = [];
 
       for (const [tokenKey, group] of grouped.entries()) {
@@ -524,7 +524,7 @@ function BatchPayment() {
           );
 
           if (currentAllowance < totalAmount) {
-            toast.info(`Approving ${symbol} for spending...`);
+            toast(`Approving ${symbol} for spending...`);
             const approveTx = await tokenContract.approve(
               contractAddress,
               totalAmount

@@ -10,9 +10,11 @@ const STORE_NAME = 'invoices';
  * previous version or corrupted state), we delete and recreate it.
  * @returns {Promise<import('idb').IDBPDatabase>}
  */
+let dbPromise = null;
+
 async function getDB() {
-  try {
-    const db = await openDB(DB_NAME, DB_VERSION, {
+  if (!dbPromise) {
+    dbPromise = openDB(DB_NAME, DB_VERSION, {
       upgrade(db) {
         let store;
         if (!db.objectStoreNames.contains(STORE_NAME)) {
@@ -20,18 +22,19 @@ async function getDB() {
         } else {
           store = db.transaction.objectStore(STORE_NAME);
         }
-        
+
         if (!store.indexNames.contains('by-sender')) store.createIndex('by-sender', 'from');
         if (!store.indexNames.contains('by-receiver')) store.createIndex('by-receiver', 'to');
         if (!store.indexNames.contains('by-chain')) store.createIndex('by-chain', 'chainId');
         if (!store.indexNames.contains('by-invoiceId')) store.createIndex('by-invoiceId', 'invoiceId');
       },
+    }).catch((err) => {
+      dbPromise = null; // Reset so next call retries
+      console.error('[invoiceDB] DB open failed:', err);
+      throw err;
     });
-    return db;
-  } catch (err) {
-    console.error('[invoiceDB] DB open failed:', err);
-    throw err;
   }
+  return dbPromise;
 }
 
 /**
@@ -54,13 +57,16 @@ export async function storeInvoice(invoice) {
   if (invoice.chainId === undefined || invoice.invoiceId === undefined) {
     throw new Error('storeInvoice: chainId and invoiceId are required');
   }
+  if (!invoice.from || !invoice.to) {
+    throw new Error('storeInvoice: from and to addresses are required');
+  }
 
   const db = await getDB();
   const record = {
     ...invoice,
     compositeKey: makeKey(invoice.chainId, invoice.invoiceId),
-    from: invoice.from?.toLowerCase(),
-    to: invoice.to?.toLowerCase(),
+    from: invoice.from.toLowerCase(),
+    to: invoice.to.toLowerCase(),
     storedAt: Date.now(),
   };
   await db.put(STORE_NAME, record);
@@ -145,10 +151,13 @@ export async function updateInvoiceStatus(chainId, invoiceId, updates) {
   try {
     const db = await getDB();
     const key = makeKey(chainId, invoiceId);
-    const existing = await db.get(STORE_NAME, key);
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+    const existing = await store.get(key);
     if (!existing) return null;
     const updated = { ...existing, ...updates, updatedAt: Date.now() };
-    await db.put(STORE_NAME, updated);
+    await store.put(updated);
+    await tx.done;
     return updated;
   } catch (err) {
     console.warn('[invoiceDB] updateInvoiceStatus failed:', err);

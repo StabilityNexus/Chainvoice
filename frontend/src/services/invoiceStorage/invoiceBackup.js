@@ -4,7 +4,7 @@ import {
   downloadJSON,
   readFileAsJSON,
 } from '@aossie-org/idb-backup';
-import { DB_NAME } from './invoiceDB.js';
+import { DB_NAME, getAllInvoices } from './invoiceDB.js';
 
 /**
  * Export all local invoice data as a downloadable JSON backup file.
@@ -47,7 +47,6 @@ export async function importInvoiceBackup(file) {
  */
 export async function getLocalInvoiceCount() {
   try {
-    const { getAllInvoices } = await import('./invoiceDB.js');
     const all = await getAllInvoices();
     return all.length;
   } catch {
