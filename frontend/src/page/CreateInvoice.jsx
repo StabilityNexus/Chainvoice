@@ -51,7 +51,7 @@ import {
 } from "@/utils/invoiceValidation";
 import toast from "react-hot-toast";
 
-import ProductCatalogImport from "../components/ProductCatalogImport";
+
 import { AmountTypeToggle } from "../components/AmountTypeToggle";
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
 import { useProductCatalog } from "@/hooks/useProductCatalog";
@@ -1159,8 +1159,6 @@ function CreateInvoice() {
             </div>
           </div>
 
-          {/* Product Catalog Import Section */}
-          <ProductCatalogImport />
 
           {/* Invoice Items Section */}
           <div className="mb-6 sm:mb-8">

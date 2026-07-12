@@ -57,7 +57,7 @@ import {
   getClientAddressError,
   validateBatchInvoiceData,
 } from "@/utils/invoiceValidation";
-import ProductCatalogImport from "@/components/ProductCatalogImport";
+
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
 import { useProductCatalog } from "@/hooks/useProductCatalog";
 import {
@@ -1055,8 +1055,6 @@ function CreateInvoicesBatch() {
               </div>
             </div>
           </div>
-
-          <ProductCatalogImport />
 
           {/* Clean Invoice Rows */}
           <div className="w-full mb-6 sm:mb-8 space-y-4">
