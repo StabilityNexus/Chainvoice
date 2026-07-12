@@ -16,10 +16,10 @@ import { useRef } from "react";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
+import { getReceivedInvoices as getLocalReceivedInvoices, storeInvoice, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
 
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
-import { toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import toast from "react-hot-toast";
 import CancelIcon from "@mui/icons-material/Cancel";
 
 import {
@@ -358,7 +358,7 @@ function ReceivedInvoice() {
     }
 
     setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
-    toast.info(
+    toast(
       `Selected ${batchInvoices.length} invoices from batch #${batchId}`
     );
 
@@ -431,7 +431,7 @@ function ReceivedInvoice() {
         const amountDueInWei = ethers.parseUnits(String(amountDue), decimals);
 
         if (currentAllowance < amountDueInWei) {
-          toast.info(`Requesting approval for ${tokenSymbol}...`);
+          toast(`Requesting approval for ${tokenSymbol}...`);
           const contractAddress = import.meta.env[
             `VITE_CONTRACT_ADDRESS_${chainId}`
           ];
@@ -443,16 +443,16 @@ function ReceivedInvoice() {
             contractAddress,
             amountDueInWei
           );
-          toast.info("Approval transaction submitted. Please wait...");
+          toast("Approval transaction submitted. Please wait...");
           await approveTx.wait();
           toast.success(`${tokenSymbol} approval completed successfully!`);
         }
 
-        toast.info("Submitting payment transaction...");
+        toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
           value: fee,
         });
-        toast.info(
+        toast(
           "Payment transaction submitted. Please wait for confirmation..."
         );
         await tx.wait();
@@ -461,11 +461,11 @@ function ReceivedInvoice() {
         const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
         const total = amountDueInWei + BigInt(fee);
 
-        toast.info("Submitting payment transaction...");
+        toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
           value: total,
         });
-        toast.info(
+        toast(
           "Payment transaction submitted. Please wait for confirmation..."
         );
         await tx.wait();
@@ -511,7 +511,7 @@ function ReceivedInvoice() {
       const grouped = getGroupedInvoices();
 
       // BALANCE CHECK (same as individual)
-      toast.info("Checking balances...");
+      toast("Checking balances...");
 
       for (const [tokenKey, group] of grouped.entries()) {
         try {
@@ -574,7 +574,7 @@ function ReceivedInvoice() {
           );
 
           if (currentAllowance < totalAmount) {
-            toast.info(`Approving ${symbol} for spending...`);
+            toast(`Approving ${symbol} for spending...`);
             const approveTx = await tokenContract.approve(
               contractAddress,
               totalAmount
@@ -661,9 +661,18 @@ function ReceivedInvoice() {
 
         const decryptedInvoices = [];
 
+        // 1. Fetch local invoices
+        const localInvoices = await getLocalReceivedInvoices(address);
+        const localInvoiceMap = new Map();
+        for (const local of localInvoices) {
+          if (String(local.chainId) === String(chainId)) {
+            localInvoiceMap.set(String(local.invoiceId), local);
+          }
+        }
+
         for (const invoice of res) {
           try {
-            const id = invoice[0];
+            const id = invoice[0].toString();
             const from = invoice[1].toLowerCase();
             const to = invoice[2].toLowerCase();
             const isPaid = invoice[5];
@@ -678,10 +687,40 @@ function ReceivedInvoice() {
               continue;
             }
 
-            const decryptedString = atob(encryptedStringBase64);
+            const localInv = localInvoiceMap.get(id);
+            let parsed;
 
-            const parsed = JSON.parse(decryptedString);
-            parsed["id"] = id;
+            if (localInv && localInv.data) {
+              parsed = { ...localInv.data };
+              
+              // Update local status if it changed
+              if (localInv.isPaid !== isPaid || localInv.isCancelled !== isCancelled) {
+                await updateInvoiceStatus(chainId, id, { isPaid, isCancelled });
+              }
+            } else {
+              if (!encryptedStringBase64) continue;
+              const decryptedString = atob(encryptedStringBase64);
+              parsed = JSON.parse(decryptedString);
+
+              // Cache it locally
+              try {
+                await storeInvoice({
+                  invoiceId: id,
+                  chainId,
+                  from,
+                  to,
+                  isPaid,
+                  isCancelled,
+                  wakuDelivered: false,
+                  invoiceDataHash: dataToEncryptHash,
+                  data: parsed
+                });
+              } catch (err) {
+                console.warn(`Failed to cache invoice ${id} locally`, err);
+              }
+            }
+
+            parsed["id"] = BigInt(id);
             parsed["isPaid"] = isPaid;
             parsed["isCancelled"] = isCancelled;
 
@@ -797,7 +836,7 @@ function ReceivedInvoice() {
     }
 
     try {
-      toast.info("Generating PDF...");
+      toast("Generating PDF...");
       const pdf = await generateInvoicePDF(drawerState.selectedInvoice, fee);
       const fileName = `invoice-${drawerState.selectedInvoice.id.toString().padStart(6, "0")}.pdf`;
       pdf.save(fileName);

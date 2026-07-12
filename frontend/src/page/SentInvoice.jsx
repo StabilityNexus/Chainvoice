@@ -16,9 +16,10 @@ import { useRef } from "react";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
+import { getSentInvoices as getLocalSentInvoices, storeInvoice, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
 
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
-import { toast } from "react-toastify";
+import toast from "react-hot-toast";
 import {
   CircularProgress,
   Skeleton,
@@ -156,9 +157,19 @@ function SentInvoice() {
 
         const decryptedInvoices = [];
 
+        // 1. Fetch local invoices
+        const localInvoices = await getLocalSentInvoices(address);
+        const localInvoiceMap = new Map();
+        for (const local of localInvoices) {
+          if (String(local.chainId) === String(chainId)) {
+            localInvoiceMap.set(String(local.invoiceId), local);
+          }
+        }
+
+        // 2. Process on-chain invoices and merge
         for (const invoice of res) {
           try {
-            const id = invoice[0];
+            const id = invoice[0].toString();
             const from = invoice[1].toLowerCase();
             const to = invoice[2].toLowerCase();
             const isPaid = invoice[5];
@@ -174,10 +185,40 @@ function SentInvoice() {
               continue;
             }
 
-            const decryptedString = atob(encryptedStringBase64);
+            const localInv = localInvoiceMap.get(id);
+            let parsed;
 
-            const parsed = JSON.parse(decryptedString);
-            parsed["id"] = id;
+            if (localInv && localInv.data) {
+              parsed = { ...localInv.data };
+              
+              // Update local status if it changed
+              if (localInv.isPaid !== isPaid || localInv.isCancelled !== isCancelled) {
+                await updateInvoiceStatus(chainId, id, { isPaid, isCancelled });
+              }
+            } else {
+              if (!encryptedStringBase64) continue;
+              const decryptedString = atob(encryptedStringBase64);
+              parsed = JSON.parse(decryptedString);
+
+              // Cache it locally
+              try {
+                await storeInvoice({
+                  invoiceId: id,
+                  chainId,
+                  from,
+                  to,
+                  isPaid,
+                  isCancelled,
+                  wakuDelivered: false,
+                  invoiceDataHash: dataToEncryptHash,
+                  data: parsed
+                });
+              } catch (err) {
+                console.warn(`Failed to cache invoice ${id} locally`, err);
+              }
+            }
+
+            parsed["id"] = BigInt(id);
             parsed["isPaid"] = isPaid;
             parsed["isCancelled"] = isCancelled;
 
@@ -291,7 +332,7 @@ function SentInvoice() {
     }
 
     try {
-      toast.info("Generating PDF...");
+      toast("Generating PDF...");
       const pdf = await generateInvoicePDF(drawerState.selectedInvoice, fee);
       const fileName = `invoice-${drawerState.selectedInvoice.id.toString().padStart(6, "0")}.pdf`;
       pdf.save(fileName);
