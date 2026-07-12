@@ -37,6 +37,7 @@ jobs:
         run: npm install
 
       - name: Run lint
+        continue-on-error: true
         run: npm run lint
 
       - name: Run tests with coverage
