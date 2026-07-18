@@ -16,17 +16,10 @@ import { useRef } from "react";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
-import { LitNodeClient } from "@lit-protocol/lit-node-client";
-import { decryptToString } from "@lit-protocol/encryption/src/lib/encryption.js";
-import { LIT_ABILITY, LIT_NETWORK } from "@lit-protocol/constants";
-import {
-  createSiweMessageWithRecaps,
-  generateAuthSig,
-  LitAccessControlConditionResource,
-} from "@lit-protocol/auth-helpers";
+import { getReceivedInvoices as getLocalReceivedInvoices, storeInvoice, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
+
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
-import { toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import toast from "react-hot-toast";
 import CancelIcon from "@mui/icons-material/Cancel";
 
 import {
@@ -91,8 +84,7 @@ function ReceivedInvoice() {
   const [receivedInvoices, setReceivedInvoice] = useState([]);
   const [fee, setFee] = useState(0);
   const [error, setError] = useState(null);
-  const [litReady, setLitReady] = useState(false);
-  const litClientRef = useRef(null);
+
   const [paymentLoading, setPaymentLoading] = useState({});
   const [networkLoading, setNetworkLoading] = useState(false);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
@@ -366,7 +358,7 @@ function ReceivedInvoice() {
     }
 
     setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
-    toast.info(
+    toast(
       `Selected ${batchInvoices.length} invoices from batch #${batchId}`
     );
 
@@ -439,7 +431,7 @@ function ReceivedInvoice() {
         const amountDueInWei = ethers.parseUnits(String(amountDue), decimals);
 
         if (currentAllowance < amountDueInWei) {
-          toast.info(`Requesting approval for ${tokenSymbol}...`);
+          toast(`Requesting approval for ${tokenSymbol}...`);
           const contractAddress = import.meta.env[
             `VITE_CONTRACT_ADDRESS_${chainId}`
           ];
@@ -451,16 +443,16 @@ function ReceivedInvoice() {
             contractAddress,
             amountDueInWei
           );
-          toast.info("Approval transaction submitted. Please wait...");
+          toast("Approval transaction submitted. Please wait...");
           await approveTx.wait();
           toast.success(`${tokenSymbol} approval completed successfully!`);
         }
 
-        toast.info("Submitting payment transaction...");
+        toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
           value: fee,
         });
-        toast.info(
+        toast(
           "Payment transaction submitted. Please wait for confirmation..."
         );
         await tx.wait();
@@ -469,11 +461,11 @@ function ReceivedInvoice() {
         const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
         const total = amountDueInWei + BigInt(fee);
 
-        toast.info("Submitting payment transaction...");
+        toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
           value: total,
         });
-        toast.info(
+        toast(
           "Payment transaction submitted. Please wait for confirmation..."
         );
         await tx.wait();
@@ -519,7 +511,7 @@ function ReceivedInvoice() {
       const grouped = getGroupedInvoices();
 
       // BALANCE CHECK (same as individual)
-      toast.info("Checking balances...");
+      toast("Checking balances...");
 
       for (const [tokenKey, group] of grouped.entries()) {
         try {
@@ -582,7 +574,7 @@ function ReceivedInvoice() {
           );
 
           if (currentAllowance < totalAmount) {
-            toast.info(`Approving ${symbol} for spending...`);
+            toast(`Approving ${symbol} for spending...`);
             const approveTx = await tokenContract.approve(
               contractAddress,
               totalAmount
@@ -631,28 +623,6 @@ function ReceivedInvoice() {
     }
   };
 
-  // Initialize Lit Protocol
-  useEffect(() => {
-    const initLit = async () => {
-      try {
-        setLoading(true);
-        if (!litClientRef.current) {
-          const client = new LitNodeClient({
-            litNetwork: LIT_NETWORK.DatilDev,
-            debug: false,
-          });
-          await client.connect();
-          litClientRef.current = client;
-          setLitReady(true);
-        }
-      } catch (error) {
-        console.error("Error initializing Lit client:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    initLit();
-  }, []);
 
   useEffect(() => {
     setShowWalletAlert(!isConnected);
@@ -660,7 +630,7 @@ function ReceivedInvoice() {
 
   // Fetch invoices
   useEffect(() => {
-    if (!walletClient || !address || !litReady) return;
+    if (!walletClient || !address) return;
 
     const fetchReceivedInvoices = async () => {
       try {
@@ -669,12 +639,7 @@ function ReceivedInvoice() {
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
 
-        const litNodeClient = litClientRef.current;
-        if (!litNodeClient) {
-          setError("Lit client not initialized. Please refresh the page.");
-          setLoading(false);
-          return;
-        }
+
 
         const contractAddress = import.meta.env[
           `VITE_CONTRACT_ADDRESS_${chainId}`
@@ -696,9 +661,18 @@ function ReceivedInvoice() {
 
         const decryptedInvoices = [];
 
+        // 1. Fetch local invoices
+        const localInvoices = await getLocalReceivedInvoices(address);
+        const localInvoiceMap = new Map();
+        for (const local of localInvoices) {
+          if (String(local.chainId) === String(chainId)) {
+            localInvoiceMap.set(String(local.invoiceId), local);
+          }
+        }
+
         for (const invoice of res) {
           try {
-            const id = invoice[0];
+            const id = invoice[0].toString();
             const from = invoice[1].toLowerCase();
             const to = invoice[2].toLowerCase();
             const isPaid = invoice[5];
@@ -713,72 +687,40 @@ function ReceivedInvoice() {
               continue;
             }
 
-            const ciphertext = atob(encryptedStringBase64);
-            const accessControlConditions = [
-              {
-                contractAddress: "",
-                standardContractType: "",
-                chain: "ethereum",
-                method: "",
-                parameters: [":userAddress"],
-                returnValueTest: {
-                  comparator: "=",
-                  value: from,
-                },
-              },
-              { operator: "or" },
-              {
-                contractAddress: "",
-                standardContractType: "",
-                chain: "ethereum",
-                method: "",
-                parameters: [":userAddress"],
-                returnValueTest: {
-                  comparator: "=",
-                  value: to,
-                },
-              },
-            ];
+            const localInv = localInvoiceMap.get(id);
+            let parsed;
 
-            const sessionSigs = await litNodeClient.getSessionSigs({
-              chain: "ethereum",
-              resourceAbilityRequests: [
-                {
-                  resource: new LitAccessControlConditionResource("*"),
-                  ability: LIT_ABILITY.AccessControlConditionDecryption,
-                },
-              ],
-              authNeededCallback: async ({
-                uri,
-                expiration,
-                resourceAbilityRequests,
-              }) => {
-                const nonce = await litNodeClient.getLatestBlockhash();
-                const toSign = await createSiweMessageWithRecaps({
-                  uri,
-                  expiration,
-                  resources: resourceAbilityRequests,
-                  walletAddress: address,
-                  nonce,
-                  litNodeClient,
+            if (localInv && localInv.data) {
+              parsed = { ...localInv.data };
+              
+              // Update local status if it changed
+              if (localInv.isPaid !== isPaid || localInv.isCancelled !== isCancelled) {
+                await updateInvoiceStatus(chainId, id, { isPaid, isCancelled });
+              }
+            } else {
+              if (!encryptedStringBase64) continue;
+              const decryptedString = atob(encryptedStringBase64);
+              parsed = JSON.parse(decryptedString);
+
+              // Cache it locally
+              try {
+                await storeInvoice({
+                  invoiceId: id,
+                  chainId,
+                  from,
+                  to,
+                  isPaid,
+                  isCancelled,
+                  wakuDelivered: false,
+                  invoiceDataHash: dataToEncryptHash,
+                  data: parsed
                 });
-                return await generateAuthSig({ signer, toSign });
-              },
-            });
+              } catch (err) {
+                console.warn(`Failed to cache invoice ${id} locally`, err);
+              }
+            }
 
-            const decryptedString = await decryptToString(
-              {
-                accessControlConditions,
-                chain: "ethereum",
-                ciphertext,
-                dataToEncryptHash,
-                sessionSigs,
-              },
-              litNodeClient
-            );
-
-            const parsed = JSON.parse(decryptedString);
-            parsed["id"] = id;
+            parsed["id"] = BigInt(id);
             parsed["isPaid"] = isPaid;
             parsed["isCancelled"] = isCancelled;
 
@@ -854,7 +796,7 @@ function ReceivedInvoice() {
     };
 
     fetchReceivedInvoices();
-  }, [walletClient, litReady, address, tokens]);
+  }, [walletClient, address, tokens]);
 
   const toggleDrawer = (invoice) => (event) => {
     if (
@@ -894,7 +836,7 @@ function ReceivedInvoice() {
     }
 
     try {
-      toast.info("Generating PDF...");
+      toast("Generating PDF...");
       const pdf = await generateInvoicePDF(drawerState.selectedInvoice, fee);
       const fileName = `invoice-${drawerState.selectedInvoice.id.toString().padStart(6, "0")}.pdf`;
       pdf.save(fileName);

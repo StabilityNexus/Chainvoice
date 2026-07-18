@@ -7,7 +7,8 @@ import {
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import * as chains from "wagmi/chains";
-import { mainnet, classic, base, bsc, polygon, sepolia } from "wagmi/chains";
+import { mainnet as wagmiMainnet, classic, base, bsc, polygon, sepolia } from "wagmi/chains";
+
 import { HashRouter as Router, Route, Routes } from "react-router-dom";
 
 import { lazy, Suspense } from "react";
@@ -24,6 +25,16 @@ const CreateInvoice = lazy(() => import("./page/CreateInvoice"));
 const SentInvoice = lazy(() => import("./page/SentInvoice"));
 const ReceivedInvoice = lazy(() => import("./page/ReceivedInvoice"));
 
+const mainnet = {
+  ...wagmiMainnet,
+  rpcUrls: {
+    ...wagmiMainnet.rpcUrls,
+    default: {
+      http: ["https://cloudflare-eth.com", ...wagmiMainnet.rpcUrls.default.http],
+    },
+  },
+};
+
 const AllChains = [mainnet, classic, base, bsc, polygon, sepolia, citreaTestnet];
 
 export const config = getDefaultConfig({
@@ -38,6 +49,7 @@ const GenerateLink = lazy(() => import("./page/GenerateLink"));
 const CreateInvoicesBatch = lazy(() => import("./page/CreateInvoicesBatch"));
 const BatchPayment = lazy(() => import("./page/BatchPayment"));
 const NotFound = lazy(() => import("./page/NotFound"));
+const Settings = lazy(() => import("./page/Settings"));
 
 function App() {
   return (
@@ -96,6 +108,7 @@ function App() {
                           path="batch-invoice"
                           element={<CreateInvoicesBatch />}
                         />
+                        <Route path="settings" element={<Settings />} />
                       </Route>
                       <Route path="feature" element={<Feature />} />
                       <Route path="about" element={<About />} />
