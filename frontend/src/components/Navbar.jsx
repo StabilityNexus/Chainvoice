@@ -184,8 +184,8 @@ function Navbar() {
                     <Link
                       to="/dashboard/create"
                       className={`flex items-center px-1 xl:px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
-                          ? "text-green-400 font-medium"
-                          : "text-white hover:text-green-400"
+                        ? "text-green-400 font-medium"
+                        : "text-white hover:text-green-400"
                         }`}
                     >
                       <span className="mr-2">{item.icon}</span>
@@ -195,8 +195,8 @@ function Navbar() {
                     <Link
                       to={item.path}
                       className={`flex items-center px-1 xl:px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
-                          ? "text-green-400 font-medium"
-                          : "text-white hover:text-green-400"
+                        ? "text-green-400 font-medium"
+                        : "text-white hover:text-green-400"
                         }`}
                     >
                       <span className="mr-2">{item.icon}</span>
@@ -205,6 +205,7 @@ function Navbar() {
                   )}
                 </motion.div>
               ))}
+
             {publicItems.map((item) => (
               <motion.div
                 key={item.name}
@@ -214,8 +215,8 @@ function Navbar() {
                 <Link
                   to={item.path}
                   className={`flex items-center px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
-                      ? "text-green-400 font-medium"
-                      : "text-white hover:text-green-400"
+                    ? "text-green-400 font-medium"
+                    : "text-white hover:text-green-400"
                     }`}
                 >
                   <span className="mr-2">{item.icon}</span>
@@ -224,11 +225,14 @@ function Navbar() {
               </motion.div>
             ))}
 
+            <div data-social-share></div>
+
             <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               className="ml-4 flex items-center space-x-4"
             >
+
               <NetworkSwitcher />
               <ConnectButton
                 accountStatus="address"
@@ -311,8 +315,8 @@ function Navbar() {
                       }
                       onClick={closeMobileMenu}
                       className={`block w-full text-left px-4 py-3 rounded-lg transition-colors ${isActive(item.path)
-                          ? "bg-green-900/30 text-green-400 font-medium"
-                          : "text-white hover:bg-gray-800"
+                        ? "bg-green-900/30 text-green-400 font-medium"
+                        : "text-white hover:bg-gray-800"
                         }`}
                     >
                       <div className="flex items-center">
@@ -327,8 +331,8 @@ function Navbar() {
                     to={item.path}
                     onClick={closeMobileMenu}
                     className={`block w-full text-left px-4 py-3 rounded-lg transition-colors ${isActive(item.path)
-                        ? "bg-green-900/30 text-green-400 font-medium"
-                        : "text-white hover:bg-gray-800"
+                      ? "bg-green-900/30 text-green-400 font-medium"
+                      : "text-white hover:bg-gray-800"
                       }`}
                   >
                     <div className="flex items-center">
