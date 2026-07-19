@@ -205,7 +205,7 @@ function Navbar() {
                   )}
                 </motion.div>
               ))}
-
+            <div data-social-share></div>
             {publicItems.map((item) => (
               <motion.div
                 key={item.name}
@@ -224,8 +224,6 @@ function Navbar() {
                 </Link>
               </motion.div>
             ))}
-
-            <div data-social-share></div>
 
             <motion.div
               whileHover={{ scale: 1.05 }}
