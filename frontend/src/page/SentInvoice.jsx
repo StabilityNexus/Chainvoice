@@ -8,11 +8,10 @@ import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { BrowserProvider, Contract, ethers } from "ethers";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
-import { useRef } from "react";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
@@ -21,7 +20,6 @@ import { getSentInvoices as getLocalSentInvoices, storeInvoice, updateInvoiceSta
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import toast from "react-hot-toast";
 import {
-  CircularProgress,
   Skeleton,
   Chip,
   Avatar,
@@ -73,9 +71,6 @@ function SentInvoice() {
   const [sentInvoices, setSentInvoices] = useState([]);
   const [fee, setFee] = useState(0);
   const [error, setError] = useState(null);
-
-  const [paymentLoading, setPaymentLoading] = useState({});
-  const [networkLoading, setNetworkLoading] = useState(false);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [invoiceToCancel, setInvoiceToCancel] = useState(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
@@ -95,6 +90,7 @@ function SentInvoice() {
   };
 
   // Helper function to get token logo
+  // eslint-disable-next-line no-unused-vars
   const getTokenLogo = (tokenAddress, fallbackLogo) => {
     const tokenInfo = getTokenInfo(tokenAddress);
     return (
@@ -106,6 +102,7 @@ function SentInvoice() {
   };
 
   // Helper function to get token decimals
+  // eslint-disable-next-line no-unused-vars
   const getTokenDecimals = (tokenAddress, fallbackDecimals = 18) => {
     const tokenInfo = getTokenInfo(tokenAddress);
     return tokenInfo?.decimals || fallbackDecimals;
@@ -125,6 +122,7 @@ function SentInvoice() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
+     
   useEffect(() => {
     if (!walletClient || !address) return;
 
@@ -295,7 +293,8 @@ function SentInvoice() {
     };
 
     fetchSentInvoices();
-  }, [walletClient, address, tokens]); // Added tokens to dependency array
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletClient, address, tokens, chainId]); // Added tokens and chainId to dependency array
 
   const [drawerState, setDrawerState] = useState({
     open: false,
@@ -351,7 +350,6 @@ function SentInvoice() {
 
   const handleCancelInvoice = async (invoiceId) => {
     try {
-      setPaymentLoading((prev) => ({ ...prev, [invoiceId]: true }));
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
       const contractAddress = import.meta.env[
@@ -376,11 +374,8 @@ function SentInvoice() {
     } catch (error) {
       console.error("Cancellation failed:", error);
       toast.error("Failed to cancel invoice");
-    } finally {
-      setPaymentLoading((prev) => ({ ...prev, [invoiceId]: false }));
     }
   };
-
 
   const formatAddress = (address) => {
     return `${address.substring(0, 10)}...${address.substring(
@@ -451,7 +446,7 @@ function SentInvoice() {
                     No Invoices Found
                   </h3>
                   <p className="text-gray-600 mt-1">
-                    You haven't sent any invoices yet.
+                    You haven&apos;t sent any invoices yet.
                   </p>
                 </div>
               </div>
@@ -1038,7 +1033,7 @@ function SentInvoice() {
           <DialogContent>
             <DialogContentText id="alert-dialog-description">
               <Typography variant="body1" className="mb-3">
-                You're about to cancel this invoice sent to{" "}
+                You&apos;re about to cancel this invoice sent to{" "}
                 <span className="font-medium">
                   {invoiceToCancel?.client.fname}{" "}
                   {invoiceToCancel?.client.lname}

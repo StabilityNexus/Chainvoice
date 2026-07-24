@@ -1,5 +1,5 @@
 // pages/CreateInvoicesBatch.jsx - Clean & Professional
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import {
@@ -29,7 +29,6 @@ import {
   ChevronDown,
   ChevronRight,
   AlertTriangle,
-  Users,
   Receipt,
   AlertCircle,
 } from "lucide-react";
@@ -82,7 +81,7 @@ function CreateInvoicesBatch() {
   const { isConnected, chainId } = useAccount();
   const account = useAccount();
   const [dueDate, setDueDate] = useState(new Date());
-  const [issueDate, setIssueDate] = useState(new Date());
+  const [issueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -148,6 +147,7 @@ function CreateInvoicesBatch() {
         };
       })
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceRows.map((r) => JSON.stringify(r.itemData)).join(",")]);
 
 
@@ -501,6 +501,7 @@ function CreateInvoicesBatch() {
       setRowItemErrors(validation.itemErrors || {});
       setFieldErrors(validation.fieldErrors || {});
       
+      // eslint-disable-next-line no-unused-vars
       const hasFieldErrors = Object.keys(validation.addressErrors || {}).length > 0 || 
                              Object.keys(validation.totalErrors || {}).length > 0 ||
                              Object.keys(validation.itemErrors || {}).length > 0 ||
@@ -670,7 +671,7 @@ function CreateInvoicesBatch() {
           if (parsed?.name === 'InvoiceCreated') {
             invoiceIds.push(parsed.args[0].toString());
           }
-        } catch (e) {
+        } catch {
           // ignore
         }
       }

@@ -43,8 +43,8 @@ function createSearchIndexes(tokens) {
 }
 
 export function useTokenSearch(tokens, pageSize = 250) {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const loading = false;
+  const error = null;
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
 

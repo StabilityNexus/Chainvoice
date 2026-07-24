@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import {
   Copy,
   Link,
   Check,
   Wallet,
-  PlusIcon,
   Loader2,
   CheckCircle2,
   XCircle,
@@ -14,7 +13,6 @@ import {
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { cn } from "@/lib/utils";
 
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
 import TokenIntegrationRequest from "@/components/TokenIntegrationRequest";
@@ -29,8 +27,8 @@ const GenerateLink = () => {
   const { address, isConnected, chainId } = useAccount();
   const { data: walletClient } = useWalletClient();
   const [copied, setCopied] = useState(false);
-  const [amount, setAmount] = useState("");
-  const [description, setDescription] = useState("");
+  const [amount] = useState("");
+  const [description] = useState("");
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
 
   // Get tokens from the new hook
@@ -42,7 +40,7 @@ const GenerateLink = () => {
   const [useCustomToken, setUseCustomToken] = useState(false);
   const [tokenVerificationState, setTokenVerificationState] = useState("idle");
   const [verifiedToken, setVerifiedToken] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
   // Set default token when tokens are loaded
   useEffect(() => {
@@ -58,7 +56,7 @@ const GenerateLink = () => {
     }
   }, [tokens, selectedToken, useCustomToken]);
 
-  const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"];
+  // const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"];
 
   useEffect(() => {
     setShowWalletAlert(!isConnected);
@@ -300,7 +298,7 @@ const GenerateLink = () => {
                                   verified
                                 </li>
                                 <li>
-                                  • Address should start with "0x" followed by
+                                  • Address should start with &quot;0x&quot; followed by
                                   40 characters
                                 </li>
                                 <li>
@@ -385,7 +383,7 @@ const GenerateLink = () => {
                                 </p>
                                 <p className="text-xs text-red-500 mt-1">
                                   Please check the contract address and try
-                                  again. Make sure it's a valid ERC-20 token.
+                                  again. Make sure it&apos;s a valid ERC-20 token.
                                 </p>
                               </div>
                             </div>

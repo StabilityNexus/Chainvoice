@@ -1,5 +1,5 @@
 // pages/BatchPayment.jsx - Complete Enhanced Version
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import { BrowserProvider, Contract, ethers } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
@@ -38,7 +38,6 @@ function BatchPayment() {
   const [error, setError] = useState(null);
 
   const [paymentLoading, setPaymentLoading] = useState({});
-  const [networkLoading, setNetworkLoading] = useState(false);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [balanceErrors, setBalanceErrors] = useState([]);
   const [batchSuggestions, setBatchSuggestions] = useState([]);
@@ -52,10 +51,12 @@ function BatchPayment() {
   // Get tokens from the hook
   const { tokens } = useTokenList(chainId || 1);
 
+  // eslint-disable-next-line no-unused-vars
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
 
+    // eslint-disable-next-line no-unused-vars
   const handleChangeRowsPerPage = (event) => {
     setRowsPerPage(+event.target.value);
     setPage(0);
@@ -272,9 +273,7 @@ function BatchPayment() {
       if (!selectedInvoices.has(invoice.id)) return;
 
       const tokenAddress = invoice.paymentToken?.address || ethers.ZeroAddress;
-      const tokenKey = `${tokenAddress}_${
-        invoice.paymentToken?.symbol || "ETH"
-      }`;
+      const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"}`;
 
       if (!grouped.has(tokenKey)) {
         grouped.set(tokenKey, {
@@ -310,9 +309,6 @@ function BatchPayment() {
         setError(null);
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
-        const network = await provider.getNetwork();
-
-
 
         const contractAddress = import.meta.env[
           `VITE_CONTRACT_ADDRESS_${chainId}`
@@ -433,7 +429,8 @@ function BatchPayment() {
     };
 
     fetchReceivedInvoices();
-  }, [walletClient, address, tokens]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletClient, address, tokens, chainId]);
 
   // ENHANCED Batch payment function with pre-checks
   const handleBatchPayment = async () => {
@@ -461,7 +458,7 @@ function BatchPayment() {
       toast("Checking balances...");
       const errors = [];
 
-      for (const [tokenKey, group] of grouped.entries()) {
+      for (const [, group] of grouped.entries()) {
         try {
           await checkPaymentCapability(group, signer);
         } catch (error) {
@@ -481,7 +478,7 @@ function BatchPayment() {
       toast.success("Balance checks passed! Processing payments...");
 
       // Process payments only after all checks pass
-      for (const [tokenKey, group] of grouped.entries()) {
+      for (const [, group] of grouped.entries()) {
         const { tokenAddress, symbol, decimals, invoices } = group;
         const invoiceIds = invoices.map((inv) => BigInt(inv.id));
 
@@ -946,7 +943,7 @@ function BatchPayment() {
                     No Invoices Found
                   </h3>
                   <p className="text-gray-600">
-                    You don't have any received invoices yet.
+                    You don&apos;t have any received invoices yet.
                   </p>
                 </div>
               </div>

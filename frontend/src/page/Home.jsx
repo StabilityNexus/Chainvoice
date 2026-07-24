@@ -1,5 +1,5 @@
 // Home.js - Updated with Batch Creation AND Batch Payment sections
-import * as React from "react";
+
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import List from "@mui/material/List";
@@ -16,7 +16,7 @@ import MenuItem from "@mui/material/MenuItem";
 import FormControl from "@mui/material/FormControl";
 import Select from "@mui/material/Select";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { FileStack, CreditCard, Layers3, PlusCircle, FileStackIcon } from "lucide-react";
+import { FileStackIcon } from "lucide-react";
 
 export default function Home() {
   const navigate = useNavigate();
