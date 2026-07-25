@@ -10,19 +10,16 @@ on:
     paths:
       - 'frontend/**'
 
-permissions:
-  pull-requests: write
-  issues: write
-  contents: read
-
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: read
+
     defaults:
       run:
         working-directory: ./frontend
-        
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -48,22 +45,74 @@ jobs:
           npm run test:ci > test_output.log 2>&1 || echo "TESTS_FAILED=true" >> $GITHUB_ENV
           cat test_output.log
 
+      - name: Fail if tests failed
+        id: test-result
+        if: env.TESTS_FAILED == 'true'
+        run: |
+          echo "tests_failed=true" >> $GITHUB_OUTPUT
+          exit 1
+
+      - name: Run build
+        id: build
+        continue-on-error: true
+        run: |
+          npm run build > build_output.log 2>&1 || echo "BUILD_FAILED=true" >> $GITHUB_ENV
+          cat build_output.log
+
+      - name: Fail if build failed
+        id: build-result
+        if: env.BUILD_FAILED == 'true'
+        run: |
+          echo "build_failed=true" >> $GITHUB_OUTPUT
+          exit 1
+
+      - name: Upload test and build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-logs
+          path: |
+            ./frontend/test_output.log
+            ./frontend/build_output.log
+          if-no-files-found: ignore
+          retention-days: 1
+
+    outputs:
+      tests_failed: ${{ steps.test-result.outputs.tests_failed }}
+      build_failed: ${{ steps.build-result.outputs.build_failed }}
+
+  report-results:
+    needs: test-and-build
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Download CI logs
+        uses: actions/download-artifact@v4
+        with:
+          name: ci-logs
+          path: ./logs
+        continue-on-error: true
+
       - name: Handle Test Failure
-        if: env.TESTS_FAILED == 'true' && github.event_name == 'pull_request'
+        if: needs.test-and-build.outputs.tests_failed == 'true'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             let testOutput = '';
             try {
-              testOutput = fs.readFileSync('./frontend/test_output.log', 'utf8');
+              testOutput = fs.readFileSync('./logs/test_output.log', 'utf8');
               if (testOutput.length > 60000) {
                 testOutput = testOutput.substring(testOutput.length - 60000);
               }
             } catch (e) {
               testOutput = 'Could not read test output.';
             }
-            
+
             try {
               await github.rest.issues.addLabels({
                 owner: context.repo.owner,
@@ -71,7 +120,7 @@ jobs:
                 issue_number: context.issue.number,
                 labels: ['test case failing']
               });
-              
+
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -79,15 +128,11 @@ jobs:
                 body: `⚠️ **Tests failed!**\n\n<details><summary>Test Output</summary>\n\n\`\`\`\n${testOutput}\n\`\`\`\n</details>`
               });
             } catch (e) {
-              console.log('Failed to add labels or comment (likely due to fork PR restrictions):', e.message);
+              console.log('Failed to add labels or comment:', e.message);
             }
-            
-      - name: Fail if tests failed
-        if: env.TESTS_FAILED == 'true'
-        run: exit 1
 
       - name: Remove test failure label (if passed)
-        if: env.TESTS_FAILED != 'true' && github.event_name == 'pull_request'
+        if: needs.test-and-build.outputs.tests_failed != 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -102,15 +147,8 @@ jobs:
               // Ignore if label doesn't exist
             }
 
-      - name: Run build
-        id: build
-        continue-on-error: true
-        run: |
-          npm run build > build_output.log 2>&1 || echo "BUILD_FAILED=true" >> $GITHUB_ENV
-          cat build_output.log
-
       - name: Handle Build Failure
-        if: env.BUILD_FAILED == 'true' && github.event_name == 'pull_request'
+        if: needs.test-and-build.outputs.build_failed == 'true'
         uses: actions/github-script@v7
         with:
           script: |
@@ -122,25 +160,25 @@ jobs:
                 labels: ['build failed']
               });
             } catch (e) {
-              console.log('Failed to add label (likely due to fork PR restrictions):', e.message);
+              console.log('Failed to add label:', e.message);
             }
 
       - name: Report Build Size
-        if: env.BUILD_FAILED != 'true' && github.event_name == 'pull_request'
+        if: needs.test-and-build.outputs.build_failed != 'true'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
             let buildOutput = '';
             try {
-              buildOutput = fs.readFileSync('./frontend/build_output.log', 'utf8');
+              buildOutput = fs.readFileSync('./logs/build_output.log', 'utf8');
               const lines = buildOutput.split('\n');
               const metrics = lines.filter(line => line.includes('dist/assets/')).join('\n');
               buildOutput = metrics || 'Metrics not found';
             } catch (e) {
               buildOutput = 'Could not read build output.';
             }
-            
+
             try {
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
@@ -149,9 +187,5 @@ jobs:
                 body: `✅ **Build successful!**\n\n<details><summary>Build Size Metrics</summary>\n\n\`\`\`\n${buildOutput}\n\`\`\`\n</details>`
               });
             } catch (e) {
-              console.log('Failed to add comment (likely due to fork PR restrictions):', e.message);
+              console.log('Failed to add comment:', e.message);
             }
-
-      - name: Fail if build failed
-        if: env.BUILD_FAILED == 'true'
-        run: exit 1
