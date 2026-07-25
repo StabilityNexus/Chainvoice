@@ -12,6 +12,7 @@ on:
 
 permissions:
   pull-requests: write
+  issues: write
   contents: read
 
 jobs:
@@ -63,19 +64,23 @@ jobs:
               testOutput = 'Could not read test output.';
             }
             
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              labels: ['test case failing']
-            });
-            
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `⚠️ **Tests failed!**\n\n<details><summary>Test Output</summary>\n\n\`\`\`\n${testOutput}\n\`\`\`\n</details>`
-            });
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['test case failing']
+              });
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `⚠️ **Tests failed!**\n\n<details><summary>Test Output</summary>\n\n\`\`\`\n${testOutput}\n\`\`\`\n</details>`
+              });
+            } catch (e) {
+              console.log('Failed to add labels or comment (likely due to fork PR restrictions):', e.message);
+            }
             
       - name: Fail if tests failed
         if: env.TESTS_FAILED == 'true'
@@ -109,12 +114,16 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              labels: ['build failed']
-            });
+            try {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                labels: ['build failed']
+              });
+            } catch (e) {
+              console.log('Failed to add label (likely due to fork PR restrictions):', e.message);
+            }
 
       - name: Report Build Size
         if: env.BUILD_FAILED != 'true' && github.event_name == 'pull_request'
@@ -132,12 +141,16 @@ jobs:
               buildOutput = 'Could not read build output.';
             }
             
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `✅ **Build successful!**\n\n<details><summary>Build Size Metrics</summary>\n\n\`\`\`\n${buildOutput}\n\`\`\`\n</details>`
-            });
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `✅ **Build successful!**\n\n<details><summary>Build Size Metrics</summary>\n\n\`\`\`\n${buildOutput}\n\`\`\`\n</details>`
+              });
+            } catch (e) {
+              console.log('Failed to add comment (likely due to fork PR restrictions):', e.message);
+            }
 
       - name: Fail if build failed
         if: env.BUILD_FAILED == 'true'
