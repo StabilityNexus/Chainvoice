@@ -84,7 +84,7 @@ function CreateInvoice() {
       : account?.chainId ?? 1;
   const { tokens, loading: loadingTokens, error: tokenListError } = useTokenList(chainIdForTokens);
   const [dueDate, setDueDate] = useState(new Date());
-  const issueDate = new Date();
+  const [issueDate] = useState(() => new Date());
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 

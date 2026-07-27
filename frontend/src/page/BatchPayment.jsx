@@ -27,7 +27,7 @@ import WalletConnectionAlert from "../components/WalletConnectionAlert";
 
 function BatchPayment() {
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const rowsPerPage = 10;
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId } = useAccount();
   const [loading, setLoading] = useState(true);
@@ -51,16 +51,6 @@ function BatchPayment() {
   // Get tokens from the hook
   const { tokens } = useTokenList(chainId || 1);
 
-  // eslint-disable-next-line no-unused-vars
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-    // eslint-disable-next-line no-unused-vars
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(+event.target.value);
-    setPage(0);
-  };
 
   // Helper function to get token info
   const getTokenInfo = (tokenAddress) => {
