@@ -8,11 +8,10 @@ import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { BrowserProvider, Contract, ethers } from "ethers";
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
-import { useRef } from "react";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
@@ -52,7 +51,6 @@ import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import SelectAllIcon from "@mui/icons-material/SelectAll";
 import ClearAllIcon from "@mui/icons-material/ClearAll";
 import PaymentIcon from "@mui/icons-material/Payment";
-import WarningIcon from "@mui/icons-material/Warning";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import LayersIcon from "@mui/icons-material/Layers";
 import CloseIcon from "@mui/icons-material/Close";
@@ -86,7 +84,6 @@ function ReceivedInvoice() {
   const [error, setError] = useState(null);
 
   const [paymentLoading, setPaymentLoading] = useState({});
-  const [networkLoading, setNetworkLoading] = useState(false);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
 
   // Error handling states
@@ -284,8 +281,7 @@ function ReceivedInvoice() {
       if (!selectedInvoices.has(invoice.id)) return;
 
       const tokenAddress = invoice.paymentToken?.address || ethers.ZeroAddress;
-      const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"
-        }`;
+      const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"}`;
 
       if (!grouped.has(tokenKey)) {
         grouped.set(tokenKey, {
@@ -513,7 +509,7 @@ function ReceivedInvoice() {
       // BALANCE CHECK (same as individual)
       toast("Checking balances...");
 
-      for (const [tokenKey, group] of grouped.entries()) {
+      for (const [, group] of grouped.entries()) {
         try {
           await checkBalance(
             group.tokenAddress,
@@ -535,7 +531,7 @@ function ReceivedInvoice() {
       toast.success("Balance checks passed! Processing payments...");
 
       // Process payments
-      for (const [tokenKey, group] of grouped.entries()) {
+      for (const [, group] of grouped.entries()) {
         const { tokenAddress, symbol, decimals, invoices } = group;
         const invoiceIds = invoices.map((inv) => BigInt(inv.id));
 
@@ -766,7 +762,7 @@ function ReceivedInvoice() {
                     decimals: Number(decimals),
                     logo: "/tokenImages/generic.png",
                   };
-                } catch (error) {
+                } catch {
                   parsed.paymentToken.logo =
                     parsed.paymentToken.logo || "/tokenImages/generic.png";
                 }
@@ -796,7 +792,8 @@ function ReceivedInvoice() {
     };
 
     fetchReceivedInvoices();
-  }, [walletClient, address, tokens]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletClient, address, tokens, chainId]);
 
   const toggleDrawer = (invoice) => (event) => {
     if (
@@ -1240,7 +1237,7 @@ function ReceivedInvoice() {
                     No Invoices Found
                   </h3>
                   <p className="text-gray-600 mt-1">
-                    You don't have any received invoices yet.
+                    You don&apos;t have any received invoices yet.
                   </p>
                 </div>
               </div>

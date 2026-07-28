@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
 
 const PAGE_SIZE = 12;
@@ -89,7 +89,8 @@ export default function ProductAutocompleteInput({
 
   useEffect(() => {
     scrollActiveIntoView(activeIndex);
-  }, [activeIndex, scrollActiveIntoView]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeIndex, ]);
 
   const handleInputChange = useCallback(
     (e) => {
@@ -142,6 +143,7 @@ export default function ProductAutocompleteInput({
         });
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [showSuggestions, suggestions, activeIndex, handleSelect, scrollActiveIntoView],
   );
 

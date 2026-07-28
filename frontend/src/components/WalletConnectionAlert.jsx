@@ -1,7 +1,6 @@
 // components/WalletConnectionAlert.jsx
-import React from "react";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
-import { FileText, X } from "lucide-react";
+
+import { X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import AccountBalanceWalletIcon from "@mui/icons-material/AccountBalanceWallet";
 const WalletConnectionAlert = ({ show, onDismiss }) => {

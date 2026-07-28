@@ -31,7 +31,7 @@ function getNetworkName(chainId) {
   const id = Number(chainId);
   return CHAIN_ID_TO_NAME[id] || "Unknown network";
 }
-import React from "react";
+
 import { ethers } from "ethers";
 import { Chip, Typography } from "@mui/material";
 import PaidIcon from "@mui/icons-material/CheckCircle";

@@ -84,7 +84,7 @@ function CreateInvoice() {
       : account?.chainId ?? 1;
   const { tokens, loading: loadingTokens, error: tokenListError } = useTokenList(chainIdForTokens);
   const [dueDate, setDueDate] = useState(new Date());
-  const [issueDate, setIssueDate] = useState(new Date());
+  const [issueDate] = useState(() => new Date());
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -218,6 +218,7 @@ function CreateInvoice() {
     [chainIdForTokens]
   );
 
+   
   useEffect(() => {
     const urlClientAddress = searchParams.get("clientAddress");
     const urlTokenAddress = searchParams.get("tokenAddress");
@@ -302,6 +303,7 @@ function CreateInvoice() {
     };
 
     processUrlToken();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, tokens, loadingTokens, account.address, chainIdForTokens, verifyToken]);
 
   useEffect(() => {
@@ -418,17 +420,14 @@ function CreateInvoice() {
     });
 
     if (!validation.isValid) {
-      let hasFieldError = false;
       if (validation.fieldErrors.clientAddress) {
         setClientAddressError(validation.fieldErrors.clientAddress);
-        hasFieldError = true;
       } else {
         setClientAddressError("");
       }
 
       if (validation.fieldErrors.totalAmountDue) {
         setTotalAmountError(validation.fieldErrors.totalAmountDue);
-        hasFieldError = true;
       } else {
         setTotalAmountError("");
       }
@@ -439,7 +438,6 @@ function CreateInvoice() {
         if (key.startsWith("item_")) {
            const idx = parseInt(key.split("_")[1]);
            newItemErrors[idx] = validation.fieldErrors[key];
-           hasFieldError = true;
         } else {
            newFieldErrors[key] = validation.fieldErrors[key];
         }
@@ -563,7 +561,7 @@ function CreateInvoice() {
             invoiceId = parsed.args[0].toString();
             break;
           }
-        } catch (e) {
+        } catch {
           // ignore
         }
       }
@@ -1065,7 +1063,7 @@ function CreateInvoice() {
                                 verified
                               </li>
                               <li>
-                                • Address should start with "0x" followed by 40
+                                • Address should start with &quot;0x&quot; followed by 40
                                 characters
                               </li>
                               <li>
@@ -1150,7 +1148,7 @@ function CreateInvoice() {
                               </p>
                               <p className="text-xs text-red-500 mt-1">
                                 Please check the contract address and try again.
-                                Make sure it's a valid ERC-20 token.
+                                Make sure it&apos;s a valid ERC-20 token.
                               </p>
                             </div>
                           </div>

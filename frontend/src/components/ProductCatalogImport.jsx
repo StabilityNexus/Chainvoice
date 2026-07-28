@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -95,6 +95,7 @@ export default function ProductCatalogImport() {
       if (hasSavedUrlSource) {
         toast('Local file is now active for search. Saved URL remains available via refresh.');
       }
+       
     } catch (err) {
       toast.error(err.message || 'Failed to import file');
     } finally {
@@ -127,6 +128,7 @@ export default function ProductCatalogImport() {
           ? `Loaded ${result.count} products from URL and saved for refresh`
           : `Loaded ${result.count} products from URL (temporary session)`,
       );
+       
     } catch (err) {
       toast.error(err.message || 'Failed to import from URL');
     } finally {
@@ -139,6 +141,7 @@ export default function ProductCatalogImport() {
     try {
       const result = await refreshURL();
       toast.success(`Refreshed ${result.count} products`);
+       
     } catch (err) {
       toast.error(err.message || 'Failed to refresh data');
     } finally {
@@ -154,6 +157,7 @@ export default function ProductCatalogImport() {
       try {
         const result = await persistCurrentURLData();
         toast.success(`Saved URL for refresh (${result.count} products)`);
+       
       } catch (err) {
         toast.error(err.message || 'Failed to save fetched URL');
       } finally {
@@ -169,6 +173,7 @@ export default function ProductCatalogImport() {
           window.localStorage.removeItem(LAST_CATALOG_URL_INPUT_KEY);
         }
         toast.success('Saved URL removed. Refresh is now disabled.');
+       
       } catch (err) {
         toast.error(err.message || 'Failed to remove saved URL');
       } finally {
@@ -187,6 +192,7 @@ export default function ProductCatalogImport() {
         window.localStorage.removeItem(LAST_CATALOG_URL_INPUT_KEY);
       }
       toast.success('Product catalog cleared');
+      // eslint-disable-next-line no-unused-vars
     } catch (err) {
       toast.error('Failed to clear catalog');
     } finally {

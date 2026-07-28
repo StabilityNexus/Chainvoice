@@ -456,7 +456,7 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   pdf.setFontSize(9);
 
   if (invoice.items && invoice.items.length > 0) {
-    invoice.items.forEach((item, index) => {
+    invoice.items.forEach((item) => {
       if (yPos > 250) {
         pdf.setDrawColor(...borderGray);
         pdf.setLineWidth(0.5);
