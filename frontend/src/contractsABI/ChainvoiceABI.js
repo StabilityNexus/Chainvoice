@@ -77,14 +77,9 @@ export const ChainvoiceABI = [
         "internalType": "address"
       },
       {
-        "name": "encryptedInvoiceData",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "encryptedHash",
-        "type": "string",
-        "internalType": "string"
+        "name": "invoiceDataHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "outputs": [],
@@ -110,14 +105,9 @@ export const ChainvoiceABI = [
         "internalType": "address"
       },
       {
-        "name": "encryptedPayloads",
-        "type": "string[]",
-        "internalType": "string[]"
-      },
-      {
-        "name": "encryptedHashes",
-        "type": "string[]",
-        "internalType": "string[]"
+        "name": "invoiceDataHashes",
+        "type": "bytes32[]",
+        "internalType": "bytes32[]"
       }
     ],
     "outputs": [],
@@ -188,14 +178,9 @@ export const ChainvoiceABI = [
             "internalType": "bool"
           },
           {
-            "name": "encryptedInvoiceData",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "encryptedHash",
-            "type": "string",
-            "internalType": "string"
+            "name": "invoiceDataHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
           }
         ]
       }
@@ -288,14 +273,9 @@ export const ChainvoiceABI = [
             "internalType": "bool"
           },
           {
-            "name": "encryptedInvoiceData",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "encryptedHash",
-            "type": "string",
-            "internalType": "string"
+            "name": "invoiceDataHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
           }
         ]
       }
@@ -354,14 +334,9 @@ export const ChainvoiceABI = [
             "internalType": "bool"
           },
           {
-            "name": "encryptedInvoiceData",
-            "type": "string",
-            "internalType": "string"
-          },
-          {
-            "name": "encryptedHash",
-            "type": "string",
-            "internalType": "string"
+            "name": "invoiceDataHash",
+            "type": "bytes32",
+            "internalType": "bytes32"
           }
         ]
       }
@@ -447,14 +422,9 @@ export const ChainvoiceABI = [
         "internalType": "bool"
       },
       {
-        "name": "encryptedInvoiceData",
-        "type": "string",
-        "internalType": "string"
-      },
-      {
-        "name": "encryptedHash",
-        "type": "string",
-        "internalType": "string"
+        "name": "invoiceDataHash",
+        "type": "bytes32",
+        "internalType": "bytes32"
       }
     ],
     "stateMutability": "view"
@@ -607,25 +577,6 @@ export const ChainvoiceABI = [
         "name": "",
         "type": "address",
         "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "wakuPublicKeys",
-    "inputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes",
-        "internalType": "bytes"
       }
     ],
     "stateMutability": "view"
