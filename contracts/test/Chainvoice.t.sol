@@ -12,7 +12,7 @@ contract ChainvoiceTest is Test {
     address bob = address(0xB0B);
     address charlie = address(0xC4A7);
 
-    event WakuKeyRegistered(address indexed user, bytes publicKey);
+    event PublicKeyRegistered(address indexed user, bytes publicKey);
 
     function setUp() public {
         chainvoice = new Chainvoice();
@@ -311,10 +311,10 @@ contract ChainvoiceTest is Test {
     }
 
     /* ------------------------------------------------------------ */
-    /*                    WAKU KEY REGISTRY                          */
+    /*                  MESSAGING KEY REGISTRY                       */
     /* ------------------------------------------------------------ */
 
-    function testRegisterWakuPublicKey() public {
+    function testRegisterPublicKey() public {
         // 65-byte uncompressed secp256k1 public key (0x04 prefix + 64 bytes)
         bytes memory pubKey = new bytes(65);
         pubKey[0] = 0x04;
@@ -323,15 +323,15 @@ contract ChainvoiceTest is Test {
         }
 
         vm.prank(alice);
-        chainvoice.registerWakuPublicKey(pubKey);
+        chainvoice.registerPublicKey(pubKey);
 
-        bytes memory stored = chainvoice.getWakuPublicKey(alice);
+        bytes memory stored = chainvoice.getPublicKey(alice);
         assertEq(stored.length, 65);
         assertEq(stored[0], pubKey[0]);
         assertEq(stored[64], pubKey[64]);
     }
 
-    function testRegisterWakuPublicKey_EmitsEvent() public {
+    function testRegisterPublicKey_EmitsEvent() public {
         bytes memory pubKey = new bytes(65);
         pubKey[0] = 0x04;
         for (uint256 i = 1; i < 65; i++) {
@@ -339,13 +339,13 @@ contract ChainvoiceTest is Test {
         }
 
         vm.expectEmit(true, false, false, true);
-        emit WakuKeyRegistered(alice, pubKey);
+        emit PublicKeyRegistered(alice, pubKey);
 
         vm.prank(alice);
-        chainvoice.registerWakuPublicKey(pubKey);
+        chainvoice.registerPublicKey(pubKey);
     }
 
-    function testUpdateWakuPublicKey() public {
+    function testUpdatePublicKey() public {
         bytes memory key1 = new bytes(65);
         key1[0] = 0x04;
         for (uint256 i = 1; i < 65; i++) key1[i] = bytes1(uint8(i));
@@ -355,21 +355,21 @@ contract ChainvoiceTest is Test {
         for (uint256 i = 1; i < 65; i++) key2[i] = bytes1(uint8(i + 50));
 
         vm.startPrank(alice);
-        chainvoice.registerWakuPublicKey(key1);
+        chainvoice.registerPublicKey(key1);
 
-        bytes memory stored1 = chainvoice.getWakuPublicKey(alice);
+        bytes memory stored1 = chainvoice.getPublicKey(alice);
         assertEq(keccak256(stored1), keccak256(key1));
 
         // Update to a new key
-        chainvoice.registerWakuPublicKey(key2);
+        chainvoice.registerPublicKey(key2);
         vm.stopPrank();
 
-        bytes memory stored2 = chainvoice.getWakuPublicKey(alice);
+        bytes memory stored2 = chainvoice.getPublicKey(alice);
         assertEq(keccak256(stored2), keccak256(key2));
     }
 
-    function testGetWakuPublicKey_Unregistered() public {
-        bytes memory stored = chainvoice.getWakuPublicKey(address(0xDEAD));
+    function testGetPublicKey_Unregistered() public {
+        bytes memory stored = chainvoice.getPublicKey(address(0xDEAD));
         assertEq(stored.length, 0);
     }
 
@@ -383,21 +383,21 @@ contract ChainvoiceTest is Test {
         for (uint256 i = 1; i < 65; i++) bobKey[i] = bytes1(uint8(i + 50));
 
         vm.prank(alice);
-        chainvoice.registerWakuPublicKey(aliceKey);
+        chainvoice.registerPublicKey(aliceKey);
 
         vm.prank(bob);
-        chainvoice.registerWakuPublicKey(bobKey);
+        chainvoice.registerPublicKey(bobKey);
 
-        assertEq(keccak256(chainvoice.getWakuPublicKey(alice)), keccak256(aliceKey));
-        assertEq(keccak256(chainvoice.getWakuPublicKey(bob)), keccak256(bobKey));
+        assertEq(keccak256(chainvoice.getPublicKey(alice)), keccak256(aliceKey));
+        assertEq(keccak256(chainvoice.getPublicKey(bob)), keccak256(bobKey));
     }
 
-    function testRegisterWakuPublicKey_RevertIfInvalidLength() public {
+    function testRegisterPublicKey_RevertIfInvalidLength() public {
         bytes memory shortKey = hex"04aabbccdd";
 
         vm.prank(alice);
-        vm.expectRevert(Chainvoice.InvalidWakuKey.selector);
-        chainvoice.registerWakuPublicKey(shortKey);
+        vm.expectRevert(Chainvoice.InvalidPublicKey.selector);
+        chainvoice.registerPublicKey(shortKey);
     }
 
     function testCreateInvoice_RevertIfZeroHash() public {
@@ -406,14 +406,14 @@ contract ChainvoiceTest is Test {
         chainvoice.createInvoice(bob, 1 ether, address(0), bytes32(0));
     }
 
-    function testRegisterWakuPublicKey_RevertIfInvalidPrefix() public {
+    function testRegisterPublicKey_RevertIfInvalidPrefix() public {
         bytes memory badPrefixKey = new bytes(65);
         badPrefixKey[0] = 0x03; // wrong prefix, should be 0x04
         for (uint256 i = 1; i < 65; i++) badPrefixKey[i] = bytes1(uint8(i));
 
         vm.prank(alice);
-        vm.expectRevert(Chainvoice.InvalidWakuKey.selector);
-        chainvoice.registerWakuPublicKey(badPrefixKey);
+        vm.expectRevert(Chainvoice.InvalidPublicKey.selector);
+        chainvoice.registerPublicKey(badPrefixKey);
     }
 
     function testCreateInvoiceWithDataHash() public {

@@ -52,14 +52,19 @@ http://localhost:5173
 
 The frontend reads Vite environment variables from `.env`.
 
-The provided `.env.example` includes deployed contract addresses for supported networks and the WalletConnect project ID placeholder:
+The provided `.env.example` lists the contract addresses per network alongside the WalletConnect project ID placeholder:
 
 ```env
-VITE_CONTRACT_ADDRESS_11155111=0x7bC4C5abb5b1B8355Aa65307C1cFDbe6254505d2
+VITE_CONTRACT_ADDRESS_11155111=
 VITE_CONTRACT_ADDRESS_61=
 VITE_CONTRACT_ADDRESS_137=
 VITE_WALLETCONNECT_PROJECT_ID=
 ```
+
+> ⚠️ **Redeployment required.** Renaming the key registry functions changed
+> their selectors, so no previously deployed Chainvoice matches the current ABI.
+> Deploy `contracts/src/Chainvoice.sol` and fill in the addresses above.
+> Registered keys do not carry over — every user must register again.
 
 > ⚠️ Ethereum Classic and Polygon are left blank on purpose. Both still run the
 > v1 contract, which does not match the current ABI. The app treats any

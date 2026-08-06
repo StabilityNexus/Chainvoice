@@ -149,7 +149,7 @@ describe("fetchPublicKeyFromChain", () => {
   // This decides whether the sender encrypts a payload or falls back to the
   // on-chain summary, so every "unregistered" shape has to be recognised.
   const contractReturning = (value) => ({
-    getWakuPublicKey: jest.fn().mockResolvedValue(value),
+    getPublicKey: jest.fn().mockResolvedValue(value),
   });
 
   it.each(["0x", "0x0", ""])(
@@ -190,7 +190,7 @@ describe("fetchPublicKeyFromChain", () => {
   it("looks up the address it was given", async () => {
     const contract = contractReturning("0x");
     await fetchPublicKeyFromChain(contract, ADDRESS);
-    expect(contract.getWakuPublicKey).toHaveBeenCalledWith(ADDRESS);
+    expect(contract.getPublicKey).toHaveBeenCalledWith(ADDRESS);
   });
 });
 
@@ -199,12 +199,12 @@ describe("registerPublicKeyOnChain", () => {
     const { publicKey } = await deriveRelayKeyPair(makeSigner(), ADDRESS);
     const wait = jest.fn().mockResolvedValue({ status: 1 });
     const contract = {
-      registerWakuPublicKey: jest.fn().mockResolvedValue({ wait }),
+      registerPublicKey: jest.fn().mockResolvedValue({ wait }),
     };
 
     const receipt = await registerPublicKeyOnChain(contract, publicKey);
 
-    expect(contract.registerWakuPublicKey).toHaveBeenCalledWith(bytesToHex(publicKey));
+    expect(contract.registerPublicKey).toHaveBeenCalledWith(bytesToHex(publicKey));
     expect(wait).toHaveBeenCalled();
     expect(receipt).toEqual({ status: 1 });
   });
@@ -212,14 +212,14 @@ describe("registerPublicKeyOnChain", () => {
   it("submits a 65-byte 0x04-prefixed key, as the contract requires", async () => {
     const { publicKey } = await deriveRelayKeyPair(makeSigner(), ADDRESS);
     const contract = {
-      registerWakuPublicKey: jest
+      registerPublicKey: jest
         .fn()
         .mockResolvedValue({ wait: jest.fn().mockResolvedValue({}) }),
     };
 
     await registerPublicKeyOnChain(contract, publicKey);
 
-    const submitted = contract.registerWakuPublicKey.mock.calls[0][0];
+    const submitted = contract.registerPublicKey.mock.calls[0][0];
     expect(submitted).toMatch(/^0x04[0-9a-f]{128}$/);
   });
 });
