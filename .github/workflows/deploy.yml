@@ -45,11 +45,28 @@ jobs:
       - name: Build
         run: npm run build
         working-directory: ./frontend
-        env: 
+        env:
           VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
           VITE_CONTRACT_ADDRESS_11155111: ${{ secrets.VITE_CONTRACT_ADDRESS_11155111 }}
-          VITE_CONTRACT_ADDRESS_61: ${{ secrets.VITE_CONTRACT_ADDRESS_61 }}
-          VITE_CONTRACT_ADDRESS_137: ${{ secrets.VITE_CONTRACT_ADDRESS_137 }}
+          # Ethereum Classic and Polygon are deliberately not injected. Both
+          # still run the v1 contract, which stores payloads on-chain as strings
+          # and has no key registry, so it does not match this ABI. The app
+          # treats any non-empty address as a supported network, so a populated
+          # secret here would publish a build that sends undecodable calls.
+          # Restore these once those chains are redeployed.
+          # Vite inlines these at build time, so an unset VITE_RELAY_URL bakes
+          # in the localhost fallback, which the browser then blocks as mixed
+          # content from the Pages origin. Either an https URL (needs CORS on
+          # the relay) or a path the host rewrites to it.
+          #
+          # Repository *variables*, not secrets: everything here is published in
+          # the JavaScript bundle, and storing a published value as a secret
+          # invites someone to put a privileged relay key in it. A static site
+          # cannot hold a credential — if the relay needs a private key, put a
+          # proxy in front and inject it there.
+          VITE_RELAY_URL: ${{ vars.VITE_RELAY_URL }}
+          VITE_RELAY_API_KEY: ${{ vars.VITE_RELAY_API_KEY }}
+          VITE_RELAY_TIMEOUT_MS: ${{ vars.VITE_RELAY_TIMEOUT_MS }}
 
       # Setup Pages
       - name: Setup Pages

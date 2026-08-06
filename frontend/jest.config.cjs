@@ -8,6 +8,7 @@ module.exports = {
     "src/services/relay/invoiceCrypto.js",
     "src/services/relay/invoiceHashUtils.js",
     "src/services/relay/relayInvoiceMessaging.js",
+    "src/services/relay/relayKeyManager.js",
   ],
   coverageDirectory: "<rootDir>/coverage",
 };

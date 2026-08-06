@@ -38,6 +38,9 @@ import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
+import { computeInvoiceHash } from "../services/relay/invoiceHashUtils.js";
+import { sendEncryptedInvoice } from "../services/relay/relayInvoiceMessaging.js";
+import { fetchPublicKeyFromChain } from "../services/relay/relayKeyManager.js";
 
 
 
@@ -557,8 +560,7 @@ function CreateInvoicesBatch() {
       // Prepare batch arrays
       const tos = [];
       const amounts = [];
-      const encryptedPayloads = [];
-      const encryptedHashes = [];
+      const invoiceDataHashes = [];
 
 
 
@@ -569,7 +571,7 @@ function CreateInvoicesBatch() {
       // Process each invoice
       for (const [index, row] of validInvoices.entries()) {
         toast(
-          `Encrypting invoice ${index + 1} of ${validInvoices.length}...`
+          `Preparing invoice ${index + 1} of ${validInvoices.length}...`
         );
 
         const invoicePayload = {
@@ -612,11 +614,11 @@ function CreateInvoicesBatch() {
           },
         };
 
-        const invoiceString = JSON.stringify(invoicePayload);
         invoicePayloads.push(invoicePayload);
 
-        const encryptedStringBase64 = btoa(invoiceString);
-        const dataToEncryptHash = "";
+        // Only the commitment goes on-chain; the payload is delivered
+        // encrypted over the relay once the batch is confirmed.
+        const invoiceDataHash = computeInvoiceHash(invoicePayload);
 
         // Add to batch arrays
         tos.push(row.clientAddress);
@@ -634,11 +636,10 @@ function CreateInvoicesBatch() {
         }
 
         amounts.push(amountForContract);
-        encryptedPayloads.push(encryptedStringBase64);
-        encryptedHashes.push(dataToEncryptHash);
+        invoiceDataHashes.push(invoiceDataHash);
       }
 
-      toast.success("All invoices encrypted successfully!");
+      toast.success("All invoices prepared successfully!");
       toast("Submitting batch transaction to blockchain...");
 
       // Send to contract
@@ -656,49 +657,151 @@ function CreateInvoicesBatch() {
         tos,
         amounts,
         paymentToken.address,
-        encryptedPayloads,
-        encryptedHashes
+        invoiceDataHashes
       );
 
       toast("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
 
       const iface = new ethers.Interface(ChainvoiceABI);
-      const invoiceIds = [];
+      // Keep the recipient alongside each id. Payloads are paired with events
+      // by position, and position is only meaningful if the recipient matches —
+      // pairing the wrong way round would encrypt one client's invoice to
+      // another client's key.
+      const created = [];
       for (const log of receipt.logs) {
         try {
           const parsed = iface.parseLog(log);
           if (parsed?.name === 'InvoiceCreated') {
-            invoiceIds.push(parsed.args[0].toString());
+            created.push({
+              id: parsed.args[0].toString(),
+              to: parsed.args[2].toLowerCase(),
+            });
           }
         } catch {
           // ignore
         }
       }
+      const invoiceIds = created.map((c) => c.id);
 
       if (invoiceIds.length !== invoicePayloads.length) {
         console.warn(`Expected ${invoicePayloads.length} InvoiceCreated events, got ${invoiceIds.length}`);
       }
 
-      for (const [eventIndex, invoiceId] of invoiceIds.entries()) {
+      // Deliver in bounded groups. A 50-invoice batch is 100 sequential round
+      // trips otherwise, all of it after the transaction has already confirmed,
+      // with the user watching a spinner. Kept small so the relay's per-IP rate
+      // limit is not the next thing to fail.
+      const DELIVERY_CONCURRENCY = 5;
+      let undelivered = 0;
+
+      let unmatched = 0;
+      const deliverOne = async (eventIndex) => {
+        const { id: invoiceId, to: eventTo } = created[eventIndex];
         const payload = invoicePayloads[eventIndex];
-        if (!payload) continue;
+        if (!payload) {
+          // The invoice exists on-chain but we have no payload to pair with it,
+          // so nothing is stored and nothing can be delivered. Silence here
+          // would hand the user a success toast for an invoice whose details
+          // were never captured.
+          console.error(
+            `Invoice ${invoiceId}: no local payload for this event; details not captured`
+          );
+          unmatched++;
+          return;
+        }
+
+        const payloadTo = payload.client.address.toLowerCase();
+        if (eventTo !== payloadTo) {
+          // Positions disagree with the chain. Encrypting to the wrong
+          // recipient would disclose the invoice, so store locally and let the
+          // sender resend rather than guess.
+          console.error(
+            `Invoice ${invoiceId}: event recipient ${eventTo} does not match payload recipient ${payloadTo}; skipping relay delivery`
+          );
+          undelivered++;
+          try {
+            await storeInvoice({
+              invoiceId,
+              chainId: account.chainId,
+              from: account.address.toLowerCase(),
+              to: payloadTo,
+              isPaid: false,
+              isCancelled: false,
+              relayDelivered: false,
+              invoiceDataHash: invoiceDataHashes[eventIndex],
+              data: payload,
+            });
+          } catch (err) {
+            console.error(`Failed to store invoice ${invoiceId} locally:`, err);
+          }
+          return;
+        }
+
+        // Delivery is best-effort and per-recipient: one client without a
+        // registered key must not stop the rest of the batch from arriving.
+        let relayDelivered = false;
+        try {
+          const receiverPublicKey = await fetchPublicKeyFromChain(
+            contract,
+            payload.client.address
+          );
+          if (receiverPublicKey) {
+            await sendEncryptedInvoice({
+              invoiceData: payload,
+              receiverPublicKey,
+              receiverAddress: payload.client.address,
+              senderAddress: account.address,
+              chainId: account.chainId,
+              invoiceId,
+            });
+            relayDelivered = true;
+          }
+        } catch (relayErr) {
+          console.warn(
+            `Relay delivery for invoice ${invoiceId} failed (non-critical):`,
+            relayErr
+          );
+        }
+        if (!relayDelivered) undelivered++;
 
         try {
           await storeInvoice({
             invoiceId,
             chainId: account.chainId,
             from: account.address.toLowerCase(),
-            to: payload.client.address.toLowerCase(),
+            to: payloadTo,
             isPaid: false,
             isCancelled: false,
-            wakuDelivered: false,
-            invoiceDataHash: "",
+            relayDelivered,
+            invoiceDataHash: invoiceDataHashes[eventIndex],
             data: payload,
           });
         } catch (err) {
           console.error(`Failed to store invoice ${invoiceId} locally:`, err);
         }
+      };
+
+      for (let i = 0; i < created.length; i += DELIVERY_CONCURRENCY) {
+        const group = [];
+        for (let j = i; j < Math.min(i + DELIVERY_CONCURRENCY, created.length); j++) {
+          group.push(deliverOne(j));
+        }
+        await Promise.all(group);
+      }
+
+      if (undelivered > 0) {
+        toast(
+          `${undelivered} of ${invoiceIds.length} invoices could not be delivered to the client yet. Resend them from Sent Invoices.`,
+          { icon: "⚠️" }
+        );
+      }
+
+      if (unmatched > 0) {
+        toast.error(
+          `${unmatched} of ${invoiceIds.length} invoices were created on-chain but their details could not be matched locally. Those invoices are payable but their details are lost — please re-create them.`,
+          { duration: 12000 }
+        );
       }
 
       toast.success(

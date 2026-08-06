@@ -51,6 +51,9 @@ import {
 } from "@/utils/invoiceValidation";
 import toast from "react-hot-toast";
 import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
+import { computeInvoiceHash } from "../services/relay/invoiceHashUtils.js";
+import { sendEncryptedInvoice } from "../services/relay/relayInvoiceMessaging.js";
+import { fetchPublicKeyFromChain } from "../services/relay/relayKeyManager.js";
 
 
 import { AmountTypeToggle } from "../components/AmountTypeToggle";
@@ -522,11 +525,10 @@ function CreateInvoice() {
         })),
       };
 
-      const invoiceString = JSON.stringify(invoicePayload);
-
-      // 2. Base64 Encode Payload
-      const encryptedStringBase64 = btoa(invoiceString);
-      const dataToEncryptHash = "";
+      // Only a commitment to the invoice goes on-chain. The payload itself
+      // reaches the client encrypted over the relay, and they recompute this
+      // hash to prove it arrived untampered.
+      const invoiceDataHash = computeInvoiceHash(invoicePayload);
 
       if (!account?.chainId) {
         throw new Error("Missing chainId: wallet connected but chain not configured");
@@ -546,8 +548,7 @@ function CreateInvoice() {
         normalizedData.clientAddress,
         ethers.parseUnits(totalAmountDue.toString(), tokenDecimals),
         paymentToken.address,
-        encryptedStringBase64,
-        dataToEncryptHash
+        invoiceDataHash
       );
 
       const receipt = await tx.wait();
@@ -566,7 +567,42 @@ function CreateInvoice() {
         }
       }
 
+      let relayDelivered = false;
       if (invoiceId) {
+        // Delivery is best-effort: the invoice already exists on-chain, and
+        // the client can still be sent the payload later.
+        try {
+          const receiverPublicKey = await fetchPublicKeyFromChain(
+            contract,
+            normalizedData.clientAddress
+          );
+          if (receiverPublicKey) {
+            await sendEncryptedInvoice({
+              invoiceData: invoicePayload,
+              receiverPublicKey,
+              receiverAddress: normalizedData.clientAddress,
+              senderAddress: account.address,
+              chainId: account.chainId,
+              invoiceId,
+            });
+            relayDelivered = true;
+          } else {
+            toast(
+              "Invoice created. Your client has not registered a messaging key yet, so they will only see the on-chain summary until they do.",
+              { icon: "ℹ️" }
+            );
+          }
+        } catch (relayErr) {
+          console.warn(
+            `Relay delivery for invoice ${invoiceId} failed (non-critical):`,
+            relayErr
+          );
+          toast(
+            "Invoice created on-chain, but delivering the encrypted details to your client failed. You can resend from Sent Invoices.",
+            { icon: "⚠️" }
+          );
+        }
+
         try {
           await storeInvoice({
             invoiceId,
@@ -575,8 +611,8 @@ function CreateInvoice() {
             to: data.clientAddress.toLowerCase(),
             isPaid: false,
             isCancelled: false,
-            wakuDelivered: false,
-            invoiceDataHash: dataToEncryptHash,
+            relayDelivered,
+            invoiceDataHash,
             data: invoicePayload,
           });
         } catch (storageErr) {
@@ -595,7 +631,14 @@ function CreateInvoice() {
 
       setTimeout(() => navigate("/dashboard/sent"), 4000);
     } catch (err) {
-      console.error("Encryption or transaction failed:", err);
+      // Declining in the wallet is a deliberate choice, not a failure — saying
+      // "Failed to create invoice" sends people hunting for a bug that is not
+      // there. MetaMask surfaces this as 4001, ethers as ACTION_REJECTED.
+      if (err?.code === "ACTION_REJECTED" || err?.code === 4001) {
+        toast("Transaction cancelled in your wallet.", { icon: "✋" });
+        return;
+      }
+      console.error("Invoice creation failed:", err);
       toast.error("Failed to create invoice.");
     } finally {
       setLoading(false);
