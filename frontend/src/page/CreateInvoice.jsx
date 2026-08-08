@@ -54,6 +54,7 @@ import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
 import { computeInvoiceHash } from "../services/relay/invoiceHashUtils.js";
 import { sendEncryptedInvoice } from "../services/relay/relayInvoiceMessaging.js";
 import { fetchPublicKeyFromChain } from "../services/relay/relayKeyManager.js";
+import { useRelayKeys } from "@/hooks/useRelayKeys";
 
 
 import { AmountTypeToggle } from "../components/AmountTypeToggle";
@@ -118,6 +119,30 @@ function CreateInvoice() {
   const [itemData, setItemData] = useState([createEmptyInvoiceItem()]);
 
   const { catalogMetadata } = useProductCatalog();
+
+  const {
+    isRegistered,
+    isCheckingRegistration,
+    isUnsupportedNetwork,
+    isLoading: keysLoading,
+    error: keysError,
+    deriveAndRegister,
+  } = useRelayKeys();
+
+  // Registering cannot help on a chain with no deployment, so that case gets
+  // its own message rather than a setup step guaranteed to fail.
+  const needsRegistration =
+    isConnected &&
+    !isCheckingRegistration &&
+    !isUnsupportedNetwork &&
+    !isRegistered;
+  const showUnsupportedNetwork =
+    isConnected && !isCheckingRegistration && isUnsupportedNetwork;
+
+  // Whether the client can receive encrypted details: "unknown" | "checking"
+  // | "registered" | "unregistered". Checked as soon as a valid address is
+  // entered so the sender learns before spending gas, not after.
+  const [clientKeyStatus, setClientKeyStatus] = useState("unknown");
 
   const handleProductSelect = useCallback((product, index) => {
     setItemData((prevItemData) => {
@@ -323,6 +348,46 @@ function CreateInvoice() {
   useEffect(() => {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
+
+  // Look up whether the client has a key in the registry. Debounced because
+  // this runs as the address is typed.
+  useEffect(() => {
+    const trimmed = (clientAddress || "").trim();
+    if (!walletClient || !account?.chainId || !ethers.isAddress(trimmed)) {
+      setClientKeyStatus("unknown");
+      return;
+    }
+
+    const contractAddress =
+      import.meta.env[`VITE_CONTRACT_ADDRESS_${account.chainId}`];
+    if (!contractAddress) {
+      setClientKeyStatus("unknown");
+      return;
+    }
+
+    let cancelled = false;
+    setClientKeyStatus("checking");
+
+    const timer = setTimeout(async () => {
+      try {
+        const provider = new BrowserProvider(walletClient);
+        const contract = new Contract(contractAddress, ChainvoiceABI, provider);
+        const key = await fetchPublicKeyFromChain(contract, trimmed);
+        if (!cancelled) {
+          setClientKeyStatus(key ? "registered" : "unregistered");
+        }
+      } catch {
+        // A failed read should not imply the client is unregistered — leaving
+        // it unknown keeps the form quiet rather than showing a false warning.
+        if (!cancelled) setClientKeyStatus("unknown");
+      }
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [clientAddress, walletClient, account?.chainId]);
 
   const handleItemData = (e, index) => {
     const { name, value } = e.target;
@@ -679,7 +744,72 @@ function CreateInvoice() {
         />
       </div>
 
-      <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
+      {/* Registration is a one-time setup step, so it comes before the form
+          rather than surfacing as a failure after the invoice is already
+          on-chain. The key lives in the on-chain registry, so a returning user
+          is detected from the chain and never sees this. */}
+      {showUnsupportedNetwork && (
+        <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
+          <div className="bg-white border border-amber-200 rounded-lg p-6 shadow-sm">
+            <h2 className="text-xl font-bold mb-2 text-gray-800">
+              Unsupported network
+            </h2>
+            <p className="text-sm text-gray-600">
+              Chainvoice is not deployed on the network your wallet is connected
+              to, so invoices cannot be created here. Switch to a supported
+              network to continue.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {needsRegistration && (
+        <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
+          <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+            <h2 className="text-xl font-bold mb-2 text-gray-800">
+              Set up encrypted invoicing
+            </h2>
+            <p className="text-sm text-gray-600 mb-4">
+              Register your encryption key once so clients can send you invoices
+              privately. You sign a message to derive the key, then a single
+              transaction publishes the public half to the registry — your
+              private key never leaves this device.
+            </p>
+            {keysError && (
+              <div className="mb-4 flex items-center gap-2 text-sm text-red-600">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{keysError}</span>
+              </div>
+            )}
+            <Button
+              type="button"
+              className="bg-green-600 hover:bg-green-700 px-6 py-2 text-white"
+              disabled={keysLoading}
+              onClick={() =>
+                deriveAndRegister().catch(() => {
+                  /* surfaced through keysError above */
+                })
+              }
+            >
+              {keysLoading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="animate-spin h-4 w-4" />
+                  Registering...
+                </div>
+              ) : (
+                "Register my key"
+              )}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      <div
+        className={cn(
+          "w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6",
+          (needsRegistration || showUnsupportedNetwork) && "hidden"
+        )}
+      >
         {(searchParams.get("clientAddress") ||
           searchParams.get("amount") ||
           searchParams.get("description")) && (
@@ -906,6 +1036,25 @@ function CreateInvoice() {
                         <span>{clientAddressError}</span>
                             </div>
                                )}
+              {!clientAddressError && clientKeyStatus === "registered" && (
+                <div className="mt-2 flex items-center gap-2 text-sm text-green-700">
+                  <CheckCircle2 className="h-4 w-4 shrink-0" />
+                  <span>
+                    This client can receive encrypted invoice details.
+                  </span>
+                </div>
+              )}
+              {!clientAddressError && clientKeyStatus === "unregistered" && (
+                <div className="mt-2 flex items-start gap-2 text-sm text-amber-700">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <span>
+                    This client has not registered an encryption key, so they
+                    will only see the on-chain summary. You can still create the
+                    invoice and resend the details from Sent Invoices once they
+                    register.
+                  </span>
+                </div>
+              )}
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row gap-4">
                   <div className="flex-1">
