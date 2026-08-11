@@ -1,18 +1,18 @@
 # Chainvoice Brand Kit
 
-This folder is the canonical source for Chainvoice's visual identity: logo, favicons/icons, color palette, and typography. All assets referenced below live in this `brand/` folder.
+This document is the canonical reference for Chainvoice's visual identity: logo, favicons/icons, color palette, and typography. Generated favicons/icons live in this `brand/` folder; the source logo lives alongside the app at `frontend/public/logo.svg` (referenced below rather than duplicated).
 
 ## Logo
 
 | Asset | File |
 | --- | --- |
-| Primary logo (SVG) | [`logo.svg`](./logo.svg) |
+| Primary logo (SVG) | [`logo.svg`](../frontend/public/logo.svg) |
 
 The logo is a rounded square badge (dashed border) containing two interlocking arrows in the brand green, symbolizing the two-way flow of invoices and payments between parties.
 
 ## Favicons & Icons
 
-Generated from `logo.svg` at the standard sizes used across browsers, bookmarks, and mobile home screens:
+Generated from `frontend/public/logo.svg` at the standard sizes used across browsers, bookmarks, and mobile home screens:
 
 | File | Size | Use |
 | --- | --- | --- |

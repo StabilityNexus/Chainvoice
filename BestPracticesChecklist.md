@@ -2,7 +2,7 @@
 
 > Criteria adapted from the [OpenSSF Best Practices Badge](https://github.com/coreinfrastructure/best-practices-badge)
 > (MIT / CC BY 3.0) by OpenSSF contributors. Modified for AOSSIE multi-repo template use.
-
+>
 > **Purpose:** Covers OpenSSF Best Practices criteria that are NOT auto-detected by OpenSSF Scorecard.
 > Scorecard already handles: License, SAST tools, CI tests, Security Policy file, Branch Protection,
 > Pinned Dependencies, Signed Releases, Maintained status, and Known Vulnerabilities.
@@ -22,16 +22,18 @@
 
 ## Score Summary
 
-<!-- Auto-updated by checklist-score.yml workflow — do not edit manually -->
+> This repository has no `checklist-score.yml` automation yet, so this table is maintained by hand. Convention: `[~]` (N/A) rows count toward each category's `Total` but not toward `Met`, consistent with how AOSSIE's `checklist-score.yml` scores sibling repos.
+
 | Category           | Met | Total | Status |
 |--------------------|-----|-------|--------|
 | Basics             | 7   | 8     | 🟡     |
 | Change Control     | 3   | 6     | 🔴     |
 | Reporting          | 3   | 8     | 🔴     |
-| Quality            | 7   | 11    | 🟡     |
-| Security           | 0   | 9     | 🔴     |
+| Quality            | 6   | 11    | 🔴     |
+| Security           | 4   | 9     | 🟡     |
 | Analysis           | 0   | 7     | 🔴     |
-| **Total**          | **20** | **49** | **41%** |
+| **Total**          | **23** | **49** | **47%** |
+
 ---
 
 ## 🏗️ Basics
@@ -90,7 +92,7 @@
   - *Evidence URL:* Current release note is a one-line title only, not a change summary.
 
 - [~] 🔴 **release_notes_vulns** — Release notes identify every publicly known vulnerability (with CVE) fixed in that release.
-  - *Evidence URL:* N/A — *Justification: no publicly known/disclosed vulnerabilities to date.*
+  - *Evidence URL:* N/A — *Justification: as of 2026-08-11, no CVEs or public vulnerability disclosures exist against this repository (verified via GitHub Security Advisories for this repo). Re-verify this justification at each future release rather than treating it as permanent.*
 
 ---
 
@@ -149,8 +151,8 @@
 
 ### New Functionality Testing Policy
 
-- [x] 🔴 **test_policy** — The project has a general policy that new functionality must include tests in the automated test suite.
-  - *Evidence (CONTRIBUTING reference or informal policy):* `CONTRIBUTING.md` "Test Requirements" — mandatory for all contract logic changes.
+- [ ] 🔴 **test_policy** — The project has a general policy that new functionality must include tests in the automated test suite.
+  - *Evidence (CONTRIBUTING reference or informal policy):* `CONTRIBUTING.md` "Test Requirements" mandates tests only for smart contract logic changes — there's no equivalent stated policy for frontend/general functionality.
 
 - [ ] 🔴 **tests_are_added** — Evidence exists that the test policy has been followed in recent major changes (e.g., PRs include tests).
   - *Evidence URL (recent PR with tests):* Not yet compiled — needs a sample PR link.
@@ -183,17 +185,17 @@
 
 ### Cryptography (mark N/A if project does not handle cryptography)
 
-- [~] 🔴 **crypto_published** — Only publicly reviewed cryptographic protocols/algorithms are used by default.
-  - *Note:* N/A — No custom cryptography implemented; relies on standard EVM/ECDSA signature verification.
+- [x] 🔴 **crypto_published** — Only publicly reviewed cryptographic protocols/algorithms are used by default.
+  - *Note:* The contract relies on Ethereum's standard secp256k1 ECDSA transaction signing for sender authentication (`msg.sender`) and the native `keccak256` opcode for hashing — both are publicly reviewed, protocol-level primitives. No custom cryptography is implemented in `contracts/src/Chainvoice.sol`.
 
-- [~] 🟡 **crypto_call** — Project calls an established crypto library rather than reimplementing crypto functions.
-  - *Library used:* N/A — Uses EVM built-in `ecrecover`/signature verification, no custom crypto library.
+- [x] 🟡 **crypto_call** — Project calls an established crypto library rather than reimplementing crypto functions.
+  - *Library used:* No explicit library import — the contract relies on the EVM's built-in, audited secp256k1/ECDSA transaction verification and native `keccak256` opcode rather than reimplementing any cryptographic primitive itself.
 
-- [~] 🔴 **crypto_working** — No broken algorithms (MD4, MD5, single DES, RC4, Dual_EC_DRBG) used unless required for interoperability (must be documented).
-  - *Note:* N/A — No such algorithms used.
+- [x] 🔴 **crypto_working** — No broken algorithms (MD4, MD5, single DES, RC4, Dual_EC_DRBG) used unless required for interoperability (must be documented).
+  - *Note:* No such algorithms used; relies on Ethereum's standard secp256k1/ECDSA and keccak256.
 
-- [~] 🔴 **crypto_keylength** — Key lengths meet [NIST 2030 minimums](https://www.keylength.com/en/4/) by default.
-  - *Note:* N/A — Uses standard EVM key/signature sizes (secp256k1).
+- [x] 🔴 **crypto_keylength** — Key lengths meet [NIST 2030 minimums](https://www.keylength.com/en/4/) by default.
+  - *Note:* Uses standard Ethereum secp256k1 key/signature sizes (256-bit), which meet current recommended minimums.
 
 - [~] 🔴 **crypto_password_storage** — Passwords for external users are stored as iterated salted hashes (Argon2id, bcrypt, scrypt, PBKDF2).
   - *Note:* N/A — *Justification: project doesn't store user passwords (wallet-based auth).*
@@ -240,11 +242,13 @@
 > Add domain-specific notes here for Web3, Full-Stack, or AI projects.
 
 ### Web3 / Solidity Notes
+
 - Scorecard does not audit Solidity-specific security. Use [Slither](https://github.com/crytic/slither) for `static_analysis` and `warnings` criteria — **not currently configured, recommended next step.**
 - For `crypto_*` criteria: contracts rely on standard EVM ECDSA signatures; no custom cryptographic primitives.
-- Smart contract audit reports (if any) would count as evidence for `know_secure_design`.
+- `know_secure_design` requires evidence of a primary developer's own knowledge (training, experience, or self-certification) — a third-party audit report demonstrates external review, not developer knowledge, and should not be cited as evidence for this criterion.
 
 ### Full-Stack Notes
+
 - Frontend is React + Vite + TypeScript, tested with Jest, linted with ESLint (CI currently `continue-on-error`).
 
 ---

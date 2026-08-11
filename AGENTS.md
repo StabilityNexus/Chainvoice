@@ -16,6 +16,7 @@ Chainvoice is a decentralized invoicing platform: a Solidity smart contract back
 ## Build, Test & Lint
 
 Frontend (run from `frontend/`):
+
 ```bash
 npm install
 npm run dev      # start dev server
@@ -26,6 +27,7 @@ npm run test:ci  # Jest with coverage, CI mode
 ```
 
 Smart contracts (run from `contracts/`, requires [Foundry](https://getfoundry.sh/)):
+
 ```bash
 forge build
 forge test

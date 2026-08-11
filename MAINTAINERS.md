@@ -18,3 +18,7 @@ This document lists the individuals fulfilling the key roles of [Maintainer](htt
 | Name    | GitHub Username | Discord Username |
 | ------- | ---------------- | ------------------ |
 | Atharva | @Atharva0506     | @atharva0506       |
+
+## Ideators
+
+_No Ideators are currently assigned to this repository._
