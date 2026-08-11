@@ -1,5 +1,7 @@
 <img width="52" height="52" alt="image" src="https://github.com/user-attachments/assets/9ad77273-ebe3-4279-be6d-ad47954e4746" />
 
+> **Discord:** All contribution discussion for Chainvoice happens in the [#chainvoice channel](https://discord.com/channels/995968619034984528/1328282666335993856) on the Stability Nexus Discord server. Please join and share your PR/issue there for visibility.
+
 ## Smart Contract Contribution Guidelines 
 The following guidelines apply to all contributions that modify or introduce smart contract logic in ChainVoice. Since smart contracts form the core logic of the system, a higher standard of review and validation is required compared to frontend or general application changes.
 
