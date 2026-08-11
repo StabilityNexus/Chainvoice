@@ -11,7 +11,7 @@ This document lists the individuals fulfilling the key roles of [Maintainer](htt
 | Name  | GitHub Username  | Discord Username | Area / Focus                        |
 | ----- | ---------------- | ----------------- | ------------------------------------ |
 | Bruno | @Zahnentferner   | @b.wp              | Whole Project Guidance & PR Reviews |
-| Karn  | @kumawatkaran523 | @karankk9616       | Whole Project Guidance & PR Reviews |
+| Karan | @kumawatkaran523 | @karankk9616       | Whole Project Guidance & PR Reviews |
 
 ## Maintainers
 
