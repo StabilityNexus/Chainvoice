@@ -32,11 +32,10 @@ jobs:
        github.event_name == 'pull_request')
 
     permissions:
+      contents: read # required for actions/checkout to read repository contents
       security-events: write
       id-token: write
       actions: read
-      # Uncomment for PRIVATE repositories.
-      # contents: read
 
     steps:
       - name: "Harden Runner"
@@ -61,6 +60,9 @@ jobs:
             rekor.sigstore.dev:443
             auth.docker.io:443
             api.scorecard.dev:443
+            token.actions.githubusercontent.com:443
+            results-receiver.actions.githubusercontent.com:443
+            *.blob.core.windows.net:443
 
       - name: "Checkout code"
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

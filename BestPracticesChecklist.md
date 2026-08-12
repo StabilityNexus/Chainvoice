@@ -30,9 +30,9 @@
 | Change Control     | 3   | 6     | 🔴     |
 | Reporting          | 3   | 8     | 🔴     |
 | Quality            | 6   | 11    | 🔴     |
-| Security           | 4   | 9     | 🟡     |
+| Security           | 0   | 9     | 🔴     |
 | Analysis           | 0   | 7     | 🔴     |
-| **Total**          | **23** | **49** | **47%** |
+| **Total**          | **19** | **49** | **39%** |
 
 ---
 
@@ -185,17 +185,17 @@
 
 ### Cryptography (mark N/A if project does not handle cryptography)
 
-- [x] 🔴 **crypto_published** — Only publicly reviewed cryptographic protocols/algorithms are used by default.
-  - *Note:* The contract relies on Ethereum's standard secp256k1 ECDSA transaction signing for sender authentication (`msg.sender`) and the native `keccak256` opcode for hashing — both are publicly reviewed, protocol-level primitives. No custom cryptography is implemented in `contracts/src/Chainvoice.sol`.
+- [ ] 🔴 **crypto_published** — Only publicly reviewed cryptographic protocols/algorithms are used by default.
+  - *Note:* Corrected after code review — `contracts/src/Chainvoice.sol` does not call `keccak256`, `ecrecover`, or any ECDSA/ECIES function; it only stores an off-chain-computed `invoiceDataHash` and validates the byte-length/prefix of a Waku public key (`registerWakuPublicKey`, lines 124–126). The frontend's "encryption" (`frontend/src/page/CreateInvoice.jsx:528`, `CreateInvoicesBatch.jsx:618`, `BatchPayment.jsx:340`) is `btoa`/`atob` — Base64 encoding, not a cryptographic algorithm — and `dataToEncryptHash` is hardcoded to `""` rather than computed. No genuine cryptographic protocol is currently in use despite the project's intent to end-to-end encrypt invoice data via Waku.
 
-- [x] 🟡 **crypto_call** — Project calls an established crypto library rather than reimplementing crypto functions.
-  - *Library used:* No explicit library import — the contract relies on the EVM's built-in, audited secp256k1/ECDSA transaction verification and native `keccak256` opcode rather than reimplementing any cryptographic primitive itself.
+- [~] 🟡 **crypto_call** — Project calls an established crypto library rather than reimplementing crypto functions.
+  - *Library used:* N/A — no cryptographic library is called; see `crypto_published` note above.
 
-- [x] 🔴 **crypto_working** — No broken algorithms (MD4, MD5, single DES, RC4, Dual_EC_DRBG) used unless required for interoperability (must be documented).
-  - *Note:* No such algorithms used; relies on Ethereum's standard secp256k1/ECDSA and keccak256.
+- [ ] 🔴 **crypto_working** — No broken algorithms (MD4, MD5, single DES, RC4, Dual_EC_DRBG) used unless required for interoperability (must be documented).
+  - *Note:* Base64 (`btoa`/`atob`) is not a cryptographic algorithm at all, so this criterion can't be assessed as "met" — there is no real algorithm in place to evaluate for weakness.
 
-- [x] 🔴 **crypto_keylength** — Key lengths meet [NIST 2030 minimums](https://www.keylength.com/en/4/) by default.
-  - *Note:* Uses standard Ethereum secp256k1 key/signature sizes (256-bit), which meet current recommended minimums.
+- [ ] 🔴 **crypto_keylength** — Key lengths meet [NIST 2030 minimums](https://www.keylength.com/en/4/) by default.
+  - *Note:* The registered Waku public key is a standard uncompressed secp256k1 point (65 bytes, prefix `0x04`), which would meet minimums if used — but it is only stored/validated for format, never actually used to encrypt anything on the paths above.
 
 - [~] 🔴 **crypto_password_storage** — Passwords for external users are stored as iterated salted hashes (Argon2id, bcrypt, scrypt, PBKDF2).
   - *Note:* N/A — *Justification: project doesn't store user passwords (wallet-based auth).*
@@ -244,7 +244,7 @@
 ### Web3 / Solidity Notes
 
 - Scorecard does not audit Solidity-specific security. Use [Slither](https://github.com/crytic/slither) for `static_analysis` and `warnings` criteria — **not currently configured, recommended next step.**
-- For `crypto_*` criteria: contracts rely on standard EVM ECDSA signatures; no custom cryptographic primitives.
+- For `crypto_*` criteria: no genuine cryptography is currently implemented anywhere in the stack — the frontend's "encryption" of invoice data is Base64 encoding (`btoa`/`atob`), not a cipher, and the invoice data hash is never actually computed. **Recommended next step:** use the registered Waku public key (`registerWakuPublicKey`) to actually ECIES-encrypt the payload, and compute a real `keccak256` hash for `invoiceDataHash` instead of leaving it empty.
 - `know_secure_design` requires evidence of a primary developer's own knowledge (training, experience, or self-certification) — a third-party audit report demonstrates external review, not developer knowledge, and should not be cited as evidence for this criterion.
 
 ### Full-Stack Notes
