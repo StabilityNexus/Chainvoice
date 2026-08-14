@@ -90,6 +90,11 @@ function CreateInvoice() {
   const [dueDate, setDueDate] = useState(new Date());
   const [issueDate] = useState(() => new Date());
   const [loading, setLoading] = useState(false);
+  // Which phase of submission is in flight, purely to word the Create button
+  // correctly — a first-time sender goes through a signature + a registration
+  // tx before the invoice tx, and seeing "Creating Invoice..." during the
+  // registration part would misdescribe what their wallet prompt is for.
+  const [submitStage, setSubmitStage] = useState("idle");
   const navigate = useNavigate();
 
   const itemRefsMobile = useRef([]);
@@ -124,18 +129,15 @@ function CreateInvoice() {
     isRegistered,
     isCheckingRegistration,
     isUnsupportedNetwork,
-    isLoading: keysLoading,
     error: keysError,
+    checkRegistration,
     deriveAndRegister,
   } = useRelayKeys();
 
-  // Registering cannot help on a chain with no deployment, so that case gets
-  // its own message rather than a setup step guaranteed to fail.
-  const needsRegistration =
-    isConnected &&
-    !isCheckingRegistration &&
-    !isUnsupportedNetwork &&
-    !isRegistered;
+  // Registering cannot help on a chain with no deployment, so that case still
+  // gets its own message rather than a setup step guaranteed to fail. Key
+  // registration itself is no longer gated up front here — it happens inline
+  // in createInvoiceRequest, the first time it's actually needed.
   const showUnsupportedNetwork =
     isConnected && !isCheckingRegistration && isUnsupportedNetwork;
 
@@ -552,8 +554,29 @@ function CreateInvoice() {
     }
 
     setClientAddressError("");
+    setLoading(true);
+    // Tracked as a plain variable, not just via setSubmitStage: the state
+    // update is not visible to this same function invocation (stale closure),
+    // but the catch block below needs to know which phase actually failed to
+    // word the error correctly.
+    let phase = "registering";
+    setSubmitStage("registering");
+
     try {
-      setLoading(true);
+      // A returning user is recognized here and this is a no-op; a new one is
+      // prompted for a signature + one registration tx before their first
+      // invoice, instead of being blocked from reaching the form at all.
+      let registered = isRegistered;
+      if (!registered) {
+        registered = await checkRegistration();
+      }
+      if (!registered) {
+        await deriveAndRegister();
+      }
+
+      phase = "creating";
+      setSubmitStage("creating");
+
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
 
@@ -700,13 +723,23 @@ function CreateInvoice() {
       // "Failed to create invoice" sends people hunting for a bug that is not
       // there. MetaMask surfaces this as 4001, ethers as ACTION_REJECTED.
       if (err?.code === "ACTION_REJECTED" || err?.code === 4001) {
-        toast("Transaction cancelled in your wallet.", { icon: "✋" });
+        toast(
+          phase === "registering"
+            ? "Signature request cancelled — invoice not sent."
+            : "Transaction cancelled in your wallet.",
+          { icon: "✋" }
+        );
         return;
       }
       console.error("Invoice creation failed:", err);
-      toast.error("Failed to create invoice.");
+      toast.error(
+        phase === "registering"
+          ? keysError || "Failed to set up your encryption key."
+          : "Failed to create invoice."
+      );
     } finally {
       setLoading(false);
+      setSubmitStage("idle");
     }
   };
 
@@ -744,10 +777,6 @@ function CreateInvoice() {
         />
       </div>
 
-      {/* Registration is a one-time setup step, so it comes before the form
-          rather than surfacing as a failure after the invoice is already
-          on-chain. The key lives in the on-chain registry, so a returning user
-          is detected from the chain and never sees this. */}
       {showUnsupportedNetwork && (
         <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
           <div className="bg-white border border-amber-200 rounded-lg p-6 shadow-sm">
@@ -763,51 +792,10 @@ function CreateInvoice() {
         </div>
       )}
 
-      {needsRegistration && (
-        <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
-          <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-            <h2 className="text-xl font-bold mb-2 text-gray-800">
-              Set up encrypted invoicing
-            </h2>
-            <p className="text-sm text-gray-600 mb-4">
-              Register your encryption key once so clients can send you invoices
-              privately. You sign a message to derive the key, then a single
-              transaction publishes the public half to the registry — your
-              private key never leaves this device.
-            </p>
-            {keysError && (
-              <div className="mb-4 flex items-center gap-2 text-sm text-red-600">
-                <AlertCircle className="h-4 w-4 shrink-0" />
-                <span>{keysError}</span>
-              </div>
-            )}
-            <Button
-              type="button"
-              className="bg-green-600 hover:bg-green-700 px-6 py-2 text-white"
-              disabled={keysLoading}
-              onClick={() =>
-                deriveAndRegister().catch(() => {
-                  /* surfaced through keysError above */
-                })
-              }
-            >
-              {keysLoading ? (
-                <div className="flex items-center gap-2">
-                  <Loader2 className="animate-spin h-4 w-4" />
-                  Registering...
-                </div>
-              ) : (
-                "Register my key"
-              )}
-            </Button>
-          </div>
-        </div>
-      )}
-
       <div
         className={cn(
           "w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6",
-          (needsRegistration || showUnsupportedNetwork) && "hidden"
+          showUnsupportedNetwork && "hidden"
         )}
       >
         {(searchParams.get("clientAddress") ||
@@ -1770,7 +1758,9 @@ function CreateInvoice() {
               {loading ? (
                 <div className="flex items-center gap-2">
                   <Loader2 className="animate-spin h-5 w-5" />
-                  Creating Invoice...
+                  {submitStage === "registering"
+                    ? "Setting up encryption key..."
+                    : "Creating Invoice..."}
                 </div>
               ) : (
                 "Create Invoice"
