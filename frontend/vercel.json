@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/relay/:path*",
+      "destination": "https://thrubox-server.onrender.com/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
