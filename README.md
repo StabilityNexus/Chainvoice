@@ -13,6 +13,12 @@
 </p>
 
 <p align="center">
+  <a href="https://scorecard.dev/viewer/?uri=github.com/StabilityNexus/Chainvoice">
+    <img src="https://api.scorecard.dev/projects/github.com/StabilityNexus/Chainvoice/badge" alt="OpenSSF Scorecard"/>
+  </a>
+</p>
+
+<p align="center">
   <a href="https://t.me/StabilityNexus"><img src="https://img.shields.io/badge/Telegram-24A1DE?style=flat&logo=telegram&logoColor=white" alt="Telegram"></a>
   &nbsp;
   <a href="https://x.com/StabilityNexus"><img src="https://img.shields.io/twitter/follow/StabilityNexus" alt="X (Twitter)"></a>
@@ -71,7 +77,7 @@ Chainvoice/
 1. **Fork the repository**
 2. **Clone your fork**
 
-git clone https://github.com/yourusername/Chainvoice.git  
+git clone https://github.com/YOUR_USERNAME/Chainvoice.git  
 cd Chainvoice
 
 ## Frontend Setup
