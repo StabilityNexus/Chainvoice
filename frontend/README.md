@@ -55,11 +55,16 @@ The frontend reads Vite environment variables from `.env`.
 The provided `.env.example` includes deployed contract addresses for supported networks and the WalletConnect project ID placeholder:
 
 ```env
-VITE_CONTRACT_ADDRESS_11155111=0x54a542dCDC306eE281b5De4613EcEfe6e6ABc562
-VITE_CONTRACT_ADDRESS_61=0xD044A85a5daC307217B9bF313A90E8a60AF7DdCe
-VITE_CONTRACT_ADDRESS_137=0xD044A85a5daC307217B9bF313A90E8a60AF7DdCe
+VITE_CONTRACT_ADDRESS_11155111=0x7bC4C5abb5b1B8355Aa65307C1cFDbe6254505d2
+VITE_CONTRACT_ADDRESS_61=
+VITE_CONTRACT_ADDRESS_137=
 VITE_WALLETCONNECT_PROJECT_ID=
 ```
+
+> ⚠️ Ethereum Classic and Polygon are left blank on purpose. Both still run the
+> v1 contract, which does not match the current ABI. The app treats any
+> non-empty address as supported, so filling these in would send calls those
+> contracts cannot decode. Populate them only after redeploying.
 
 To enable Web3 wallet functionality, create a free WalletConnect Project ID from the Reown dashboard:
 
