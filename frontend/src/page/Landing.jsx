@@ -61,7 +61,7 @@ function Landing() {
                 className="relative"
               >
                 <img
-                  src="/dashboard.png"
+                  src={`${import.meta.env.BASE_URL}dashboard.png`}
                   alt="Secure Invoice Dashboard"
                   className="rounded-xl shadow-2xl border border-gray-700/50"
                 />
@@ -200,7 +200,7 @@ function Landing() {
               className="relative"
             >
               <img
-                src="/token-select.png"
+                src={`${import.meta.env.BASE_URL}token-select.png`}
                 alt="Token Payment Flow"
                 className="rounded-xl border border-gray-700/50 shadow-xl"
               />
@@ -258,7 +258,7 @@ function Landing() {
                 rel="noopener noreferrer"
               >
                 <img
-                  src="/logo-animated.gif"
+                  src={`${import.meta.env.BASE_URL}logo-animated.gif`}
                   alt="Stability Nexus"
                   className="h-14"
                 />

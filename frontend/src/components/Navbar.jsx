@@ -149,7 +149,7 @@ function Navbar() {
               closeMobileMenu();
             }}
           >
-            <img src="/logo.png" alt="logo" width={50} />
+            <img src={`${import.meta.env.BASE_URL}logo.png`} alt="logo" width={50} />
             <p className="text-3xl font-bold text-green-500">
               Cha<span className="text-3xl font-bold text-white">in</span>voice
             </p>

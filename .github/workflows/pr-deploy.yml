@@ -1,0 +1,271 @@
+# Workflow 2 of 2 for PR previews (fork-safe).
+# Triggered by workflow_run after pr-build.yml completes.
+# Runs in the BASE REPOSITORY context — has write permissions and secrets,
+# so it can build with VITE_ env vars, push to gh-pages, and comment on PRs.
+#
+# SECURITY NOTES:
+# - This workflow ALWAYS runs the code from the default branch (main),
+#   so fork PRs cannot modify the deploy/cleanup logic.
+# - PR source code is checked out with persist-credentials: false,
+#   so build scripts cannot access GITHUB_TOKEN via git.
+# - GITHUB_TOKEN is only passed to the peaceiris deploy action, never to build steps.
+#
+# PREREQUISITE (org admin action required):
+#   Go to github.com/StabilityNexus/Chainvoice/settings/actions
+#   → Workflow permissions → select "Read and write permissions"
+#
+# PRODUCTION IMPACT: None.
+#   - PR previews deploy to pr-preview/pr-N/ subdirectory only.
+#   - Production deploy.yml restores pr-preview/ dirs before deploying.
+#   - Different concurrency groups prevent conflicts.
+
+name: "PR Preview: Deploy"
+
+on:
+  workflow_run:
+    workflows: ["PR Preview: Build"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  deploy-preview:
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
+    concurrency:
+      group: pr-preview-deploy
+      cancel-in-progress: false
+    steps:
+      # ─── Download the metadata artifact to determine action ──────────────
+      - name: Download PR metadata
+        uses: actions/github-script@v7
+        id: metadata
+        with:
+          script: |
+            // List artifacts from the triggering workflow run
+            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.payload.workflow_run.id,
+            });
+
+            // Find the metadata artifact
+            const metadataArtifact = artifacts.data.artifacts.find(
+              a => a.name.startsWith('pr-metadata-')
+            );
+            if (!metadataArtifact) {
+              core.setFailed('No PR metadata artifact found');
+              return;
+            }
+
+            // Download and extract metadata
+            const download = await github.rest.actions.downloadArtifact({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              artifact_id: metadataArtifact.id,
+              archive_format: 'zip',
+            });
+
+            const fs = require('fs');
+            fs.mkdirSync('./pr-metadata', { recursive: true });
+            fs.writeFileSync('./pr-metadata.zip', Buffer.from(download.data));
+
+      - name: Extract and validate metadata
+        run: |
+          unzip -o ./pr-metadata.zip -d ./pr-metadata
+
+          PR_NUMBER=$(cat ./pr-metadata/pr_number | tr -d '[:space:]')
+          PR_SHA=$(cat ./pr-metadata/sha | tr -d '[:space:]')
+          PR_ACTION=$(cat ./pr-metadata/action | tr -d '[:space:]')
+
+          # Validate PR number is a positive integer (prevents injection)
+          if ! echo "$PR_NUMBER" | grep -qE '^[0-9]+$'; then
+            echo "::error::Invalid PR number: '$PR_NUMBER'"
+            exit 1
+          fi
+
+          # Validate action is one of the expected values
+          if [ "$PR_ACTION" != "deploy" ] && [ "$PR_ACTION" != "cleanup" ]; then
+            echo "::error::Invalid action: '$PR_ACTION' (expected 'deploy' or 'cleanup')"
+            exit 1
+          fi
+
+          # Validate SHA looks like a hex commit hash
+          if ! echo "$PR_SHA" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::error::Invalid SHA: '$PR_SHA'"
+            exit 1
+          fi
+
+          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
+          echo "PR_SHA=$PR_SHA" >> $GITHUB_ENV
+          echo "PR_ACTION=$PR_ACTION" >> $GITHUB_ENV
+          echo "✅ Metadata validated: PR #$PR_NUMBER, action=$PR_ACTION, sha=${PR_SHA:0:7}"
+
+      # ─── Deploy preview (when action == deploy) ─────────────────────────
+
+      # Checkout PR code with NO credentials persisted — build scripts
+      # cannot access GITHUB_TOKEN through git commands.
+      - name: Checkout PR code
+        if: env.PR_ACTION == 'deploy'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.PR_SHA }}
+          persist-credentials: false
+
+      - name: Setup Node
+        if: env.PR_ACTION == 'deploy'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        if: env.PR_ACTION == 'deploy'
+        run: |
+          if [ -f "./frontend/package-lock.json" ]; then
+            npm ci
+          else
+            npm install
+          fi
+        working-directory: ./frontend
+
+      - name: Build preview site
+        if: env.PR_ACTION == 'deploy'
+        run: npm run build -- --base /${{ github.event.workflow_run.repository.name }}/pr-preview/pr-${{ env.PR_NUMBER }}/
+        working-directory: ./frontend
+        env:
+          # Secrets are available here because this workflow runs in the base
+          # repo context. This allows wallet connection to work in PR previews.
+          # Note: GITHUB_TOKEN is intentionally NOT passed to the build step.
+          VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
+          VITE_CONTRACT_ADDRESS_11155111: ${{ secrets.VITE_CONTRACT_ADDRESS_11155111 }}
+          VITE_CONTRACT_ADDRESS_61: ${{ secrets.VITE_CONTRACT_ADDRESS_61 }}
+          VITE_CONTRACT_ADDRESS_137: ${{ secrets.VITE_CONTRACT_ADDRESS_137 }}
+
+      - name: Add .nojekyll
+        if: env.PR_ACTION == 'deploy'
+        run: touch ./frontend/dist/.nojekyll
+
+      - name: Deploy preview to gh-pages
+        if: env.PR_ACTION == 'deploy'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./frontend/dist
+          destination_dir: pr-preview/pr-${{ env.PR_NUMBER }}
+          keep_files: true
+          user_name: "github-actions[bot]"
+          user_email: "github-actions[bot]@users.noreply.github.com"
+          commit_message: "deploy: preview for PR #${{ env.PR_NUMBER }} (${{ env.PR_SHA }})"
+
+      - name: Post or update deploy comment on PR
+        if: env.PR_ACTION == 'deploy'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = parseInt(process.env.PR_NUMBER);
+            const sha = process.env.PR_SHA.substring(0, 7);
+            const repoOwner = context.repo.owner;
+            const repoName = context.repo.repo;
+
+            // Dynamically construct the preview environment URL.
+            // We use the default GitHub Pages domain format (https://<owner>.github.io/<repo>)
+            // because it universally supports both contributor forks and the main organization repository.
+            // If the main repository uses a custom domain (e.g., chainvoice.stability.nexus),
+            // GitHub Pages automatically redirects this standard URL to the custom domain.
+            const previewUrl = `https://${repoOwner}.github.io/${repoName}/pr-preview/pr-${prNumber}/`;
+
+            const marker = '<!-- pr-preview-bot -->';
+            const body =
+              `${marker}\n` +
+              `### 🔍 PR Preview\n\n` +
+              `| | |\n` +
+              `|---|---|\n` +
+              `| **Preview URL** | ${previewUrl} |\n` +
+              `| **Commit** | \`${sha}\` |\n` +
+              `| **Status** | ✅ Deployed |\n\n` +
+              `> This preview is updated on every commit and will be removed when the PR is closed.`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: repoOwner,
+              repo: repoName,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: repoOwner,
+                repo: repoName,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: repoOwner,
+                repo: repoName,
+                issue_number: prNumber,
+                body,
+              });
+            }
+
+      # ─── Cleanup preview (when action == cleanup) ──────────────────────
+      - name: Checkout repository
+        if: env.PR_ACTION == 'cleanup'
+        uses: actions/checkout@v4
+
+      - name: Remove preview from gh-pages
+        if: env.PR_ACTION == 'cleanup'
+        run: |
+          # Guard: if gh-pages doesn't exist yet there is nothing to clean up.
+          git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1 || {
+            echo "gh-pages branch does not exist — nothing to clean up."
+            exit 0
+          }
+
+          # Fetch and create a local tracking branch.
+          git fetch origin gh-pages:gh-pages --depth=1
+          git checkout gh-pages
+
+          PR_DIR="pr-preview/pr-${{ env.PR_NUMBER }}"
+          if [ -d "$PR_DIR" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git rm -r -f "$PR_DIR"
+            git commit -m "cleanup: remove preview for PR #${{ env.PR_NUMBER }}"
+            git push --set-upstream origin gh-pages
+            echo "✅ Preview directory '$PR_DIR' removed from gh-pages."
+          else
+            echo "Preview directory '$PR_DIR' not found — nothing to clean up."
+          fi
+
+      - name: Update PR comment to indicate removal
+        if: env.PR_ACTION == 'cleanup'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = parseInt(process.env.PR_NUMBER);
+            const marker = '<!-- pr-preview-bot -->';
+            const body =
+              `${marker}\n` +
+              `### 🔍 PR Preview\n\n` +
+              `| | |\n` +
+              `|---|---|\n` +
+              `| **Status** | 🗑️ Preview removed (PR closed) |\n`;
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+
+            const existing = comments.find(c => c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            }
