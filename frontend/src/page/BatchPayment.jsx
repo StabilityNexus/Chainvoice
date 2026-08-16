@@ -7,7 +7,10 @@ import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import html2canvas from "html2canvas";
 
 import { ERC20_ABI } from "../contractsABI/ERC20_ABI";
+import { getReceivedInvoices as getLocalReceivedInvoices } from "../services/invoiceStorage/invoiceDB.js";
+import { verifyInvoiceHash } from "../services/relay/invoiceHashUtils.js";
 import toast from "react-hot-toast";
+import { resolveInvoiceDecimals, formatInvoiceDate } from "../utils/invoiceAmounts.js";
 import {
   CheckCircle2,
   Loader2,
@@ -24,6 +27,8 @@ import {
 } from "lucide-react";
 import { useTokenList } from "../hooks/useTokenList";
 import WalletConnectionAlert from "../components/WalletConnectionAlert";
+
+
 
 function BatchPayment() {
   const [page, setPage] = useState(0);
@@ -89,7 +94,11 @@ function BatchPayment() {
     const groups = invoices
       .filter((inv) => !inv.isPaid && !inv.isCancelled)
       .reduce((acc, inv) => {
-        const issueDate = new Date(inv.issueDate).toDateString();
+        // Undated on-chain-only invoices would otherwise all share the
+        // "Invalid Date" key and be suggested as one bogus batch.
+        const issueDate = inv.issueDate
+          ? new Date(inv.issueDate).toDateString()
+          : `undated-${inv.id}`;
         const key = `${inv.user?.address}_${
           inv.paymentToken?.address || "ETH"
         }_${issueDate}`;
@@ -320,6 +329,16 @@ function BatchPayment() {
 
         const decryptedInvoices = [];
 
+        // The payload lives in IndexedDB, delivered over the relay; the chain
+        // only holds a hash of it.
+        const localInvoices = await getLocalReceivedInvoices(address);
+        const localInvoiceMap = new Map();
+        for (const local of localInvoices) {
+          if (String(local.chainId) === String(chainId)) {
+            localInvoiceMap.set(String(local.invoiceId), local);
+          }
+        }
+
         for (const invoice of res) {
           try {
             const id = invoice[0];
@@ -327,19 +346,31 @@ function BatchPayment() {
             const to = invoice[2].toLowerCase();
             const isPaid = invoice[5];
             const isCancelled = invoice[6];
-            const encryptedStringBase64 = invoice[7];
-            const dataToEncryptHash = invoice[8];
-
-            if (!encryptedStringBase64 || !dataToEncryptHash) continue;
+            const invoiceDataHash = invoice[7];
 
             const currentUserAddress = address.toLowerCase();
             if (currentUserAddress !== from && currentUserAddress !== to) {
               continue;
             }
 
-            const decryptedString = atob(encryptedStringBase64);
+            const localInv = localInvoiceMap.get(id.toString());
+            // Only trust a payload that still matches its on-chain commitment.
+            const payloadTrusted =
+              localInv?.data && verifyInvoiceHash(localInv.data, invoiceDataHash);
 
-            const parsed = JSON.parse(decryptedString);
+            // Invoices whose details have not arrived are still payable: the
+            // amount and token come from the chain, which is authoritative.
+            const parsed = payloadTrusted
+              ? { ...localInv.data }
+              : {
+                  amountDue: invoice[3].toString(),
+                  user: { address: from },
+                  client: { address: to },
+                  paymentToken: { address: invoice[4] },
+                  issueDate: null,
+                  dueDate: null,
+                  _onChainOnly: true,
+                };
             parsed["id"] = id;
             parsed["isPaid"] = isPaid;
             parsed["isCancelled"] = isCancelled;
@@ -394,6 +425,21 @@ function BatchPayment() {
                     parsed.paymentToken.logo || "/tokenImages/generic.png";
                 }
               }
+            }
+
+            // On-chain amounts are raw token units; the stored payload carries
+            // an already-formatted decimal string, so only stubs need scaling.
+            if (parsed._onChainOnly) {
+              const decimals = resolveInvoiceDecimals(parsed.paymentToken);
+              if (decimals === null) {
+                // Showing a base-unit figure as if it were a token amount, or
+                // feeding it to parseUnits, is worse than omitting the invoice.
+                console.warn(
+                  `Invoice ${parsed.id}: cannot resolve token decimals, skipping`
+                );
+                continue;
+              }
+              parsed.amountDue = ethers.formatUnits(parsed.amountDue, decimals);
             }
 
             decryptedInvoices.push(parsed);
@@ -712,10 +758,7 @@ function BatchPayment() {
     )}`;
   };
 
-  const formatDate = (issueDate) => {
-    const date = new Date(issueDate);
-    return date.toLocaleString();
-  };
+  const formatDate = formatInvoiceDate;
 
   const unpaidInvoices = receivedInvoices.filter(
     (inv) => !inv.isPaid && !inv.isCancelled
@@ -1373,15 +1416,11 @@ function BatchPayment() {
                   <div className="flex justify-between text-sm text-gray-500 mb-2">
                     <span>
                       Issued:{" "}
-                      {new Date(
-                        drawerState.selectedInvoice.issueDate
-                      ).toLocaleDateString()}
+                      {formatInvoiceDate(drawerState.selectedInvoice.issueDate)}
                     </span>
                     <span>
                       Due:{" "}
-                      {new Date(
-                        drawerState.selectedInvoice.dueDate
-                      ).toLocaleDateString()}
+                      {formatInvoiceDate(drawerState.selectedInvoice.dueDate)}
                     </span>
                   </div>
                 </div>

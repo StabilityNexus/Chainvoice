@@ -15,16 +15,21 @@ import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
-import { getSentInvoices as getLocalSentInvoices, storeInvoice, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
+import { getSentInvoices as getLocalSentInvoices, getInvoiceById, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
+import { verifyInvoiceHash } from "@/services/relay/invoiceHashUtils.js";
+import { sendEncryptedInvoice } from "@/services/relay/relayInvoiceMessaging.js";
+import { fetchPublicKeyFromChain } from "@/services/relay/relayKeyManager.js";
 
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import toast from "react-hot-toast";
+import { resolveInvoiceDecimals, formatInvoiceDate } from "@/utils/invoiceAmounts";
 import {
   Skeleton,
   Chip,
   Avatar,
   Tooltip,
   IconButton,
+  CircularProgress,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -45,6 +50,9 @@ import TableChartIcon from "@mui/icons-material/TableChart";
 import DataObjectIcon from "@mui/icons-material/DataObject";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import CancelIcon from "@mui/icons-material/Cancel";
+import SendIcon from "@mui/icons-material/Send";
+import ErrorIcon from "@mui/icons-material/Error";
+import WarningIcon from "@mui/icons-material/Warning";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
@@ -57,6 +65,8 @@ const columns = [
   { id: "date", label: "Date", minWidth: 100 },
   { id: "actions", label: "Actions", minWidth: 150 },
 ];
+
+
 
 function SentInvoice() {
   const [page, setPage] = useState(0);
@@ -74,6 +84,8 @@ function SentInvoice() {
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [invoiceToCancel, setInvoiceToCancel] = useState(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [resending, setResending] = useState({});
 
   // Get tokens from the hook
   const { tokens } = useTokenList(chainId || 1);
@@ -172,10 +184,7 @@ function SentInvoice() {
             const to = invoice[2].toLowerCase();
             const isPaid = invoice[5];
             const isCancelled = invoice[6];
-            const encryptedStringBase64 = invoice[7];
-            const dataToEncryptHash = invoice[8];
-
-            if (!encryptedStringBase64 || !dataToEncryptHash) continue;
+            const invoiceDataHash = invoice[7];
 
             const currentUserAddress = address.toLowerCase();
             if (currentUserAddress !== from && currentUserAddress !== to) {
@@ -186,36 +195,40 @@ function SentInvoice() {
             const localInv = localInvoiceMap.get(id);
             let parsed;
 
-            if (localInv && localInv.data) {
+            // As the sender, the payload only ever existed on this device.
+            // Check it still matches the on-chain commitment before trusting it.
+            const payloadTrusted =
+              localInv?.data && verifyInvoiceHash(localInv.data, invoiceDataHash);
+
+            if (payloadTrusted) {
               parsed = { ...localInv.data };
-              
+
               // Update local status if it changed
               if (localInv.isPaid !== isPaid || localInv.isCancelled !== isCancelled) {
                 await updateInvoiceStatus(chainId, id, { isPaid, isCancelled });
               }
             } else {
-              if (!encryptedStringBase64) continue;
-              const decryptedString = atob(encryptedStringBase64);
-              parsed = JSON.parse(decryptedString);
-
-              // Cache it locally
-              try {
-                await storeInvoice({
-                  invoiceId: id,
-                  chainId,
-                  from,
-                  to,
-                  isPaid,
-                  isCancelled,
-                  wakuDelivered: false,
-                  invoiceDataHash: dataToEncryptHash,
-                  data: parsed
-                });
-              } catch (err) {
-                console.warn(`Failed to cache invoice ${id} locally`, err);
+              if (localInv?.data) {
+                console.warn(
+                  `Invoice ${id}: stored payload does not match the on-chain hash; showing on-chain data only`
+                );
               }
+              // Local storage was cleared, or this invoice was created on
+              // another device. The details are unrecoverable — the chain only
+              // holds the hash — so show what the chain does know.
+              parsed = {
+                amountDue: invoice[3].toString(),
+                user: { address: from },
+                client: { address: to },
+                paymentToken: { address: invoice[4] },
+                issueDate: null,
+                dueDate: null,
+                _onChainOnly: true,
+                _hashMismatch: Boolean(localInv?.data),
+              };
             }
 
+            parsed["relayDelivered"] = localInv?.relayDelivered ?? false;
             parsed["id"] = BigInt(id);
             parsed["isPaid"] = isPaid;
             parsed["isCancelled"] = isCancelled;
@@ -271,6 +284,21 @@ function SentInvoice() {
               }
             }
 
+            // On-chain amounts are raw token units; the stored payload carries
+            // an already-formatted decimal string, so only stubs need scaling.
+            if (parsed._onChainOnly) {
+              const decimals = resolveInvoiceDecimals(parsed.paymentToken);
+              if (decimals === null) {
+                // Showing a base-unit figure as if it were a token amount, or
+                // feeding it to parseUnits, is worse than omitting the invoice.
+                console.warn(
+                  `Invoice ${parsed.id}: cannot resolve token decimals, skipping`
+                );
+                continue;
+              }
+              parsed.amountDue = ethers.formatUnits(parsed.amountDue, decimals);
+            }
+
             decryptedInvoices.push(parsed);
           } catch (err) {
             console.error(`Error processing invoice ${invoice[0]}:`, err);
@@ -294,7 +322,89 @@ function SentInvoice() {
 
     fetchSentInvoices();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletClient, address, tokens, chainId]); // Added tokens and chainId to dependency array
+  }, [walletClient, address, tokens, chainId, refreshTrigger]); // Added tokens and chainId to dependency array
+
+  /**
+   * Re-deliver an invoice's encrypted payload to its recipient.
+   *
+   * Waku retained messages on the network, so a client could always catch up.
+   * The relay only holds what was successfully posted, so a send that failed —
+   * or a recipient who registered their key after the invoice was created —
+   * needs an explicit retry from the one device that still holds the payload.
+   */
+  const handleResend = async (invoice) => {
+    const invoiceId = invoice.id.toString();
+    if (invoice._onChainOnly) {
+      toast.error("This invoice's details are not available on this device.");
+      return;
+    }
+
+    if (!walletClient) {
+      // Otherwise BrowserProvider throws and the catch below blames the relay.
+      toast.error("Connect your wallet to resend this invoice.");
+      return;
+    }
+
+    setResending((prev) => ({ ...prev, [invoiceId]: true }));
+    try {
+      const local = await getInvoiceById(chainId, invoiceId);
+      if (!local?.data) {
+        toast.error("This invoice's details are not available on this device.");
+        return;
+      }
+
+      const provider = new BrowserProvider(walletClient);
+      const signer = await provider.getSigner();
+      const contractAddress = import.meta.env[`VITE_CONTRACT_ADDRESS_${chainId}`];
+      if (!contractAddress) {
+        // Otherwise the Contract constructor throws and the catch below blames
+        // the relay for what is actually an unsupported network.
+        toast.error("Chainvoice is not deployed on this network.");
+        return;
+      }
+      const contract = new Contract(contractAddress, ChainvoiceABI, signer);
+
+      const clientAddress = local.to;
+      const receiverPublicKey = await fetchPublicKeyFromChain(contract, clientAddress);
+      if (!receiverPublicKey) {
+        toast.error(
+          "Your client has not registered an encryption key yet. Ask them to register, then resend."
+        );
+        return;
+      }
+
+      await sendEncryptedInvoice({
+        invoiceData: local.data,
+        receiverPublicKey,
+        receiverAddress: clientAddress,
+        senderAddress: address,
+        chainId,
+        invoiceId,
+      });
+
+      await updateInvoiceStatus(chainId, invoiceId, { relayDelivered: true });
+      toast.success("Invoice details sent to your client.");
+      setRefreshTrigger((p) => p + 1);
+    } catch (err) {
+      console.error(`Failed to resend invoice ${invoiceId}:`, err);
+      // Not every failure here is the relay's. A rejected wallet connection and
+      // a malformed registry key both reach this block, and blaming the relay
+      // for either sends the user looking in the wrong place.
+      const message =
+        typeof err?.message === 'string' ? err.message : String(err ?? '');
+      if (err?.code === 'ACTION_REJECTED' || err?.code === 4001) {
+        toast("Cancelled in your wallet.", { icon: "✋" });
+      } else if (/malformed public key/i.test(message)) {
+        toast.error(
+          "Your client's registered encryption key is invalid. Ask them to register again."
+        );
+      } else {
+        toast.error("Could not reach the relay. Please try again.");
+      }
+    } finally {
+      setResending((prev) => ({ ...prev, [invoiceId]: false }));
+    }
+  };
 
   const [drawerState, setDrawerState] = useState({
     open: false,
@@ -383,10 +493,7 @@ function SentInvoice() {
     )}`;
   };
 
-  const formatDate = (issueDate) => {
-    const date = new Date(issueDate);
-    return date.toLocaleString();
-  };
+  const formatDate = formatInvoiceDate;
 
   return (
     <>
@@ -574,6 +681,36 @@ function SentInvoice() {
                                   variant="outlined"
                                 />
                               )}
+                              {invoice._onChainOnly && (
+                                <Tooltip
+                                  title={
+                                    invoice._hashMismatch
+                                      ? "The details stored on this device do not match the hash recorded on-chain for this invoice."
+                                      : "This invoice's details are not on this device. Only the chain's record of it is shown."
+                                  }
+                                >
+                                  <Chip
+                                    icon={
+                                      invoice._hashMismatch ? (
+                                        <ErrorIcon />
+                                      ) : (
+                                        <WarningIcon />
+                                      )
+                                    }
+                                    label={
+                                      invoice._hashMismatch
+                                        ? "Unverified"
+                                        : "Details unavailable"
+                                    }
+                                    color={
+                                      invoice._hashMismatch ? "error" : "default"
+                                    }
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ mt: 0.5 }}
+                                  />
+                                </Tooltip>
+                              )}
                             </TableCell>
 
                             {/* Date Column */}
@@ -607,6 +744,53 @@ function SentInvoice() {
                                     </IconButton>
                                   </Tooltip>
                                 )}
+                                {/* Always offered whenever the payload is on
+                                    this device. A delivered invoice can still
+                                    need resending: the client may have cleared
+                                    their storage, or the relay may have dropped
+                                    the message before they polled for it. */}
+                                {!invoice._onChainOnly && (
+                                    <Tooltip
+                                      title={
+                                        invoice.relayDelivered
+                                          ? "Send the details to your client again"
+                                          : "Client has not received the details — resend"
+                                      }
+                                    >
+                                      <span>
+                                        <IconButton
+                                          size="small"
+                                          disabled={Boolean(
+                                            resending[invoice.id.toString()]
+                                          )}
+                                          onClick={() => handleResend(invoice)}
+                                          sx={{
+                                            backgroundColor: invoice.relayDelivered
+                                              ? "#f1f5f9"
+                                              : "#fef3c7",
+                                            "&:hover": {
+                                              backgroundColor: invoice.relayDelivered
+                                                ? "#e2e8f0"
+                                                : "#fde68a",
+                                            },
+                                          }}
+                                        >
+                                          {resending[invoice.id.toString()] ? (
+                                            <CircularProgress size={16} />
+                                          ) : (
+                                            <SendIcon
+                                              fontSize="small"
+                                              sx={{
+                                                color: invoice.relayDelivered
+                                                  ? "#475569"
+                                                  : "#b45309",
+                                              }}
+                                            />
+                                          )}
+                                        </IconButton>
+                                      </span>
+                                    </Tooltip>
+                                  )}
                                 <Tooltip title="View Details">
                                   <IconButton
                                     size="small"
@@ -889,15 +1073,11 @@ function SentInvoice() {
                 <div className="flex justify-between text-sm text-gray-500 mb-2">
                   <span>
                     Issued:{" "}
-                    {new Date(
-                      drawerState.selectedInvoice.issueDate
-                    ).toLocaleDateString()}
+                    {formatInvoiceDate(drawerState.selectedInvoice.issueDate)}
                   </span>
                   <span>
                     Due:{" "}
-                    {new Date(
-                      drawerState.selectedInvoice.dueDate
-                    ).toLocaleDateString()}
+                    {formatInvoiceDate(drawerState.selectedInvoice.dueDate)}
                   </span>
                 </div>
               </div>

@@ -65,6 +65,19 @@ VITE_WALLETCONNECT_PROJECT_ID=
 > v1 contract, which does not match the current ABI. The app treats any
 > non-empty address as supported, so filling these in would send calls those
 > contracts cannot decode. Populate them only after redeploying.
+### Relay configuration
+
+Invoice payloads travel encrypted over a [ThruBox](https://github.com/AOSSIE-Org/ThruBox-Server) relay, configured with:
+
+```env
+VITE_RELAY_URL=http://localhost:3000
+VITE_RELAY_API_KEY=
+VITE_RELAY_TIMEOUT_MS=
+```
+
+- **`VITE_RELAY_URL`** — in development this is the target the Vite dev server proxies `/relay` to, so the browser stays same-origin. In production, either an absolute `https://` URL (which requires CORS on the relay) or a path such as `/relay` that your host rewrites to it (Vercel rewrites, Netlify redirects, nginx `proxy_pass`), which avoids CORS entirely.
+- **`VITE_RELAY_API_KEY`** — only needed if the relay sets `security.api_key`. **This is not a secret:** Vite inlines every `VITE_`-prefixed variable into the built JavaScript, so any visitor can read it. Treat it as a spam speed-bump, not access control. To keep a relay key private, proxy relay calls server-side and inject it there.
+- **`VITE_RELAY_TIMEOUT_MS`** — request timeout, default `15000`. Raise it (around `60000`) on hosts that suspend idle instances: a cold start can take most of a minute, and sends are deliberately not retried, so a timeout means an undelivered invoice.
 
 To enable Web3 wallet functionality, create a free WalletConnect Project ID from the Reown dashboard:
 
