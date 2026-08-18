@@ -26,10 +26,10 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: 'npm'
@@ -56,14 +56,13 @@ jobs:
           npm run build > build_output.log 2>&1 || echo "BUILD_FAILED=true" >> $GITHUB_ENV
           cat build_output.log
 
-      # github.event.workflow_run.pull_requests is empty for forked PRs, so the
-      # reporting workflow cannot recover the PR number from the event payload.
-      # Hand it over through the artifact instead.
+      # Results only. This job runs the fork's own copy of this file, so nothing
+      # written here is trustworthy; pr-report.yml resolves the target PR from the
+      # workflow_run payload rather than from anything in this artifact.
       - name: Collect report data
         if: always() && github.event_name == 'pull_request'
         run: |
           mkdir -p pr-report
-          echo "${{ github.event.pull_request.number }}" > pr-report/pr_number
           echo "${TESTS_FAILED:-false}" > pr-report/tests_failed
           echo "${BUILD_FAILED:-false}" > pr-report/build_failed
           cp test_output.log pr-report/ 2>/dev/null || true
@@ -71,7 +70,7 @@ jobs:
 
       - name: Upload report data
         if: always() && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: pr-report
           path: frontend/pr-report
