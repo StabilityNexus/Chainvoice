@@ -1,5 +1,7 @@
 import ProductCatalogImport from "../components/ProductCatalogImport";
 import UserProfileSettings from "../components/UserProfileSettings";
+import { PAGE_CONTAINER, PAGE_HEADER } from "@/utils/layout";
+import { cn } from "@/lib/utils";
 
 const SETTINGS_SECTIONS = [
   {
@@ -20,8 +22,8 @@ const SETTINGS_SECTIONS = [
 
 function Settings() {
   return (
-    <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6 py-6">
-      <div className="mb-6 sm:mb-8">
+    <div className={cn(PAGE_CONTAINER, "py-3 sm:py-4")}>
+      <div className={PAGE_HEADER}>
         <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
           Settings
         </h2>
@@ -30,7 +32,7 @@ function Settings() {
         </p>
       </div>
 
-      <div className="space-y-6 sm:space-y-8">
+      <div className="space-y-4 sm:space-y-6">
         {SETTINGS_SECTIONS.map(({ id, title, description, Content }) => (
           <section key={id} id={id} className="scroll-mt-24">
             <div className="mb-4">

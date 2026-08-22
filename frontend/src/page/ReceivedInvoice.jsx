@@ -62,6 +62,8 @@ import ErrorIcon from "@mui/icons-material/Error";
 import WarningIcon from "@mui/icons-material/Warning";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
+import { PAGE_CONTAINER } from "@/utils/layout";
+import { cn } from "@/lib/utils";
 
 const columns = [
   { id: "select", label: "", minWidth: 50 },
@@ -1045,8 +1047,8 @@ function ReceivedInvoice() {
           onDismiss={() => setShowWalletAlert(false)}
         />
       </div>
-      <div className=" md:p-6 ">
-        <div className="max-w-8xl mx-auto">
+      <div className={cn(PAGE_CONTAINER, "py-3 sm:py-4")}>
+        <div className="w-full">
           <div className="flex justify-between items-center mb-2">
             <div>
               <h2 className="text-2xl font-bold text-white">

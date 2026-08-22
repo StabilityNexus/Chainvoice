@@ -55,6 +55,7 @@ import { toInvoiceUserDetails } from "@/utils/userProfile";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import SenderSummary from "@/components/SenderSummary";
+import { CARD, PAGE_CONTAINER } from "@/utils/layout";
 import toast from "react-hot-toast";
 import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
 import { computeInvoiceHash } from "../services/relay/invoiceHashUtils.js";
@@ -798,7 +799,7 @@ function CreateInvoice() {
       </div>
 
       {showUnsupportedNetwork && (
-        <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
+        <div className={PAGE_CONTAINER}>
           <div className="bg-white border border-amber-200 rounded-lg p-6 shadow-sm">
             <h2 className="text-xl font-bold mb-2 text-gray-800">
               Unsupported network
@@ -812,16 +813,11 @@ function CreateInvoice() {
         </div>
       )}
 
-      <div
-        className={cn(
-          "w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6",
-          showUnsupportedNetwork && "hidden"
-        )}
-      >
+      <div className={cn(PAGE_CONTAINER, showUnsupportedNetwork && "hidden")}>
         {(searchParams.get("clientAddress") ||
           searchParams.get("amount") ||
           searchParams.get("description")) && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 overflow-hidden">
+          <div className="mb-3 bg-green-50 border border-green-200 rounded-lg p-3 overflow-hidden">
             <div className="flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
               <div>
@@ -837,14 +833,14 @@ function CreateInvoice() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-4 sm:mb-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-3">
           <h2 className="text-xl sm:text-2xl font-bold text-white">
             Create New Invoice
           </h2>
           <SenderSummary />
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8 bg-gray-50 p-4 rounded-lg shadow-sm overflow-hidden">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-4 bg-gray-50 p-3 rounded-lg shadow-sm overflow-hidden">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
             <Label className="text-sm sm:text-md font-medium text-gray-700">
               Invoice #
@@ -915,9 +911,9 @@ function CreateInvoice() {
         <form onSubmit={handleSubmit}>
           {/* Client details and payment token sit side by side so the invoice
               items stay above the fold on desktop. */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-3 sm:mb-4 items-start">
             {/* Client Information — the sender's own details come from Settings */}
-            <div className="w-full border border-gray-200 p-4 sm:p-6 rounded-lg shadow-sm bg-white overflow-hidden">
+            <div className={CARD}>
               <h3 className="text-base sm:text-lg font-semibold mb-4 text-gray-800">
                 Client Information
               </h3>
@@ -1122,7 +1118,7 @@ function CreateInvoice() {
               </div>
             </div>
 
-            <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className={CARD}>
               <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1364,7 +1360,7 @@ function CreateInvoice() {
 
 
           {/* Invoice Items Section */}
-          <div className="mb-6 sm:mb-8">
+          <div className="mb-4">
             {/* Desktop Header - Hidden on mobile */}
             <div className="hidden md:grid bg-green-500 text-white py-3 px-4 rounded-t-lg font-medium text-sm gap-2 items-center" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
               <div className="col-span-4">DESCRIPTION</div>
@@ -1414,7 +1410,7 @@ function CreateInvoice() {
             </div>
 
             <div className="border border-gray-200 rounded-b-lg bg-white">
-              <div className="p-3 sm:p-4 space-y-4 md:space-y-3">
+              <div className="p-2 sm:p-3 space-y-3 md:space-y-2">
                 {itemData.map((item, index) => (
                   <div className="relative" key={item.id} style={{ zIndex: Math.max(1, 50 - index) }}>
                     {/* Mobile Layout - Stacked */}
@@ -1731,7 +1727,7 @@ function CreateInvoice() {
           </div>
 
           {/* Form Actions */}
-          <div className="flex flex-col-reverse sm:flex-row justify-between items-center gap-4 mt-6">
+          <div className="flex flex-col-reverse sm:flex-row justify-between items-center gap-3 mt-4 pb-4">
             <Button
               className="bg-green-600 hover:bg-green-700 px-8 py-2 text-white"
               type="submit"
