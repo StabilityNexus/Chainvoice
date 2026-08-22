@@ -205,6 +205,7 @@ function Navbar() {
                   )}
                 </motion.div>
               ))}
+            <div data-social-share></div>
             {publicItems.map((item) => (
               <motion.div
                 key={item.name}
@@ -337,6 +338,10 @@ function Navbar() {
                     </div>
                   </Link>
                 ))}
+
+                <div className="px-4 py-2">
+                  <div data-social-share></div>
+                </div>
 
                 <div className="px-4 py-2">
                   <ConnectButton
