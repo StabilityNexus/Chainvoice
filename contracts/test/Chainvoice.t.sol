@@ -5,6 +5,42 @@ import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import "../src/Chainvoice.sol";
 
+contract MockERC20 {
+    string public name = "Mock ERC20";
+    string public symbol = "MOCK";
+    uint8 public decimals = 18;
+    
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+    uint256 public totalSupply;
+    
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+    
+    function mint(address to, uint256 amount) public {
+        balanceOf[to] += amount;
+        totalSupply += amount;
+        emit Transfer(address(0), to, amount);
+    }
+    
+    function approve(address spender, uint256 amount) public returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
+    }
+    
+    function transferFrom(address from, address to, uint256 amount) public returns (bool) {
+        if (allowance[from][msg.sender] < amount) return false;
+        if (balanceOf[from] < amount) return false;
+        
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        emit Transfer(from, to, amount);
+        return true;
+    }
+}
+
 contract ChainvoiceTest is Test {
     Chainvoice chainvoice;
 
@@ -452,4 +488,105 @@ contract ChainvoiceTest is Test {
         vm.expectRevert(Chainvoice.InvalidInvoiceHash.selector);
         chainvoice.createInvoicesBatch(tos, amounts, address(0), hashes);
     }
+
+    /* ------------------------------------------------------------ */
+    /*                       ERC20 OPERATIONS                       */
+    /* ------------------------------------------------------------ */
+
+    function testCreateInvoice_ERC20() public {
+        MockERC20 token = new MockERC20();
+        
+        vm.prank(alice);
+        chainvoice.createInvoice(
+            bob,
+            100 * 10**18,
+            address(token),
+            keccak256("erc20Data")
+        );
+
+        Chainvoice.InvoiceDetails memory inv = chainvoice.getInvoice(0);
+        assertEq(inv.from, alice);
+        assertEq(inv.to, bob);
+        assertEq(inv.amountDue, 100 * 10**18);
+        assertEq(inv.tokenAddress, address(token));
+        assertFalse(inv.isPaid);
+    }
+
+    function testPayInvoice_ERC20() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 100 * 10**18);
+        
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("erc20Data"));
+
+        uint256 fee = chainvoice.fee();
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100 * 10**18);
+        chainvoice.payInvoice{value: fee}(0);
+        vm.stopPrank();
+
+        Chainvoice.InvoiceDetails memory inv = chainvoice.getInvoice(0);
+        assertTrue(inv.isPaid);
+        assertEq(token.balanceOf(bob), 0);
+        assertEq(token.balanceOf(alice), 100 * 10**18);
+        assertEq(chainvoice.accumulatedFees(), fee);
+    }
+
+    function testPayInvoice_ERC20_RevertInsufficientAllowance() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 100 * 10**18);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("erc20Data"));
+
+        uint256 fee = chainvoice.fee();
+
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.InsufficientAllowance.selector);
+        chainvoice.payInvoice{value: fee}(0);
+    }
+
+    function testPayInvoice_ERC20_RevertFeeMustBeNative() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 100 * 10**18);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("erc20Data"));
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100 * 10**18);
+        vm.expectRevert(Chainvoice.FeeMustBeNative.selector);
+        chainvoice.payInvoice(0); // value: 0
+        vm.stopPrank();
+    }
+
+    function testPayInvoicesBatch_ERC20() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 300 * 10**18);
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("b1"));
+        chainvoice.createInvoice(bob, 200 * 10**18, address(token), keccak256("b2"));
+        vm.stopPrank();
+
+        uint256 fee = chainvoice.fee();
+        uint256 totalFee = fee * 2;
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 300 * 10**18);
+        chainvoice.payInvoicesBatch{value: totalFee}(ids);
+        vm.stopPrank();
+
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertTrue(chainvoice.getInvoice(1).isPaid);
+        assertEq(token.balanceOf(bob), 0);
+        assertEq(token.balanceOf(alice), 300 * 10**18);
+        assertEq(chainvoice.accumulatedFees(), totalFee);
+    }
 }
+
