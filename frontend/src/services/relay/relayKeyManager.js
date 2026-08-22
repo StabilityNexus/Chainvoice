@@ -11,7 +11,13 @@ import { ethers } from 'ethers';
  * suffix if that ever happens again.
  */
 const DERIVATION_MESSAGE = 'ChainVoice Messaging Key Derivation v2';
-const KEY_STORAGE_PREFIX = 'chainvoice_relay_keys_';
+// Versioned with the derivation message. Without this, a tab still holding a
+// key derived from the v1 message would have it served straight from the
+// session cache — and register that stale key on the redeployed registry,
+// where it would never match the v2 key the same wallet derives after a
+// reload. Bumping the prefix alongside DERIVATION_MESSAGE makes old records
+// unreadable rather than silently wrong.
+const KEY_STORAGE_PREFIX = 'chainvoice_relay_keys_v2_';
 
 /** secp256k1 key sizes, as the on-chain registry validates them. */
 const PRIVATE_KEY_BYTES = 32;

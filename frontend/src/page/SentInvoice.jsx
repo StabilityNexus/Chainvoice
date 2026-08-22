@@ -437,12 +437,17 @@ function SentInvoice() {
           const invoiceId = invoice.id.toString();
           try {
             const local = await getInvoiceById(chainId, invoiceId);
+            if (cancelled) return;
             if (!local?.data) continue;
 
             const receiverPublicKey = await fetchPublicKeyFromChain(
               contract,
               local.to
             );
+            // Re-checked after every await: teardown can happen while a read is
+            // in flight, and sending after that would deliver on behalf of a
+            // page the user has already navigated away from.
+            if (cancelled) return;
             if (!receiverPublicKey) continue;
 
             await sendEncryptedInvoice({
@@ -453,9 +458,21 @@ function SentInvoice() {
               chainId,
               invoiceId,
             });
-            await updateInvoiceStatus(chainId, invoiceId, {
+
+            // The send succeeded but only the stored flag stops it happening
+            // again. updateInvoiceStatus returns null when the IndexedDB write
+            // fails, so counting this as delivered without checking would show
+            // a success toast and then re-send the same invoice on the next
+            // refresh, forever.
+            const persisted = await updateInvoiceStatus(chainId, invoiceId, {
               relayDelivered: true,
             });
+            if (!persisted) {
+              console.warn(
+                `[SentInvoice] Invoice ${invoiceId} was delivered but the local flag could not be saved; it may be delivered again`
+              );
+              continue;
+            }
             delivered++;
           } catch (err) {
             console.warn(
