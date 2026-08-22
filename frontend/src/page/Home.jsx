@@ -16,7 +16,6 @@ import LinkIcon from "@mui/icons-material/Link";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { FileStackIcon, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
-import { useAccount } from "wagmi";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { SHELL } from "@/utils/layout";
@@ -140,58 +139,12 @@ function DashboardNav({ activeRoute, onNavigate, collapsed = false }) {
 }
 
 /**
- * Connected wallet and network, shown where the dashboard used to greet the
- * user with text that carried no information.
+ * The dashboard greeting. The connected address and network deliberately are
+ * not repeated here — the navbar already shows both.
  */
-function WalletBadge({ collapsed = false }) {
-  // chain resolves from wagmi's configured list; undefined on an unsupported
-  // network, in which case the name is simply omitted.
-  const { address, isConnected, chain } = useAccount();
-  const chainName = chain?.name;
-
-  if (!isConnected || !address) {
-    return collapsed ? (
-      <Tooltip title="Wallet not connected" placement="right" arrow>
-        <div className="mx-auto mb-2 h-2 w-2 rounded-full bg-gray-500" />
-      </Tooltip>
-    ) : (
-      <p className="px-3 pb-2 text-xs text-gray-500">Wallet not connected</p>
-    );
-  }
-
-  const shortAddress = `${address.slice(0, 6)}…${address.slice(-4)}`;
-
-  if (collapsed) {
-    return (
-      <Tooltip
-        title={`${shortAddress}${chainName ? ` · ${chainName}` : ""}`}
-        placement="right"
-        arrow
-      >
-        <div className="mx-auto mb-2 h-2 w-2 rounded-full bg-green-400" />
-      </Tooltip>
-    );
-  }
-
+function RailGreeting() {
   return (
-    <div className="px-3 pb-3">
-      <p className="font-mono text-sm text-white">{shortAddress}</p>
-      {chainName && (
-        <span className="mt-1 inline-flex items-center gap-1.5 text-xs text-gray-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
-          {chainName}
-        </span>
-      )}
-    </div>
-  );
-}
-
-/** The dashboard greeting, kept above the wallet details in both nav variants. */
-function RailGreeting({ collapsed = false }) {
-  if (collapsed) return null;
-
-  return (
-    <p className="px-3 pb-1 text-base text-white">
+    <p className="text-base text-white">
       Welcome <span className="font-medium text-green-400">Back!</span>
     </p>
   );
@@ -286,8 +239,9 @@ export default function Home() {
             },
           }}
         >
-          <RailGreeting />
-          <WalletBadge />
+          <div className="px-3 pb-2">
+            <RailGreeting />
+          </div>
           <DashboardNav activeRoute={activeRoute} onNavigate={handleNavigate} />
         </Drawer>
 
@@ -308,11 +262,14 @@ export default function Home() {
               transition: "width 0.2s ease",
             }}
           >
+            {/* Greeting and the collapse toggle share one row; collapsed, only
+                the toggle remains. */}
             <div
-              className={`flex items-center pb-2 pt-1 ${
-                railCollapsed ? "justify-center" : "justify-end px-2"
+              className={`flex items-center gap-2 pb-2 pt-1 ${
+                railCollapsed ? "justify-center" : "justify-between px-3"
               }`}
             >
+              {!railCollapsed && <RailGreeting />}
               <Tooltip
                 title={railCollapsed ? "Expand menu" : "Collapse menu"}
                 placement="right"
@@ -334,8 +291,6 @@ export default function Home() {
               </Tooltip>
             </div>
 
-            <RailGreeting collapsed={railCollapsed} />
-            <WalletBadge collapsed={railCollapsed} />
             <DashboardNav
               activeRoute={activeRoute}
               onNavigate={handleNavigate}
