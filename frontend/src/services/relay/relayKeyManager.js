@@ -3,13 +3,14 @@ import { ethers } from 'ethers';
 /**
  * Message the user signs to derive their messaging keypair.
  *
- * Do not change this string. The derived public key is what users have
- * already registered in the on-chain registry; a different message derives
- * a different key, silently breaking decryption for everyone who registered
- * before the change. It is named after Waku for historical reasons only —
- * the derivation itself is transport-independent.
+ * Treat this as a wire-compatibility constant: the derived public key is
+ * what users register on-chain, and a different message derives a different
+ * key, silently breaking decryption for anyone who registered under the old
+ * one. It may only change alongside a contract redeployment, which clears
+ * the registry and forces everyone to re-register anyway. Bump the version
+ * suffix if that ever happens again.
  */
-const DERIVATION_MESSAGE = 'ChainVoice Waku Key Derivation v1';
+const DERIVATION_MESSAGE = 'ChainVoice Messaging Key Derivation v2';
 const KEY_STORAGE_PREFIX = 'chainvoice_relay_keys_';
 
 /** secp256k1 key sizes, as the on-chain registry validates them. */
@@ -269,16 +270,12 @@ export function hasCachedKeys(address) {
 /**
  * Register the user's messaging public key on-chain.
  *
- * The contract method is still named `registerWakuPublicKey`; it is a
- * transport-agnostic secp256k1 key registry and is already deployed, so
- * the name is kept as-is.
- *
  * @param {import('ethers').Contract} contract - Chainvoice contract instance
  * @param {Uint8Array} publicKey - the user's public key
  * @returns {Promise<import('ethers').TransactionReceipt>}
  */
 export async function registerPublicKeyOnChain(contract, publicKey) {
-  const tx = await contract.registerWakuPublicKey(bytesToHex(publicKey));
+  const tx = await contract.registerPublicKey(bytesToHex(publicKey));
   return await tx.wait();
 }
 
@@ -290,7 +287,7 @@ export async function registerPublicKeyOnChain(contract, publicKey) {
  * @returns {Promise<Uint8Array|null>} - the public key bytes, or null if not registered
  */
 export async function fetchPublicKeyFromChain(contract, userAddress) {
-  const keyHex = await contract.getWakuPublicKey(userAddress);
+  const keyHex = await contract.getPublicKey(userAddress);
   if (!keyHex || keyHex === '0x' || keyHex === '0x0' || keyHex.length <= 2) {
     return null;
   }

@@ -223,6 +223,25 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
+    "name": "getPublicKey",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "getReceivedInvoices",
     "inputs": [
       {
@@ -339,25 +358,6 @@ export const ChainvoiceABI = [
             "internalType": "bytes32"
           }
         ]
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "getWakuPublicKey",
-    "inputs": [
-      {
-        "name": "user",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [
-      {
-        "name": "",
-        "type": "bytes",
-        "internalType": "bytes"
       }
     ],
     "stateMutability": "view"
@@ -507,7 +507,7 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "registerWakuPublicKey",
+    "name": "registerPublicKey",
     "inputs": [
       {
         "name": "publicKey",
@@ -833,6 +833,25 @@ export const ChainvoiceABI = [
   },
   {
     "type": "event",
+    "name": "PublicKeyRegistered",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "publicKey",
+        "type": "bytes",
+        "indexed": false,
+        "internalType": "bytes"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "TreasuryAddressUpdated",
     "inputs": [
       {
@@ -846,25 +865,6 @@ export const ChainvoiceABI = [
         "type": "address",
         "indexed": true,
         "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "WakuKeyRegistered",
-    "inputs": [
-      {
-        "name": "user",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "publicKey",
-        "type": "bytes",
-        "indexed": false,
-        "internalType": "bytes"
       }
     ],
     "anonymous": false
@@ -926,12 +926,12 @@ export const ChainvoiceABI = [
   },
   {
     "type": "error",
-    "name": "InvalidToken",
+    "name": "InvalidPublicKey",
     "inputs": []
   },
   {
     "type": "error",
-    "name": "InvalidWakuKey",
+    "name": "InvalidToken",
     "inputs": []
   },
   {

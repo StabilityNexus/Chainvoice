@@ -10,6 +10,12 @@ as well as the constructor parameters that have been used.
 | Polygon | 137 | [v1](https://github.com/StabilityNexus/Chainvoice/releases/tag/v1) | `0xD044A85a5daC307217B9bF313A90E8a60AF7DdCe` | None — constructor takes no arguments (`owner = msg.sender`, `fee` hardcoded to `0.0005 ether`) | Mainnet |
 | Ethereum Sepolia | 11155111 | [v1](https://github.com/StabilityNexus/Chainvoice/releases/tag/v1) | `0x54a542dCDC306eE281b5De4613EcEfe6e6ABc562` | None — constructor takes no arguments (`owner = msg.sender`, `fee` hardcoded to `0.0005 ether`) | Testnet |
 
+> ⚠️ **No deployment currently matches the contract in this repo.** The key
+> registry functions were renamed (`registerPublicKey` / `getPublicKey`), which
+> changed their selectors, so every address below is v1 only and incompatible
+> with the current ABI. A fresh deployment is required, and its registry starts
+> empty — every user must register their public key again.
+
 ---
 **Note to Developers:** After making a new deployment, please:
 1. create a git tag for the deployed version;
