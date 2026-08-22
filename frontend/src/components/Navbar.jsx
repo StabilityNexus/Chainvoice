@@ -10,6 +10,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import CloseIcon from "@mui/icons-material/Close";
 import MenuIcon from "@mui/icons-material/Menu";
 import InfoIcon from "@mui/icons-material/Info";
+import { cn } from "@/lib/utils";
+import { SHELL } from "@/utils/layout";
 
 function Navbar() {
   const { address, isConnected } = useAccount();
@@ -138,7 +140,9 @@ function Navbar() {
         : "bg-[#161920]"
         }`}
     >
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 z-10">
+      {/* Shares the page shell's cap so the logo and wallet button line up with
+          the content edges instead of hugging the screen on a wide display. */}
+      <div className={cn(SHELL, "z-10")}>
         <div className="flex justify-between items-center h-24">
           <motion.div
             whileHover={{ scale: 1.05 }}

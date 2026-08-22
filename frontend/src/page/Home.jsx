@@ -1,4 +1,4 @@
-// Home.js - dashboard shell: nav rail on desktop, slide-out drawer below lg
+// Home.js - dashboard shell: collapsible nav rail on desktop, drawer below lg
 
 import { useCallback, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
@@ -8,15 +8,18 @@ import ListItem from "@mui/material/ListItem";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
+import Tooltip from "@mui/material/Tooltip";
 import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import DraftsIcon from "@mui/icons-material/Drafts";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import LinkIcon from "@mui/icons-material/Link";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { FileStackIcon, Menu } from "lucide-react";
+import { FileStackIcon, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { useAccount } from "wagmi";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { SHELL } from "@/utils/layout";
 
 const MENU_ITEMS = [
   {
@@ -57,13 +60,28 @@ const MENU_ITEMS = [
   },
 ];
 
-const SIDEBAR_WIDTH = 248;
+const RAIL_WIDTH = 248;
+const RAIL_WIDTH_COLLAPSED = 68;
+const RAIL_COLLAPSED_KEY = "chainvoice_dashboard_rail_collapsed";
 
 /**
- * The dashboard navigation list. Rendered by both the permanent desktop rail
- * and the mobile drawer so the two can never drift apart.
+ * Reads the rail preference synchronously. localStorage rather than the
+ * IndexedDB used for app data: an async read would render the rail expanded
+ * and then snap it closed on every load.
  */
-function DashboardNav({ activeRoute, onNavigate }) {
+const readRailCollapsed = () => {
+  try {
+    return window.localStorage.getItem(RAIL_COLLAPSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * The dashboard navigation list. Rendered by the desktop rail (expanded or
+ * collapsed to icons) and by the mobile drawer, so the variants cannot drift.
+ */
+function DashboardNav({ activeRoute, onNavigate, collapsed = false }) {
   return (
     <List className="space-y-1" sx={{ py: 0 }}>
       {MENU_ITEMS.map((item) => {
@@ -71,41 +89,111 @@ function DashboardNav({ activeRoute, onNavigate }) {
 
         return (
           <ListItem key={item.route} disablePadding className="text-white">
-            <ListItemButton
-              onClick={() => onNavigate(item.route)}
-              selected={isActive}
-              sx={{
-                borderRadius: "8px",
-                transition: "all 0.2s ease",
-                backgroundColor: isActive
-                  ? "rgba(255, 255, 255, 0.08)"
-                  : "transparent",
-                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.05)" },
-                "&.Mui-selected": { borderLeft: `4px solid ${item.color}` },
-                padding: "9px 14px",
-              }}
+            <Tooltip
+              title={collapsed ? item.text : ""}
+              placement="right"
+              arrow
+              disableHoverListener={!collapsed}
             >
-              <ListItemIcon
+              <ListItemButton
+                onClick={() => onNavigate(item.route)}
+                selected={isActive}
+                aria-label={item.text}
                 sx={{
-                  minWidth: "32px",
-                  color: item.color,
-                  fontSize: "1.15rem",
+                  borderRadius: "8px",
+                  transition: "all 0.2s ease",
+                  justifyContent: collapsed ? "center" : "flex-start",
+                  backgroundColor: isActive
+                    ? "rgba(255, 255, 255, 0.08)"
+                    : "transparent",
+                  "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.05)" },
+                  "&.Mui-selected": { borderLeft: `4px solid ${item.color}` },
+                  padding: collapsed ? "10px 0" : "9px 14px",
                 }}
               >
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText
-                primary={item.text}
-                primaryTypographyProps={{
-                  fontSize: "0.925rem",
-                  fontWeight: isActive ? 600 : 500,
-                }}
-              />
-            </ListItemButton>
+                <ListItemIcon
+                  sx={{
+                    minWidth: collapsed ? 0 : "32px",
+                    justifyContent: "center",
+                    color: item.color,
+                    fontSize: "1.15rem",
+                  }}
+                >
+                  {item.icon}
+                </ListItemIcon>
+                {!collapsed && (
+                  <ListItemText
+                    primary={item.text}
+                    primaryTypographyProps={{
+                      fontSize: "0.925rem",
+                      fontWeight: isActive ? 600 : 500,
+                    }}
+                  />
+                )}
+              </ListItemButton>
+            </Tooltip>
           </ListItem>
         );
       })}
     </List>
+  );
+}
+
+/**
+ * Connected wallet and network, shown where the dashboard used to greet the
+ * user with text that carried no information.
+ */
+function WalletBadge({ collapsed = false }) {
+  // chain resolves from wagmi's configured list; undefined on an unsupported
+  // network, in which case the name is simply omitted.
+  const { address, isConnected, chain } = useAccount();
+  const chainName = chain?.name;
+
+  if (!isConnected || !address) {
+    return collapsed ? (
+      <Tooltip title="Wallet not connected" placement="right" arrow>
+        <div className="mx-auto mb-2 h-2 w-2 rounded-full bg-gray-500" />
+      </Tooltip>
+    ) : (
+      <p className="px-3 pb-2 text-xs text-gray-500">Wallet not connected</p>
+    );
+  }
+
+  const shortAddress = `${address.slice(0, 6)}…${address.slice(-4)}`;
+
+  if (collapsed) {
+    return (
+      <Tooltip
+        title={`${shortAddress}${chainName ? ` · ${chainName}` : ""}`}
+        placement="right"
+        arrow
+      >
+        <div className="mx-auto mb-2 h-2 w-2 rounded-full bg-green-400" />
+      </Tooltip>
+    );
+  }
+
+  return (
+    <div className="px-3 pb-3">
+      <p className="font-mono text-sm text-white">{shortAddress}</p>
+      {chainName && (
+        <span className="mt-1 inline-flex items-center gap-1.5 text-xs text-gray-400">
+          <span className="h-1.5 w-1.5 rounded-full bg-green-400" />
+          {chainName}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** The dashboard greeting, kept above the wallet details in both nav variants. */
+function RailGreeting({ collapsed = false }) {
+  if (collapsed) return null;
+
+  return (
+    <p className="px-3 pb-1 text-base text-white">
+      Welcome <span className="font-medium text-green-400">Back!</span>
+    </p>
   );
 }
 
@@ -120,6 +208,7 @@ export default function Home() {
   } = useUserProfile();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(readRailCollapsed);
 
   // First visit only: prompt for the sender details every invoice needs, once
   // storage has actually been read and once the user has not already skipped.
@@ -145,6 +234,20 @@ export default function Home() {
     [navigate]
   );
 
+  const toggleRail = useCallback(() => {
+    setRailCollapsed((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(RAIL_COLLAPSED_KEY, String(next));
+      } catch {
+        // A lost preference is not worth failing the interaction over.
+      }
+      return next;
+    });
+  }, []);
+
+  const railWidth = railCollapsed ? RAIL_WIDTH_COLLAPSED : RAIL_WIDTH;
+
   return (
     <>
       <OnboardingProfileDialog
@@ -153,7 +256,8 @@ export default function Home() {
         onSkip={dismissOnboarding}
       />
 
-      <div className="px-3 sm:px-4 lg:px-6">
+      {/* Same cap as the navbar, so the rail and content share its edges. */}
+      <div className={SHELL}>
         {/* Mobile / tablet: the hamburger doubles as the current-section label */}
         <div className="flex items-center gap-2 py-2 lg:hidden">
           <button
@@ -175,16 +279,15 @@ export default function Home() {
           sx={{
             display: { xs: "block", lg: "none" },
             "& .MuiDrawer-paper": {
-              width: SIDEBAR_WIDTH,
+              width: RAIL_WIDTH,
               backgroundColor: "#161920",
               borderRight: "1px solid rgba(255, 255, 255, 0.08)",
               padding: "12px 8px",
             },
           }}
         >
-          <p className="px-3 pb-2 text-sm text-white">
-            Welcome <span className="font-medium text-green-400">Back!</span>
-          </p>
+          <RailGreeting />
+          <WalletBadge />
           <DashboardNav activeRoute={activeRoute} onNavigate={handleNavigate} />
         </Drawer>
 
@@ -199,14 +302,44 @@ export default function Home() {
           {/* Desktop nav rail */}
           <Box
             className="hidden lg:block"
-            sx={{ width: { lg: `${SIDEBAR_WIDTH}px` }, flexShrink: 0 }}
+            sx={{
+              width: { lg: `${railWidth}px` },
+              flexShrink: 0,
+              transition: "width 0.2s ease",
+            }}
           >
-            <p className="px-3 pb-2 pt-1 text-base text-white">
-              Welcome <span className="font-medium text-green-400">Back!</span>
-            </p>
+            <div
+              className={`flex items-center pb-2 pt-1 ${
+                railCollapsed ? "justify-center" : "justify-end px-2"
+              }`}
+            >
+              <Tooltip
+                title={railCollapsed ? "Expand menu" : "Collapse menu"}
+                placement="right"
+                arrow
+              >
+                <button
+                  type="button"
+                  onClick={toggleRail}
+                  aria-label={railCollapsed ? "Expand menu" : "Collapse menu"}
+                  aria-expanded={!railCollapsed}
+                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  {railCollapsed ? (
+                    <PanelLeftOpen className="h-5 w-5" />
+                  ) : (
+                    <PanelLeftClose className="h-5 w-5" />
+                  )}
+                </button>
+              </Tooltip>
+            </div>
+
+            <RailGreeting collapsed={railCollapsed} />
+            <WalletBadge collapsed={railCollapsed} />
             <DashboardNav
               activeRoute={activeRoute}
               onNavigate={handleNavigate}
+              collapsed={railCollapsed}
             />
           </Box>
 
