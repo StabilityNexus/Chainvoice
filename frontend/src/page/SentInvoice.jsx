@@ -406,6 +406,102 @@ function SentInvoice() {
     }
   };
 
+  // Catch up on invoices that could not be delivered when they were created,
+  // usually because the client had not registered a key yet. Once they do,
+  // there is nothing to wait for, so deliver without making the sender notice
+  // and press resend. Runs once per load; the manual button stays for the
+  // cases this cannot fix.
+  useEffect(() => {
+    if (!isConnected || !address || !walletClient || !chainId) return;
+    if (sentInvoices.length === 0) return;
+
+    const pending = sentInvoices.filter(
+      (inv) => !inv._onChainOnly && !inv.relayDelivered && !inv.isCancelled
+    );
+    if (pending.length === 0) return;
+
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const contractAddress =
+          import.meta.env[`VITE_CONTRACT_ADDRESS_${chainId}`];
+        if (!contractAddress) return;
+
+        const provider = new BrowserProvider(walletClient);
+        const contract = new Contract(contractAddress, ChainvoiceABI, provider);
+
+        let delivered = 0;
+        for (const invoice of pending) {
+          if (cancelled) return;
+          const invoiceId = invoice.id.toString();
+          try {
+            const local = await getInvoiceById(chainId, invoiceId);
+            if (cancelled) return;
+            if (!local?.data) continue;
+
+            const receiverPublicKey = await fetchPublicKeyFromChain(
+              contract,
+              local.to
+            );
+            // Re-checked after every await: teardown can happen while a read is
+            // in flight, and sending after that would deliver on behalf of a
+            // page the user has already navigated away from.
+            if (cancelled) return;
+            if (!receiverPublicKey) continue;
+
+            await sendEncryptedInvoice({
+              invoiceData: local.data,
+              receiverPublicKey,
+              receiverAddress: local.to,
+              senderAddress: address,
+              chainId,
+              invoiceId,
+            });
+
+            // The send succeeded but only the stored flag stops it happening
+            // again. updateInvoiceStatus returns null when the IndexedDB write
+            // fails, so counting this as delivered without checking would show
+            // a success toast and then re-send the same invoice on the next
+            // refresh, forever.
+            const persisted = await updateInvoiceStatus(chainId, invoiceId, {
+              relayDelivered: true,
+            });
+            if (!persisted) {
+              console.warn(
+                `[SentInvoice] Invoice ${invoiceId} was delivered but the local flag could not be saved; it may be delivered again`
+              );
+              continue;
+            }
+            delivered++;
+          } catch (err) {
+            console.warn(
+              `[SentInvoice] Auto-delivery for invoice ${invoiceId} failed:`,
+              err
+            );
+          }
+        }
+
+        if (delivered > 0 && !cancelled) {
+          toast.success(
+            delivered === 1
+              ? "Delivered 1 pending invoice to its client."
+              : `Delivered ${delivered} pending invoices to their clients.`
+          );
+          setRefreshTrigger((p) => p + 1);
+        }
+      } catch (err) {
+        console.warn("[SentInvoice] Auto-delivery sweep failed:", err);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  // Deliberately not depending on refreshTrigger: a successful sweep bumps it,
+  // and re-running on that would loop.
+  }, [isConnected, address, walletClient, chainId, sentInvoices]);
+
   const [drawerState, setDrawerState] = useState({
     open: false,
     selectedInvoice: null,
