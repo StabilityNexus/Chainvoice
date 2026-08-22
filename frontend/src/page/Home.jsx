@@ -1,5 +1,6 @@
 // Home.js - Updated with Batch Creation AND Batch Payment sections
 
+import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import List from "@mui/material/List";
@@ -17,10 +18,26 @@ import FormControl from "@mui/material/FormControl";
 import Select from "@mui/material/Select";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { FileStackIcon } from "lucide-react";
+import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 export default function Home() {
   const navigate = useNavigate();
   const location = useLocation();
+  const {
+    loading: profileLoading,
+    isComplete: hasProfile,
+    onboardingDismissed,
+    dismissOnboarding,
+  } = useUserProfile();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // First visit only: prompt for the sender details every invoice needs, once
+  // storage has actually been read and once the user has not already skipped.
+  useEffect(() => {
+    if (profileLoading) return;
+    setShowOnboarding(!hasProfile && !onboardingDismissed);
+  }, [profileLoading, hasProfile, onboardingDismissed]);
 
   // Get current active route for dropdown
   const getCurrentRoute = () => {
@@ -74,6 +91,12 @@ export default function Home() {
 
   return (
     <>
+      <OnboardingProfileDialog
+        open={showOnboarding}
+        onOpenChange={setShowOnboarding}
+        onSkip={dismissOnboarding}
+      />
+
       <div className="px-2 sm:px-4 md:px-6 lg:px-10">
         <header className="mb-2">
           <h1 className="text-xl sm:text-2xl mt-4 text-white">
