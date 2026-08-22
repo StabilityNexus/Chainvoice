@@ -1,0 +1,198 @@
+name: PR Report
+
+# Companion to test.yml. A `pull_request` run from a fork gets a read-only
+# GITHUB_TOKEN no matter what its `permissions:` block asks for, so labelling and
+# commenting from inside that run always fails with
+# "Resource not accessible by integration". `workflow_run` runs in the base-repo
+# context with a real write token, so the reporting lives here instead.
+on:
+  workflow_run:
+    workflows: ['Test and Build']
+    types: [completed]
+
+permissions:
+  issues: write
+  pull-requests: write
+  actions: read
+
+# One report in flight per head branch. Without this, two pushes in quick
+# succession race: both runs list the comments, both see no existing report, and
+# both create one. The newest run always has the freshest results, so superseding
+# an in-flight one loses nothing.
+concurrency:
+  group: pr-report-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
+
+jobs:
+  report:
+    name: Label and comment
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      # This job holds a write token, so it must never check out or execute the
+      # PR's code. It only reads text out of the artifact and quotes it.
+      - name: Download report data
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: pr-report
+          path: pr-report
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Label and comment
+        if: steps.download.outcome == 'success'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
+
+            // Which PR to write to is decided from the event payload alone, never
+            // from the artifact. A `pull_request` run executes the fork's own copy
+            // of test.yml, so every byte of that artifact is attacker-controlled: a
+            // PR that wrote someone else's number into it could drive labels and
+            // bot comments onto any issue in this repo.
+            const findPullRequest = async () => {
+              // Populated only when head and base are the same repo.
+              if (run.pull_requests?.length) return run.pull_requests[0].number;
+              const prs = await github.paginate(github.rest.pulls.list, {
+                owner,
+                repo,
+                state: 'open',
+                head: `${run.head_repository.owner.login}:${run.head_branch}`,
+                per_page: 100,
+              });
+              // Prefer the exact commit; a newer push leaves this run's sha behind,
+              // and the branch match is still the right PR.
+              return (prs.find((pr) => pr.head.sha === run.head_sha) ?? prs[0])?.number;
+            };
+
+            const prNumber = await findPullRequest();
+            if (!prNumber) {
+              core.info(
+                `No open PR for ${run.head_repository.full_name}:${run.head_branch}; nothing to report.`,
+              );
+              return;
+            }
+
+            const read = (name) => {
+              try {
+                return fs.readFileSync(`pr-report/${name}`, 'utf8');
+              } catch {
+                return '';
+              }
+            };
+
+            // Advisory only. A fork controls its own copy of test.yml and could
+            // claim anything here; the authoritative pass/fail signal is the
+            // required check's own conclusion, which this cannot influence.
+            const testsFailed = read('tests_failed').trim() === 'true';
+            const buildFailed = read('build_failed').trim() === 'true';
+
+            // Artifact contents come from a fork's build. Fence-breaking is the
+            // only thing quoting it can do, but neuter it anyway.
+            const fence = (text, limit) => {
+              let out = text.replace(/`/g, 'ˋ');
+              if (out.length > limit) out = `…(truncated)\n${out.slice(-limit)}`;
+              return out.trim() || '(no output)';
+            };
+
+            const LABELS = {
+              'test case failing': { color: 'd93f0b', description: 'Automated tests are failing on this PR' },
+              'build failed': { color: 'b60205', description: 'The production build is failing on this PR' },
+            };
+
+            const setLabel = async (name, shouldHave) => {
+              if (shouldHave) {
+                try {
+                  await github.rest.issues.getLabel({ owner, repo, name });
+                } catch {
+                  await github.rest.issues.createLabel({ owner, repo, name, ...LABELS[name] });
+                }
+                await github.rest.issues.addLabels({
+                  owner, repo, issue_number: prNumber, labels: [name],
+                });
+              } else {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner, repo, issue_number: prNumber, name,
+                  });
+                } catch {
+                  // Label was not applied; nothing to remove.
+                }
+              }
+            };
+
+            await setLabel('test case failing', testsFailed);
+            await setLabel('build failed', buildFailed);
+
+            const sections = [];
+
+            if (testsFailed) {
+              sections.push({
+                heading: '⚠️ **Tests failed!**',
+                summary: 'Test Output',
+                text: read('test_output.log'),
+              });
+            }
+
+            if (buildFailed) {
+              sections.push({
+                heading: '❌ **Build failed!**',
+                summary: 'Build Output',
+                text: read('build_output.log'),
+              });
+            } else {
+              const metrics = read('build_output.log')
+                .split('\n')
+                .filter((line) => line.includes('dist/assets/'))
+                .join('\n');
+              sections.push({
+                heading: '✅ **Build successful!**',
+                summary: 'Build Size Metrics',
+                text: metrics || 'Metrics not found',
+              });
+            }
+
+            // GitHub rejects comment bodies over 65536 characters. Budget is shared
+            // across sections rather than applied per section, so tests and build
+            // both failing cannot add up past the cap.
+            const BODY_LIMIT = 60000;
+            const OVERHEAD = 600;
+            const perSection = Math.floor((BODY_LIMIT - OVERHEAD) / sections.length);
+
+            // One comment per PR, edited in place, so a PR with many pushes does
+            // not accumulate a wall of near-identical reports.
+            const MARKER = '<!-- chainvoice-pr-report -->';
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${run.id}`;
+            const body = [
+              MARKER,
+              ...sections.map(
+                (s) =>
+                  `${s.heading}\n\n<details><summary>${s.summary}</summary>\n\n\`\`\`\n` +
+                  `${fence(s.text, perSection)}\n\`\`\`\n</details>`,
+              ),
+              `<sub>[Workflow run](${runUrl}) · commit ${run.head_sha.slice(0, 7)}</sub>`,
+            ].join('\n\n');
+
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number: prNumber, per_page: 100,
+            });
+            // Must be our own comment: matching the marker anywhere in any comment
+            // would let a PR author plant it and have their comment overwritten.
+            const existing = comments.find(
+              (c) => c.user?.login === 'github-actions[bot]' && c.body?.startsWith(MARKER),
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: prNumber, body,
+              });
+            }
