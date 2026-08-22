@@ -312,7 +312,9 @@ contract Chainvoice {
 
         uint256 totalAmounts = 0;
         uint256 totalNativeFee = fee * n;
-        // Validate and sum
+        // Validate and mark paid in the same pass so a duplicate id in the
+        // batch hits AlreadySettled() on its second occurrence, before any
+        // funds move.
         for (uint256 i = 0; i < n; i++) {
             uint256 id = invoiceIds[i];
             if (id >= invoices.length) revert InvalidInvoiceId();
@@ -324,11 +326,7 @@ contract Chainvoice {
             if (inv.tokenAddress != token) revert MixedTokenBatch();
 
             totalAmounts += inv.amountDue;
-        }
-
-        // Effects: mark all paid & bump fee accumulator BEFORE interactions
-        for (uint256 i = 0; i < n; i++) {
-            invoices[invoiceIds[i]].isPaid = true;
+            inv.isPaid = true;
         }
         accumulatedFees += totalNativeFee;
         // Interactions
