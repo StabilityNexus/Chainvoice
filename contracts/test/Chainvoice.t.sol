@@ -533,6 +533,26 @@ contract ChainvoiceTest is Test {
         assertEq(chainvoice.accumulatedFees(), fee);
     }
 
+    function testPayInvoice_ERC20_RevertInsufficientBalance() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 50 * 10**18); // Insufficient balance
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("erc20Data"));
+
+        uint256 fee = chainvoice.fee();
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100 * 10**18); // Sufficient allowance
+        vm.expectRevert(Chainvoice.TokenTransferFailed.selector);
+        chainvoice.payInvoice{value: fee}(0);
+        vm.stopPrank();
+
+        Chainvoice.InvoiceDetails memory inv = chainvoice.getInvoice(0);
+        assertFalse(inv.isPaid);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
+
     function testPayInvoice_ERC20_RevertInsufficientAllowance() public {
         MockERC20 token = new MockERC20();
         token.mint(bob, 100 * 10**18);
@@ -587,6 +607,33 @@ contract ChainvoiceTest is Test {
         assertEq(token.balanceOf(bob), 0);
         assertEq(token.balanceOf(alice), 300 * 10**18);
         assertEq(chainvoice.accumulatedFees(), totalFee);
+    }
+
+    function testPayInvoicesBatch_ERC20_RevertInsufficientBalance() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 150 * 10**18); // Insufficient for both (100 + 200 = 300)
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("b1"));
+        chainvoice.createInvoice(bob, 200 * 10**18, address(token), keccak256("b2"));
+        vm.stopPrank();
+
+        uint256 fee = chainvoice.fee();
+        uint256 totalFee = fee * 2;
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 300 * 10**18); // Sufficient allowance
+        vm.expectRevert(Chainvoice.TokenTransferFailed.selector);
+        chainvoice.payInvoicesBatch{value: totalFee}(ids);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(chainvoice.accumulatedFees(), 0);
     }
 }
 
