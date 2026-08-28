@@ -10,25 +10,26 @@ on:
     paths:
       - 'frontend/**'
 
+# Read-only on purpose. This workflow runs untrusted fork code, so it must not
+# hold a token that can write to the repo. Labels and the build-size comment are
+# posted by pr-report.yml, which runs after this one in the base-repo context.
 permissions:
-  issues: write
-  pull-requests: write
   contents: read
 
 jobs:
   test-and-build:
     runs-on: ubuntu-latest
-    
+
     defaults:
       run:
         working-directory: ./frontend
-        
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
           cache: 'npm'
@@ -48,56 +49,6 @@ jobs:
           npm run test:ci > test_output.log 2>&1 || echo "TESTS_FAILED=true" >> $GITHUB_ENV
           cat test_output.log
 
-      - name: Handle Test Failure
-        if: env.TESTS_FAILED == 'true' && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            let testOutput = '';
-            try {
-              testOutput = fs.readFileSync('./frontend/test_output.log', 'utf8');
-              if (testOutput.length > 60000) {
-                testOutput = testOutput.substring(testOutput.length - 60000);
-              }
-            } catch (e) {
-              testOutput = 'Could not read test output.';
-            }
-            
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              labels: ['test case failing']
-            });
-            
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `⚠️ **Tests failed!**\n\n<details><summary>Test Output</summary>\n\n\`\`\`\n${testOutput}\n\`\`\`\n</details>`
-            });
-            
-      - name: Fail if tests failed
-        if: env.TESTS_FAILED == 'true'
-        run: exit 1
-
-      - name: Remove test failure label (if passed)
-        if: env.TESTS_FAILED != 'true' && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            try {
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                name: 'test case failing'
-              });
-            } catch (e) {
-              // Ignore if label doesn't exist
-            }
-
       - name: Run build
         id: build
         continue-on-error: true
@@ -105,40 +56,29 @@ jobs:
           npm run build > build_output.log 2>&1 || echo "BUILD_FAILED=true" >> $GITHUB_ENV
           cat build_output.log
 
-      - name: Handle Build Failure
-        if: env.BUILD_FAILED == 'true' && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
-        with:
-          script: |
-            await github.rest.issues.addLabels({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              labels: ['build failed']
-            });
+      # Results only. This job runs the fork's own copy of this file, so nothing
+      # written here is trustworthy; pr-report.yml resolves the target PR from the
+      # workflow_run payload rather than from anything in this artifact.
+      - name: Collect report data
+        if: always() && github.event_name == 'pull_request'
+        run: |
+          mkdir -p pr-report
+          echo "${TESTS_FAILED:-false}" > pr-report/tests_failed
+          echo "${BUILD_FAILED:-false}" > pr-report/build_failed
+          cp test_output.log pr-report/ 2>/dev/null || true
+          cp build_output.log pr-report/ 2>/dev/null || true
 
-      - name: Report Build Size
-        if: env.BUILD_FAILED != 'true' && github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+      - name: Upload report data
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          script: |
-            const fs = require('fs');
-            let buildOutput = '';
-            try {
-              buildOutput = fs.readFileSync('./frontend/build_output.log', 'utf8');
-              const lines = buildOutput.split('\n');
-              const metrics = lines.filter(line => line.includes('dist/assets/')).join('\n');
-              buildOutput = metrics || 'Metrics not found';
-            } catch (e) {
-              buildOutput = 'Could not read build output.';
-            }
-            
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: `✅ **Build successful!**\n\n<details><summary>Build Size Metrics</summary>\n\n\`\`\`\n${buildOutput}\n\`\`\`\n</details>`
-            });
+          name: pr-report
+          path: frontend/pr-report
+          retention-days: 1
+
+      - name: Fail if tests failed
+        if: env.TESTS_FAILED == 'true'
+        run: exit 1
 
       - name: Fail if build failed
         if: env.BUILD_FAILED == 'true'
