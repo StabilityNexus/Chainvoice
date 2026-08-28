@@ -139,8 +139,11 @@ forge create contracts/src/Chainvoice.sol:Chainvoice
 
 5. **Configure frontend**  
 cp frontend/.env.example frontend/.env  
-Edit frontend/.env and set:  
-VITE_CONTRACT_ADDRESS=your_deployed_contract_address_here  
+Edit frontend/.env and set the variable for the chain you deployed to — the
+frontend reads `VITE_CONTRACT_ADDRESS_<chainId>`, not a single shared variable.
+For Ethereum Classic that is:  
+VITE_CONTRACT_ADDRESS_61=your_deployed_contract_address_here  
+See [Environment Variables](#environment-variables) for the full list.  
 
 6. **Restart frontend development server**  
 cd frontend  
@@ -150,8 +153,8 @@ npm run dev
 
 ### Frontend Configuration (`frontend/.env`)  
 ```.env
-#Ethereum Sepolia (11155111) — blank until redeployed, see note below
-VITE_CONTRACT_ADDRESS_11155111=
+#Ethereum Sepolia (11155111)
+VITE_CONTRACT_ADDRESS_11155111=0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b
 #Ethereum Classic (61) — blank until redeployed, see note below
 VITE_CONTRACT_ADDRESS_61=
 #Polygon Mainnet (137) — blank until redeployed, see note below
@@ -160,18 +163,18 @@ VITE_CONTRACT_ADDRESS_137=
 VITE_WALLETCONNECT_PROJECT_ID=Your Project ID can be obtained from https://dashboard.reown.com/ 
 ```
 
-> ⚠️ **Redeployment required.** Renaming the key registry functions changed
-> their selectors, so no previously deployed Chainvoice matches the current ABI.
-> Deploy `contracts/src/Chainvoice.sol` and fill in the addresses above, then
-> record it in [Deployments.md](./Deployments.md). Registered keys do not carry
-> over — every user must register again.
-
+> ⚠️ Renaming the key registry functions changed their selectors, so only a
+> contract deployed from the current `contracts/src/Chainvoice.sol` will answer.
+> The Sepolia address above is such a deployment — see
+> [Deployments.md](./Deployments.md). Keys registered against an earlier
+> deployment do not carry over; those users must register again.
+>
 > ⚠️ Ethereum Classic and Polygon are left blank on purpose. Both still run the
 > v1 contract, which stores invoice payloads on-chain as strings and has no
 > public key registry, so it does not match the current ABI. The app treats any
 > non-empty address as supported, so filling these in would send calls those
 > contracts cannot decode. Populate them only after redeploying.
-
+>
 > ⚠️ **Security Note:** Never commit `.env` files to version control. Keep your private keys secure.
 
 ### Relay configuration
@@ -193,8 +196,9 @@ VITE_RELAY_TIMEOUT_MS=
 
 ### Current (hash-based invoice storage)
 Stores only `keccak256` of the invoice data on-chain and exposes the public key
-registry. Awaiting redeployment after the key registry rename — see the note
-under Environment Variables.
+registry. Addresses are tracked in [Deployments.md](./Deployments.md).
+- Ethereum Sepolia (11155111)
+```0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b```
 
 ### v1 (Mainnet Deployment — Jan 1)
 Stores the invoice payload on-chain as strings. Superseded, kept for reference.

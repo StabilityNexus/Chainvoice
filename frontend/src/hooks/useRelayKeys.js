@@ -23,6 +23,7 @@ export function useRelayKeys() {
   const [hasKeys, setHasKeys] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
   const [isUnsupportedNetwork, setIsUnsupportedNetwork] = useState(false);
+  const [isCheckingRegistration, setIsCheckingRegistration] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   // Persist to sessionStorage by default. Without this the private key lives
@@ -111,33 +112,42 @@ export function useRelayKeys() {
     // that has no key on chain.
     const isStale = () => activeAddressRef.current !== requestedAddress;
 
+    // Callers gate UI on this, so distinguish "still looking" from "absent" —
+    // otherwise a registration prompt flashes on every load before the read
+    // has had a chance to come back.
+    setIsCheckingRegistration(true);
+
     // "No contract on this chain" is not the same as "not registered", and
     // registering cannot fix it — report it separately so callers can say so
     // rather than offering a setup step that is guaranteed to fail.
     const unsupported =
       Boolean(chainId) && !import.meta.env[`VITE_CONTRACT_ADDRESS_${chainId}`];
     if (!isStale()) setIsUnsupportedNetwork(unsupported);
-    if (unsupported) {
-      if (!isStale()) setIsRegistered(false);
-      return false;
-    }
-
-    const contract = await getContract();
-    if (!contract || !requestedAddress) {
-      if (!isStale()) setIsRegistered(false);
-      return false;
-    }
     try {
+      const contract = await getContract();
+      if (!contract || !requestedAddress) {
+        if (!isStale()) setIsRegistered(false);
+        return false;
+      }
+
       const pubKey = await fetchPublicKeyFromChain(contract, requestedAddress);
       const registered = pubKey !== null && pubKey.length > 0;
       if (!isStale()) setIsRegistered(registered);
       return registered;
     } catch (err) {
-      // A transient RPC failure is indistinguishable from "not registered" in
-      // the returned value, so leave a trace of which one it was.
+      // A failed read is indistinguishable from "not registered" here. Treating
+      // it as unregistered is the safe default: registering again is a no-op
+      // when the same key is already on-chain, so the worst case is one extra
+      // signature rather than a wrongly unlocked flow. Log it so a transient
+      // RPC failure can still be told apart from a genuine absence.
       console.warn('[useRelayKeys] Registry read failed:', err);
       if (!isStale()) setIsRegistered(false);
       return false;
+    } finally {
+      // Only the newest request may clear this. A stale one finishing would
+      // otherwise report "done" while the current read is still in flight,
+      // flashing the setup step for an account that may well be registered.
+      if (!isStale()) setIsCheckingRegistration(false);
     }
   }, [getContract, address, chainId]);
 
@@ -218,6 +228,7 @@ export function useRelayKeys() {
     hasKeys,
     isRegistered,
     isUnsupportedNetwork,
+    isCheckingRegistration,
     isLoading,
     error,
     rememberSession,

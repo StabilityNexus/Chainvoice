@@ -294,6 +294,41 @@ describe("malformed cache entries", () => {
   });
 });
 
+describe("derivation version migration", () => {
+  it("ignores a key cached under the previous derivation version", async () => {
+    // A v1 record must not be served to v2 callers: registering a stale key on
+    // the redeployed registry would leave it permanently mismatched against the
+    // key the same wallet derives after a reload.
+    const { privateKey, publicKey } = await deriveRelayKeyPair(
+      makeSigner(),
+      ADDRESS,
+      true
+    );
+    const v1Record = JSON.stringify({
+      privateKey: bytesToHex(privateKey),
+      publicKey: bytesToHex(publicKey),
+    });
+
+    store.clear();
+    store.set(`chainvoice_relay_keys_${ADDRESS.toLowerCase()}`, v1Record);
+
+    jest.resetModules();
+    const reloaded = await import("../../src/services/relay/relayKeyManager.js");
+
+    expect(reloaded.hasCachedKeys(ADDRESS)).toBe(false);
+
+    // ...and the next derivation asks for a fresh signature.
+    const signer = makeSigner();
+    await reloaded.deriveRelayKeyPair(signer, ADDRESS, true);
+    expect(signer.signMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it("stores under the versioned prefix", async () => {
+    await deriveRelayKeyPair(makeSigner(), ADDRESS, true);
+    expect([...store.keys()].every((k) => k.includes("_v2_"))).toBe(true);
+  });
+});
+
 describe("concurrent derivation", () => {
   it("shares one signature prompt between concurrent callers", async () => {
     // Two components can ask for the key at once; the in-flight promise is
