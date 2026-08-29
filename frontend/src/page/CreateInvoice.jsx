@@ -109,7 +109,11 @@ function CreateInvoice() {
   const [clientCountry, setClientCountry] = useState("");
 
   // Sender details live in Settings now, so this page only reads them.
-  const { profile, isComplete: hasProfile } = useUserProfile();
+  const {
+    profile,
+    isComplete: hasProfile,
+    loading: profileLoading,
+  } = useUserProfile();
   const [showProfilePrompt, setShowProfilePrompt] = useState(false);
 
   // Token selection state
@@ -746,6 +750,11 @@ function CreateInvoice() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    // Until IndexedDB has been read the profile is still the empty default,
+    // which is indistinguishable from having none — prompting here would ask a
+    // returning user to re-enter details they already saved.
+    if (profileLoading) return;
+
     // The sender details are required on-chain, so an empty profile has to be
     // filled in before submitting rather than silently sending blanks.
     if (!hasProfile) {
@@ -914,10 +923,14 @@ function CreateInvoice() {
               </h3>
 
               <div className="mb-4">
-                <Label className="text-sm font-medium text-gray-700 mb-1 block">
+                <Label
+                  htmlFor="clientAddress"
+                  className="text-sm font-medium text-gray-700 mb-1 block"
+                >
                   Client Wallet Address <span className="text-red-500">*</span>
                 </Label>
                 <Input
+                  id="clientAddress"
                   placeholder="Client Wallet Address"
                   className={`w-full border-gray-300 text-black ${clientAddressError ? "border-red-500" : ""}`}
                   name="clientAddress"
@@ -929,21 +942,38 @@ function CreateInvoice() {
                   }}
                   onBlur={(e) => validateClientAddress(e.target.value)}
                   aria-invalid={Boolean(clientAddressError)}
+                  aria-describedby={
+                    clientAddressError
+                      ? "clientAddress-error"
+                      : clientKeyStatus === "registered" ||
+                          clientKeyStatus === "unregistered"
+                        ? "clientAddress-key-status"
+                        : undefined
+                  }
                 />
                 {clientAddressError && (
-                  <div className="mt-1 flex items-center gap-1 text-xs text-red-600">
+                  <div
+                    id="clientAddress-error"
+                    className="mt-1 flex items-center gap-1 text-xs text-red-600"
+                  >
                     <AlertCircle className="h-3 w-3 shrink-0" />
                     <span>{clientAddressError}</span>
                   </div>
                 )}
                 {!clientAddressError && clientKeyStatus === "registered" && (
-                  <div className="mt-1 flex items-center gap-1 text-xs text-green-700">
+                  <div
+                    id="clientAddress-key-status"
+                    className="mt-1 flex items-center gap-1 text-xs text-green-700"
+                  >
                     <CheckCircle2 className="h-3 w-3 shrink-0" />
                     <span>This client can receive encrypted invoice details.</span>
                   </div>
                 )}
                 {!clientAddressError && clientKeyStatus === "unregistered" && (
-                  <div className="mt-1 flex items-start gap-1 text-xs text-amber-700">
+                  <div
+                    id="clientAddress-key-status"
+                    className="mt-1 flex items-start gap-1 text-xs text-amber-700"
+                  >
                     <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" />
                     <span>
                       This client has not registered an encryption key, so they
@@ -957,10 +987,14 @@ function CreateInvoice() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
+                  <Label
+                    htmlFor="clientFname"
+                    className="text-sm font-medium text-gray-700"
+                  >
                     First Name <span className="text-red-500">*</span>
                   </Label>
                   <Input
+                    id="clientFname"
                     type="text"
                     placeholder="Client First Name"
                     className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.clientFname ? "border-red-500" : ""}`}
@@ -968,9 +1002,15 @@ function CreateInvoice() {
                     onChange={handleFieldChange}
                     onBlur={handleFieldBlur}
                     aria-invalid={Boolean(fieldErrors.clientFname)}
+                    aria-describedby={
+                      fieldErrors.clientFname ? "clientFname-error" : undefined
+                    }
                   />
                   {fieldErrors.clientFname && (
-                    <div className="mt-1 flex items-center gap-1 text-xs text-red-600">
+                    <div
+                      id="clientFname-error"
+                      className="mt-1 flex items-center gap-1 text-xs text-red-600"
+                    >
                       <AlertCircle className="h-3 w-3 shrink-0" />
                       <span>{fieldErrors.clientFname}</span>
                     </div>
@@ -978,10 +1018,14 @@ function CreateInvoice() {
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
+                  <Label
+                    htmlFor="clientLname"
+                    className="text-sm font-medium text-gray-700"
+                  >
                     Last Name
                   </Label>
                   <Input
+                    id="clientLname"
                     type="text"
                     placeholder="Client Last Name"
                     className="w-full mt-1 border-gray-300 text-black"
@@ -990,10 +1034,14 @@ function CreateInvoice() {
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
+                  <Label
+                    htmlFor="clientEmail"
+                    className="text-sm font-medium text-gray-700"
+                  >
                     Email <span className="text-red-500">*</span>
                   </Label>
                   <Input
+                    id="clientEmail"
                     type="email"
                     placeholder="Client Email"
                     className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.clientEmail ? "border-red-500" : ""}`}
@@ -1001,9 +1049,15 @@ function CreateInvoice() {
                     onChange={handleFieldChange}
                     onBlur={handleFieldBlur}
                     aria-invalid={Boolean(fieldErrors.clientEmail)}
+                    aria-describedby={
+                      fieldErrors.clientEmail ? "clientEmail-error" : undefined
+                    }
                   />
                   {fieldErrors.clientEmail && (
-                    <div className="mt-1 flex items-center gap-1 text-xs text-red-600">
+                    <div
+                      id="clientEmail-error"
+                      className="mt-1 flex items-center gap-1 text-xs text-red-600"
+                    >
                       <AlertCircle className="h-3 w-3 shrink-0" />
                       <span>{fieldErrors.clientEmail}</span>
                     </div>
@@ -1011,11 +1065,15 @@ function CreateInvoice() {
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
+                  <Label
+                    htmlFor="clientCountry"
+                    className="text-sm font-medium text-gray-700"
+                  >
                     Country
                   </Label>
                   <div className="mt-1">
                     <CountryPicker
+                      id="clientCountry"
                       value={clientCountry}
                       onChange={setClientCountry}
                       placeholder="Select country"
@@ -1031,10 +1089,14 @@ function CreateInvoice() {
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
+                  <Label
+                    htmlFor="clientCity"
+                    className="text-sm font-medium text-gray-700"
+                  >
                     City
                   </Label>
                   <Input
+                    id="clientCity"
                     type="text"
                     placeholder="City"
                     className="w-full mt-1 border-gray-300 text-black"
@@ -1043,10 +1105,14 @@ function CreateInvoice() {
                 </div>
 
                 <div>
-                  <Label className="text-sm font-medium text-gray-700">
+                  <Label
+                    htmlFor="clientPostalcode"
+                    className="text-sm font-medium text-gray-700"
+                  >
                     Postal Code
                   </Label>
                   <Input
+                    id="clientPostalcode"
                     type="text"
                     placeholder="Postal Code"
                     className="w-full mt-1 border-gray-300 text-black"
@@ -1669,7 +1735,7 @@ function CreateInvoice() {
             <Button
               className="bg-green-600 hover:bg-green-700 px-8 py-2 text-white"
               type="submit"
-              disabled={loading || !isConnected}
+              disabled={loading || profileLoading || !isConnected}
             >
               {loading ? (
                 <div className="flex items-center gap-2">

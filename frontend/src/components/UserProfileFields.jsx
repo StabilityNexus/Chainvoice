@@ -37,6 +37,7 @@ function UserProfileFields({
             <div className="mt-1">
               {field.control === "country" ? (
                 <CountryPicker
+                  id={field.name}
                   value={fieldValue}
                   onChange={(country) => onChange(field.name, country)}
                   placeholder={field.placeholder}

@@ -125,7 +125,11 @@ function CreateInvoicesBatch() {
   ]);
 
   // Sender details are shared across all invoices and live in Settings now.
-  const { profile, isComplete: hasProfile } = useUserProfile();
+  const {
+    profile,
+    isComplete: hasProfile,
+    loading: profileLoading,
+  } = useUserProfile();
   const [showProfilePrompt, setShowProfilePrompt] = useState(false);
 
   const { catalogMetadata } = useProductCatalog();
@@ -786,6 +790,11 @@ function CreateInvoicesBatch() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Until IndexedDB has been read the profile is still the empty default,
+    // which is indistinguishable from having none — prompting here would ask a
+    // returning user to re-enter details they already saved.
+    if (profileLoading) return;
 
     // The sender details are required on-chain, so an empty profile has to be
     // filled in before submitting rather than silently sending blanks.
@@ -1575,7 +1584,9 @@ function CreateInvoicesBatch() {
             <Button
               className="bg-green-600 hover:bg-green-700 w-full sm:w-auto px-6 sm:px-8 py-3 text-white text-base sm:text-lg font-semibold"
               type="submit"
-              disabled={loading || !isConnected || validInvoices === 0}
+              disabled={
+                loading || profileLoading || !isConnected || validInvoices === 0
+              }
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">
