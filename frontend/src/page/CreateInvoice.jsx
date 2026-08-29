@@ -47,8 +47,14 @@ import {
 } from "@/utils/invoiceCalculations";
 import {
   getClientAddressError,
+  getEmailError,
+  getRequiredTextError,
   validateSingleInvoiceData,
 } from "@/utils/invoiceValidation";
+import { toInvoiceUserDetails } from "@/utils/userProfile";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
+import SenderSummary from "@/components/SenderSummary";
 import toast from "react-hot-toast";
 import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
 import { computeInvoiceHash } from "../services/relay/invoiceHashUtils.js";
@@ -100,8 +106,15 @@ function CreateInvoice() {
   const itemRefsMobile = useRef([]);
   const itemRefsDesktop = useRef([]);
   const [clientAddress, setClientAddress] = useState("");
-  const [userCountry, setUserCountry] = useState("");
   const [clientCountry, setClientCountry] = useState("");
+
+  // Sender details live in Settings now, so this page only reads them.
+  const {
+    profile,
+    isComplete: hasProfile,
+    loading: profileLoading,
+  } = useUserProfile();
+  const [showProfilePrompt, setShowProfilePrompt] = useState(false);
 
   // Token selection state
   const [selectedToken, setSelectedToken] = useState(null);
@@ -456,13 +469,12 @@ function CreateInvoice() {
   const handleFieldBlur = (e) => {
     const { name, value } = e.target;
     let error = "";
-    if (name === "userFname" || name === "clientFname") {
-      if (!value.trim()) error = "First name is required";
-    } else if (name === "userEmail" || name === "clientEmail") {
-      if (!value.trim()) error = "Email is required";
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) error = "Invalid email address";
+    if (name === "clientFname") {
+      error = getRequiredTextError(value, "First name");
+    } else if (name === "clientEmail") {
+      error = getEmailError(value);
     }
-    
+
     if (error) {
       setFieldErrors((prev) => ({ ...prev, [name]: error }));
     }
@@ -589,15 +601,7 @@ function CreateInvoice() {
           symbol: paymentToken.symbol,
           decimals: Number(paymentToken.decimals),
         },
-        user: {
-          address: account?.address.toString(),
-          fname: data.userFname,
-          lname: data.userLname,
-          email: data.userEmail,
-          country: data.userCountry,
-          city: data.userCity,
-          postalcode: data.userPostalcode,
-        },
+        user: toInvoiceUserDetails(profile, account?.address),
         client: {
           address: normalizedData.clientAddress,
           fname: normalizedData.clientFname,
@@ -745,16 +749,24 @@ function CreateInvoice() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Until IndexedDB has been read the profile is still the empty default,
+    // which is indistinguishable from having none — prompting here would ask a
+    // returning user to re-enter details they already saved.
+    if (profileLoading) return;
+
+    // The sender details are required on-chain, so an empty profile has to be
+    // filled in before submitting rather than silently sending blanks.
+    if (!hasProfile) {
+      setShowProfilePrompt(true);
+      toast.error("Add your information before sending an invoice");
+      return;
+    }
+
     const formData = new FormData(e.target);
 
     const data = {
-      userAddress: formData.get("userAddress"),
-      userFname: formData.get("userFname"),
-      userLname: formData.get("userLname"),
-      userEmail: formData.get("userEmail"),
-      userCountry: userCountry || formData.get("userCountry") || "",
-      userCity: formData.get("userCity"),
-      userPostalcode: formData.get("userPostalcode"),
+      ...profile,
       clientAddress: formData.get("clientAddress"),
       clientFname: formData.get("clientFname"),
       clientLname: formData.get("clientLname"),
@@ -769,6 +781,14 @@ function CreateInvoice() {
 
   return (
     <>
+      <OnboardingProfileDialog
+        open={showProfilePrompt}
+        onOpenChange={setShowProfilePrompt}
+        required
+        title="Add your information"
+        description="Every invoice needs your name and email as the sender. Saved on this device and reused for future invoices."
+      />
+
       <div className="flex justify-center px-2 sm:px-4">
         <WalletConnectionAlert
           show={showWalletAlert}
@@ -817,9 +837,12 @@ function CreateInvoice() {
           </div>
         )}
 
-        <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-white">
-          Create New Invoice
-        </h2>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-4 sm:mb-6">
+          <h2 className="text-xl sm:text-2xl font-bold text-white">
+            Create New Invoice
+          </h2>
+          <SenderSummary />
+        </div>
 
         <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8 bg-gray-50 p-4 rounded-lg shadow-sm overflow-hidden">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
@@ -890,492 +913,451 @@ function CreateInvoice() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="flex flex-col lg:flex-row gap-4 sm:gap-6 mb-6 sm:mb-8">
-            <div className="w-full border border-gray-200 flex-1 p-4 sm:p-6 rounded-lg shadow-sm bg-white overflow-hidden">
+          {/* Client details and payment token sit side by side so the invoice
+              items stay above the fold on desktop. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8 items-start">
+            {/* Client Information — the sender's own details come from Settings */}
+            <div className="w-full border border-gray-200 p-4 sm:p-6 rounded-lg shadow-sm bg-white overflow-hidden">
               <h3 className="text-base sm:text-lg font-semibold mb-4 text-gray-800">
-                From (Your Information)
-              </h3>
-              <Input
-                value={account?.address}
-                className="w-full mb-4 bg-gray-50 border-gray-300 text-gray-500 text-xs sm:text-sm font-mono"
-                readOnly
-                name="userAddress"
-              />
-
-              <div className="space-y-3 sm:space-y-4">
-                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      First Name <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      type="text"
-                      placeholder="Your First Name"
-                      className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.userFname ? "border-red-500" : ""}`}
-                      name="userFname"
-                      onChange={handleFieldChange}
-                      onBlur={handleFieldBlur}
-                    />
-                    {fieldErrors.userFname && (
-                      <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.userFname}</span></div>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      Last Name
-                    </Label>
-                    <Input
-                      type="text"
-                      placeholder="Your Last Name"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="userLname"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      Email <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      type="email"
-                      placeholder="Email"
-                      className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.userEmail ? "border-red-500" : ""}`}
-                      name="userEmail"
-                      onChange={handleFieldChange}
-                      onBlur={handleFieldBlur}
-                    />
-                    {fieldErrors.userEmail && (
-                      <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.userEmail}</span></div>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      Country
-                    </Label>
-                    <div className="mt-1">
-                      <CountryPicker
-                        value={userCountry}
-                        onChange={setUserCountry}
-                        placeholder="Select country"
-                        className="w-full border-gray-300 text-black"
-                        disabled={loading}
-                      />
-                      <input
-                        type="hidden"
-                        name="userCountry"
-                        value={userCountry}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      City
-                    </Label>
-                    <Input
-                      type="text"
-                      placeholder="City"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="userCity"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      Postal Code
-                    </Label>
-                    <Input
-                      type="text"
-                      placeholder="Postal Code"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="userPostalcode"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-            {/* Client Information */}
-            <div className="border border-gray-200 flex-1 p-6 rounded-lg shadow-sm bg-white">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">
                 Client Information
               </h3>
-              <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                Client Wallet Address <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                placeholder="Client Wallet Address"
-                className={`w-full mb-4 border-gray-300 text-black ${clientAddressError ? "border-red-500" : ""}`}
-                name="clientAddress"
-                value={clientAddress}
-                onChange={(e) => {const value = e.target.value;
-                         setClientAddress(value);
-                      validateClientAddress(value);
-                     }}
-                     onBlur={(e) => {
-    validateClientAddress(e.target.value);
-  }}
-              />
-              {clientAddressError && (
-                 <div className="mt-2 flex items-center gap-2 text-sm text-red-600">
-                    <AlertCircle className="h-4 w-4" />
-                        <span>{clientAddressError}</span>
-                            </div>
-                               )}
-              {!clientAddressError && clientKeyStatus === "registered" && (
-                <div className="mt-2 flex items-center gap-2 text-sm text-green-700">
-                  <CheckCircle2 className="h-4 w-4 shrink-0" />
-                  <span>
-                    This client can receive encrypted invoice details.
-                  </span>
-                </div>
-              )}
-              {!clientAddressError && clientKeyStatus === "unregistered" && (
-                <div className="mt-2 flex items-start gap-2 text-sm text-amber-700">
-                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <span>
-                    This client has not registered an encryption key, so they
-                    will only see the on-chain summary. You can still create the
-                    invoice and resend the details from Sent Invoices once they
-                    register.
-                  </span>
-                </div>
-              )}
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      First Name <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      type="text"
-                      placeholder="Client First Name"
-                      className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.clientFname ? "border-red-500" : ""}`}
-                      name="clientFname"
-                      onChange={handleFieldChange}
-                      onBlur={handleFieldBlur}
-                    />
-                    {fieldErrors.clientFname && (
-                      <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.clientFname}</span></div>
-                    )}
-                  </div>
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      Last Name
-                    </Label>
-                    <Input
-                      type="text"
-                      placeholder="Client Last Name"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="clientLname"
-                    />
-                  </div>
-                </div>
 
-
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      Email <span className="text-red-500">*</span>
-                    </Label>
-                    <Input
-                      type="email"
-                      placeholder="Client Email"
-                      className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.clientEmail ? "border-red-500" : ""}`}
-                      name="clientEmail"
-                      onChange={handleFieldChange}
-                      onBlur={handleFieldBlur}
-                    />
-                    {fieldErrors.clientEmail && (
-                      <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.clientEmail}</span></div>
-                    )}
+              <div className="mb-4">
+                <Label
+                  htmlFor="clientAddress"
+                  className="text-sm font-medium text-gray-700 mb-1 block"
+                >
+                  Client Wallet Address <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="clientAddress"
+                  placeholder="Client Wallet Address"
+                  className={`w-full border-gray-300 text-black ${clientAddressError ? "border-red-500" : ""}`}
+                  name="clientAddress"
+                  value={clientAddress}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setClientAddress(value);
+                    validateClientAddress(value);
+                  }}
+                  onBlur={(e) => validateClientAddress(e.target.value)}
+                  aria-invalid={Boolean(clientAddressError)}
+                  aria-describedby={
+                    clientAddressError
+                      ? "clientAddress-error"
+                      : clientKeyStatus === "registered" ||
+                          clientKeyStatus === "unregistered"
+                        ? "clientAddress-key-status"
+                        : undefined
+                  }
+                />
+                {clientAddressError && (
+                  <div
+                    id="clientAddress-error"
+                    className="mt-1 flex items-center gap-1 text-xs text-red-600"
+                  >
+                    <AlertCircle className="h-3 w-3 shrink-0" />
+                    <span>{clientAddressError}</span>
                   </div>
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      Country
-                    </Label>
-                    <div className="mt-1">
-                      <CountryPicker
-                        value={clientCountry}
-                        onChange={setClientCountry}
-                        placeholder="Select country"
-                        className="w-full border-gray-300 text-black"
-                        disabled={loading}
-                      />
-                      <input
-                        type="hidden"
-                        name="clientCountry"
-                        value={clientCountry}
-                      />
+                )}
+                {!clientAddressError && clientKeyStatus === "registered" && (
+                  <div
+                    id="clientAddress-key-status"
+                    className="mt-1 flex items-center gap-1 text-xs text-green-700"
+                  >
+                    <CheckCircle2 className="h-3 w-3 shrink-0" />
+                    <span>This client can receive encrypted invoice details.</span>
+                  </div>
+                )}
+                {!clientAddressError && clientKeyStatus === "unregistered" && (
+                  <div
+                    id="clientAddress-key-status"
+                    className="mt-1 flex items-start gap-1 text-xs text-amber-700"
+                  >
+                    <AlertCircle className="h-3 w-3 shrink-0 mt-0.5" />
+                    <span>
+                      This client has not registered an encryption key, so they
+                      will only see the on-chain summary. You can still create
+                      the invoice and resend the details from Sent Invoices once
+                      they register.
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <div>
+                  <Label
+                    htmlFor="clientFname"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    First Name <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="clientFname"
+                    type="text"
+                    placeholder="Client First Name"
+                    className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.clientFname ? "border-red-500" : ""}`}
+                    name="clientFname"
+                    onChange={handleFieldChange}
+                    onBlur={handleFieldBlur}
+                    aria-invalid={Boolean(fieldErrors.clientFname)}
+                    aria-describedby={
+                      fieldErrors.clientFname ? "clientFname-error" : undefined
+                    }
+                  />
+                  {fieldErrors.clientFname && (
+                    <div
+                      id="clientFname-error"
+                      className="mt-1 flex items-center gap-1 text-xs text-red-600"
+                    >
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      <span>{fieldErrors.clientFname}</span>
                     </div>
+                  )}
+                </div>
+
+                <div>
+                  <Label
+                    htmlFor="clientLname"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    Last Name
+                  </Label>
+                  <Input
+                    id="clientLname"
+                    type="text"
+                    placeholder="Client Last Name"
+                    className="w-full mt-1 border-gray-300 text-black"
+                    name="clientLname"
+                  />
+                </div>
+
+                <div>
+                  <Label
+                    htmlFor="clientEmail"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    Email <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    id="clientEmail"
+                    type="email"
+                    placeholder="Client Email"
+                    className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.clientEmail ? "border-red-500" : ""}`}
+                    name="clientEmail"
+                    onChange={handleFieldChange}
+                    onBlur={handleFieldBlur}
+                    aria-invalid={Boolean(fieldErrors.clientEmail)}
+                    aria-describedby={
+                      fieldErrors.clientEmail ? "clientEmail-error" : undefined
+                    }
+                  />
+                  {fieldErrors.clientEmail && (
+                    <div
+                      id="clientEmail-error"
+                      className="mt-1 flex items-center gap-1 text-xs text-red-600"
+                    >
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      <span>{fieldErrors.clientEmail}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div>
+                  <Label
+                    htmlFor="clientCountry"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    Country
+                  </Label>
+                  <div className="mt-1">
+                    <CountryPicker
+                      id="clientCountry"
+                      value={clientCountry}
+                      onChange={setClientCountry}
+                      placeholder="Select country"
+                      className="w-full border-gray-300 text-black"
+                      disabled={loading}
+                    />
+                    <input
+                      type="hidden"
+                      name="clientCountry"
+                      value={clientCountry}
+                    />
                   </div>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-4">
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      City
-                    </Label>
-                    <Input
-                      type="text"
-                      placeholder="City"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="clientCity"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <Label className="text-sm font-medium text-gray-700">
-                      Postal Code
-                    </Label>
-                    <Input
-                      type="text"
-                      placeholder="Postal Code"
-                      className="w-full mt-1 border-gray-300 text-black"
-                      name="clientPostalcode"
-                    />
-                  </div>
+                <div>
+                  <Label
+                    htmlFor="clientCity"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    City
+                  </Label>
+                  <Input
+                    id="clientCity"
+                    type="text"
+                    placeholder="City"
+                    className="w-full mt-1 border-gray-300 text-black"
+                    name="clientCity"
+                  />
+                </div>
+
+                <div>
+                  <Label
+                    htmlFor="clientPostalcode"
+                    className="text-sm font-medium text-gray-700"
+                  >
+                    Postal Code
+                  </Label>
+                  <Input
+                    id="clientPostalcode"
+                    type="text"
+                    placeholder="Postal Code"
+                    className="w-full mt-1 border-gray-300 text-black"
+                    name="clientPostalcode"
+                  />
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="mb-8 bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="text-gray-600"
-              >
-                <circle cx="8" cy="8" r="6"></circle>
-                <path d="M18.09 10.37A6 6 0 1 1 10.34 18"></path>
-                <path d="M7 6h1v4"></path>
-                <path d="m16.71 13.88.7.71-2.82 2.82"></path>
-              </svg>
-              Payment Currency
-            </h3>
+            <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-gray-600"
+                >
+                  <circle cx="8" cy="8" r="6"></circle>
+                  <path d="M18.09 10.37A6 6 0 1 1 10.34 18"></path>
+                  <path d="M7 6h1v4"></path>
+                  <path d="m16.71 13.88.7.71-2.82 2.82"></path>
+                </svg>
+                Payment Currency
+              </h3>
 
-            <div className="space-y-4">
-              {/* Toggle Switch */}
-              <ToggleSwitch
-                enabled={useCustomToken}
-                onChange={setUseCustomToken}
-                leftLabel="Select Token"
-                rightLabel="Input Custom Token"
-              />
+              <div className="space-y-4">
+                {/* Toggle Switch */}
+                <ToggleSwitch
+                  enabled={useCustomToken}
+                  onChange={setUseCustomToken}
+                  leftLabel="Select Token"
+                  rightLabel="Input Custom Token"
+                />
 
-              <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                <div className="w-full sm:w-auto flex-1">
-                  {!useCustomToken ? (
-                    <>
-                      <Label className="block text-sm font-medium text-gray-700 mb-2">
-                        Choose from Available Tokens
-                      </Label>
-                      {tokenListError && (
-                        <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800 flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4" />
-                          <span>{tokenListError}. Using local fallback or custom input recommended.</span>
-                        </div>
-                      )}
-                      <TokenPicker
-                        selected={selectedToken}
-                        onSelect={async (token) => {
-                          const address = token.contract_address || token.address;
-                          const decimals = await resolveTokenDecimals(
-                            address,
-                            token.decimals
-                          );
-
-                          if (decimals === null) {
-                            toast.error(
-                              "Failed to fetch token decimals for selected token"
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                  <div className="w-full sm:w-auto flex-1">
+                    {!useCustomToken ? (
+                      <>
+                        <Label className="block text-sm font-medium text-gray-700 mb-2">
+                          Choose from Available Tokens
+                        </Label>
+                        {tokenListError && (
+                          <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800 flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4" />
+                            <span>{tokenListError}. Using local fallback or custom input recommended.</span>
+                          </div>
+                        )}
+                        <TokenPicker
+                          selected={selectedToken}
+                          onSelect={async (token) => {
+                            const address = token.contract_address || token.address;
+                            const decimals = await resolveTokenDecimals(
+                              address,
+                              token.decimals
                             );
-                            return false;
-                          }
 
-                          setSelectedToken({
-                            address,
-                            symbol: token.symbol,
-                            name: token.name,
-                            logo: token.image,
-                            decimals,
-                          });
+                            if (decimals === null) {
+                              toast.error(
+                                "Failed to fetch token decimals for selected token"
+                              );
+                              return false;
+                            }
 
-                          return true;
-                        }}
-                        chainId={chainIdForTokens}
-                        disabled={loading}
-                        className="w-full"
-                        allowCustom={false} // Remove custom token option from picker since we have toggle
-                      />
-                    </>
-                  ) : (
-                    <>
-                      <Label className="block text-sm font-medium text-gray-700 mb-2">
-                        Custom Token Contract Address
-                      </Label>
+                            setSelectedToken({
+                              address,
+                              symbol: token.symbol,
+                              name: token.name,
+                              logo: token.image,
+                              decimals,
+                            });
 
-                      {/* Custom Token Instructions */}
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
-                        <div className="flex items-start gap-3">
-                          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
-                            <Coins className="w-4 h-4 text-blue-600" />
-                          </div>
-                          <div>
-                            <h4 className="font-medium text-blue-900 mb-1">
-                              Custom Token Setup
-                            </h4>
-                            <p className="text-sm text-blue-700 mb-2">
-                              Enter the contract address of the ERC-20 token you
-                              want to use for payments.
-                            </p>
-                            <ul className="text-xs text-blue-600 space-y-1">
-                              <li>
-                                • Make sure the token contract is deployed and
-                                verified
-                              </li>
-                              <li>
-                                • Address should start with &quot;0x&quot; followed by 40
-                                characters
-                              </li>
-                              <li>
-                                • Token will be verified automatically after
-                                entering
-                              </li>
-                            </ul>
-                          </div>
-                        </div>
-                      </div>
+                            return true;
+                          }}
+                          chainId={chainIdForTokens}
+                          disabled={loading}
+                          className="w-full"
+                          allowCustom={false} // Remove custom token option from picker since we have toggle
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <Label className="block text-sm font-medium text-gray-700 mb-2">
+                          Custom Token Contract Address
+                        </Label>
 
-                      <Input
-                        placeholder="0x... (Enter token contract address)"
-                        value={customTokenAddress}
-                        onChange={(e) => {
-                          const address = e.target.value;
-                          setCustomTokenAddress(address);
-                          if (!address || !ethers.isAddress(address)) {
-                            setTokenVerificationState("idle");
-                            setVerifiedToken(null);
-                          } else if (ethers.isAddress(address)) {
-                            verifyToken(address);
-                          }
-                        }}
-                        className="h-12 bg-gray-50 text-gray-700 border-gray-200"
-                        disabled={loading}
-                      />
-
-                      {tokenVerificationState === "verifying" && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600 p-3 bg-yellow-50 rounded-lg border border-yellow-200 mt-3">
-                          <Loader2 className="h-4 w-4 animate-spin text-yellow-600" />
-                          <span className="text-yellow-700">
-                            Verifying token contract...
-                          </span>
-                        </div>
-                      )}
-
-                      {tokenVerificationState === "success" &&
-                        verifiedToken && (
-                          <div className="mt-3">
-                            <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                              <div className="flex items-start gap-3">
-                                <CheckCircle2 className="h-6 w-6 text-green-500 flex-shrink-0 mt-0.5" />
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <p className="font-medium text-green-800">
-                                      {verifiedToken.name} (
-                                      {verifiedToken.symbol})
-                                    </p>
-                                    <Badge className="bg-green-100 text-green-700 text-xs">
-                                      Verified ✓
-                                    </Badge>
-                                  </div>
-                                  <div className="flex items-center gap-2 mb-2">
-                                    <span className="text-sm text-green-600 font-mono">
-                                      {verifiedToken.address}
-                                    </span>
-                                    <CopyButton
-                                      textToCopy={verifiedToken.address}
-                                    />
-                                  </div>
-                                  <p className="text-xs text-green-600">
-                                    Decimals: {String(verifiedToken.decimals)} •
-                                    Contract verified and ready to use
-                                  </p>
-                                </div>
-                              </div>
+                        {/* Custom Token Instructions */}
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                              <Coins className="w-4 h-4 text-blue-600" />
                             </div>
-                            <TokenIntegrationRequest
-                              address={customTokenAddress}
-                            />
+                            <div>
+                              <h4 className="font-medium text-blue-900 mb-1">
+                                Custom Token Setup
+                              </h4>
+                              <p className="text-sm text-blue-700 mb-2">
+                                Enter the contract address of the ERC-20 token you
+                                want to use for payments.
+                              </p>
+                              <ul className="text-xs text-blue-600 space-y-1">
+                                <li>
+                                  • Make sure the token contract is deployed and
+                                  verified
+                                </li>
+                                <li>
+                                  • Address should start with &quot;0x&quot; followed by 40
+                                  characters
+                                </li>
+                                <li>
+                                  • Token will be verified automatically after
+                                  entering
+                                </li>
+                              </ul>
+                            </div>
+                          </div>
+                        </div>
+
+                        <Input
+                          placeholder="0x... (Enter token contract address)"
+                          value={customTokenAddress}
+                          onChange={(e) => {
+                            const address = e.target.value;
+                            setCustomTokenAddress(address);
+                            if (!address || !ethers.isAddress(address)) {
+                              setTokenVerificationState("idle");
+                              setVerifiedToken(null);
+                            } else if (ethers.isAddress(address)) {
+                              verifyToken(address);
+                            }
+                          }}
+                          className="h-12 bg-gray-50 text-gray-700 border-gray-200"
+                          disabled={loading}
+                        />
+
+                        {tokenVerificationState === "verifying" && (
+                          <div className="flex items-center gap-2 text-sm text-gray-600 p-3 bg-yellow-50 rounded-lg border border-yellow-200 mt-3">
+                            <Loader2 className="h-4 w-4 animate-spin text-yellow-600" />
+                            <span className="text-yellow-700">
+                              Verifying token contract...
+                            </span>
                           </div>
                         )}
 
-                      {tokenVerificationState === "error" && (
-                        <div className="bg-red-50 p-3 rounded-lg border border-red-100 mt-3">
-                          <div className="flex items-center gap-3">
-                            <XCircle className="h-5 w-5 text-red-500" />
-                            <div>
-                              <p className="text-sm text-red-600 font-medium">
-                                Token verification failed
-                              </p>
-                              <p className="text-xs text-red-500 mt-1">
-                                Please check the contract address and try again.
-                                Make sure it&apos;s a valid ERC-20 token.
-                              </p>
+                        {tokenVerificationState === "success" &&
+                          verifiedToken && (
+                            <div className="mt-3">
+                              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
+                                <div className="flex items-start gap-3">
+                                  <CheckCircle2 className="h-6 w-6 text-green-500 flex-shrink-0 mt-0.5" />
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <p className="font-medium text-green-800">
+                                        {verifiedToken.name} (
+                                        {verifiedToken.symbol})
+                                      </p>
+                                      <Badge className="bg-green-100 text-green-700 text-xs">
+                                        Verified ✓
+                                      </Badge>
+                                    </div>
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="text-sm text-green-600 font-mono">
+                                        {verifiedToken.address}
+                                      </span>
+                                      <CopyButton
+                                        textToCopy={verifiedToken.address}
+                                      />
+                                    </div>
+                                    <p className="text-xs text-green-600">
+                                      Decimals: {String(verifiedToken.decimals)} •
+                                      Contract verified and ready to use
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                              <TokenIntegrationRequest
+                                address={customTokenAddress}
+                              />
+                            </div>
+                          )}
+
+                        {tokenVerificationState === "error" && (
+                          <div className="bg-red-50 p-3 rounded-lg border border-red-100 mt-3">
+                            <div className="flex items-center gap-3">
+                              <XCircle className="h-5 w-5 text-red-500" />
+                              <div>
+                                <p className="text-sm text-red-600 font-medium">
+                                  Token verification failed
+                                </p>
+                                <p className="text-xs text-red-500 mt-1">
+                                  Please check the contract address and try again.
+                                  Make sure it&apos;s a valid ERC-20 token.
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-gray-100">
-                <p className="text-xs text-gray-500">
-                  {useCustomToken ? (
-                    verifiedToken ? (
-                      <>
-                        <span className="font-medium text-gray-700">Note:</span>{" "}
-                        Your client will need to have sufficient balance of the
-                        chosen token to be able to pay your invoice.
+                        )}
                       </>
-                    ) : customTokenAddress ? (
+                    )}
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-gray-100">
+                  <p className="text-xs text-gray-500">
+                    {useCustomToken ? (
+                      verifiedToken ? (
+                        <>
+                          <span className="font-medium text-gray-700">Note:</span>{" "}
+                          Your client will need to have sufficient balance of the
+                          chosen token to be able to pay your invoice.
+                        </>
+                      ) : customTokenAddress ? (
+                        <>
+                          <span className="font-medium text-gray-700">Note:</span>{" "}
+                          Please wait for token verification to complete before
+                          proceeding.
+                        </>
+                      ) : (
+                        <>
+                          <span className="font-medium text-gray-700">Note:</span>{" "}
+                          Enter a valid ERC-20 token contract address above to
+                          proceed.
+                        </>
+                      )
+                    ) : selectedToken ? (
                       <>
                         <span className="font-medium text-gray-700">Note:</span>{" "}
-                        Please wait for token verification to complete before
-                        proceeding.
+                        Your client will need to have sufficient balance of{" "}
+                        <strong>{selectedToken.symbol}</strong> to be able to pay
+                        your invoice.
                       </>
                     ) : (
                       <>
                         <span className="font-medium text-gray-700">Note:</span>{" "}
-                        Enter a valid ERC-20 token contract address above to
-                        proceed.
+                        Please select a payment token to continue with invoice
+                        creation.
                       </>
-                    )
-                  ) : selectedToken ? (
-                    <>
-                      <span className="font-medium text-gray-700">Note:</span>{" "}
-                      Your client will need to have sufficient balance of{" "}
-                      <strong>{selectedToken.symbol}</strong> to be able to pay
-                      your invoice.
-                    </>
-                  ) : (
-                    <>
-                      <span className="font-medium text-gray-700">Note:</span>{" "}
-                      Please select a payment token to continue with invoice
-                      creation.
-                    </>
-                  )}
-                </p>
+                    )}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -1753,7 +1735,7 @@ function CreateInvoice() {
             <Button
               className="bg-green-600 hover:bg-green-700 px-8 py-2 text-white"
               type="submit"
-              disabled={loading || !isConnected}
+              disabled={loading || profileLoading || !isConnected}
             >
               {loading ? (
                 <div className="flex items-center gap-2">

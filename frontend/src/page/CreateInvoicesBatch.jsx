@@ -60,6 +60,10 @@ import {
   getClientAddressError,
   validateBatchInvoiceData,
 } from "@/utils/invoiceValidation";
+import { toInvoiceUserDetails } from "@/utils/userProfile";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
+import SenderSummary from "@/components/SenderSummary";
 
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
 import { useProductCatalog } from "@/hooks/useProductCatalog";
@@ -120,15 +124,13 @@ function CreateInvoicesBatch() {
     },
   ]);
 
-  // User info (shared across all invoices)
-  const [userInfo, setUserInfo] = useState({
-    userFname: "",
-    userLname: "",
-    userEmail: "",
-    userCountry: "",
-    userCity: "",
-    userPostalcode: "",
-  });
+  // Sender details are shared across all invoices and live in Settings now.
+  const {
+    profile,
+    isComplete: hasProfile,
+    loading: profileLoading,
+  } = useUserProfile();
+  const [showProfilePrompt, setShowProfilePrompt] = useState(false);
 
   const { catalogMetadata } = useProductCatalog();
 
@@ -423,17 +425,6 @@ function CreateInvoicesBatch() {
     return "Failed to create invoice batch. Please try again.";
   };
 
-  const handleFieldChange = (name, value) => {
-    setUserInfo((prev) => ({ ...prev, [name]: value }));
-    if (fieldErrors[name]) {
-      setFieldErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
-    }
-  };
-
   const handleInvoiceChange = (rowIndex, field, value) => {
     setInvoiceRows((prev) =>
       prev.map((row, i) => (i === rowIndex ? { ...row, [field]: value } : row))
@@ -455,20 +446,6 @@ function CreateInvoicesBatch() {
           return next;
         });
       }
-    }
-  };
-
-  const handleFieldBlur = (name, value) => {
-    let error = "";
-    if (name === "userFname") {
-      if (!value.trim()) error = "First name is required";
-    } else if (name === "userEmail") {
-      if (!value.trim()) error = "Email is required";
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) error = "Invalid email address";
-    }
-    
-    if (error) {
-      setFieldErrors((prev) => ({ ...prev, [name]: error }));
     }
   };
 
@@ -495,7 +472,7 @@ function CreateInvoicesBatch() {
       rows,
       paymentToken,
       ownerAddress: account.address,
-      userInfo: userInfo,
+      userInfo: profile,
     });
 
     if (!validation.isValid) {
@@ -583,15 +560,7 @@ function CreateInvoicesBatch() {
             symbol: paymentToken.symbol,
             decimals: tokenDecimals,
           },
-          user: {
-            address: account?.address.toString(),
-            fname: userInfo.userFname,
-            lname: userInfo.userLname,
-            email: userInfo.userEmail,
-            country: userInfo.userCountry,
-            city: userInfo.userCity,
-            postalcode: userInfo.userPostalcode,
-          },
+          user: toInvoiceUserDetails(profile, account?.address),
           client: {
             address: row.clientAddress,
             fname: row.clientFname,
@@ -821,6 +790,20 @@ function CreateInvoicesBatch() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Until IndexedDB has been read the profile is still the empty default,
+    // which is indistinguishable from having none — prompting here would ask a
+    // returning user to re-enter details they already saved.
+    if (profileLoading) return;
+
+    // The sender details are required on-chain, so an empty profile has to be
+    // filled in before submitting rather than silently sending blanks.
+    if (!hasProfile) {
+      setShowProfilePrompt(true);
+      toast.error("Add your information before sending invoices");
+      return;
+    }
+
     await createInvoicesRequest();
   };
 
@@ -836,6 +819,14 @@ function CreateInvoicesBatch() {
 
   return (
     <>
+      <OnboardingProfileDialog
+        open={showProfilePrompt}
+        onOpenChange={setShowProfilePrompt}
+        required
+        title="Add your information"
+        description="Every invoice needs your name and email as the sender. Saved on this device and reused for future invoices."
+      />
+
       <div className="flex justify-center px-2 sm:px-4">
         <WalletConnectionAlert
           show={showWalletAlert}
@@ -851,9 +842,10 @@ function CreateInvoicesBatch() {
             Create Multiple Invoices
           </h2>
           <p className="text-sm sm:text-base text-gray-300">
-            Create a batch of invoices in a single transaction to save on gas fees
+            Create a batch of invoices in a single transaction to save on gas
             fees
           </p>
+          <SenderSummary className="mt-1" />
         </div>
 
         {/* Clean Date Selection */}
@@ -962,94 +954,6 @@ function CreateInvoicesBatch() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Clean User Information */}
-          <div className="mb-6 sm:mb-8">
-            <div className="w-full bg-white border border-gray-200 p-4 sm:p-6 rounded-lg shadow-sm overflow-hidden">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">
-                From (Your Information)
-              </h3>
-              <div className="mb-4">
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Your Wallet Address
-                </Label>
-                <Input
-                  value={account?.address || "Not connected"}
-                  className="w-full bg-gray-50 border-gray-300 text-gray-600 font-mono text-sm"
-                  readOnly
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    First Name <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    placeholder="Your First Name"
-                    className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.userFname ? "border-red-500" : ""}`}
-                    value={userInfo.userFname}
-                    onChange={(e) => handleFieldChange("userFname", e.target.value)}
-                    onBlur={(e) => handleFieldBlur("userFname", e.target.value)}
-                  />
-                  {fieldErrors.userFname && (
-                    <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.userFname}</span></div>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Last Name *
-                  </Label>
-                  <Input
-                    placeholder="Your Last Name"
-                    className="w-full mt-1 border-gray-300 text-black"
-                    value={userInfo.userLname}
-                    onChange={(e) =>
-                      setUserInfo((prev) => ({
-                        ...prev,
-                        userLname: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Email <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    type="email"
-                    placeholder="your.email@example.com"
-                    className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.userEmail ? "border-red-500" : ""}`}
-                    value={userInfo.userEmail}
-                    onChange={(e) => handleFieldChange("userEmail", e.target.value)}
-                    onBlur={(e) => handleFieldBlur("userEmail", e.target.value)}
-                  />
-                  {fieldErrors.userEmail && (
-                    <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.userEmail}</span></div>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Country
-                  </Label>
-                  <div className="mt-1">
-                    <CountryPicker
-                      value={userInfo.userCountry}
-                      onChange={(value) =>
-                        setUserInfo((prev) => ({
-                          ...prev,
-                          userCountry: value,
-                        }))
-                      }
-                      placeholder="Select country"
-                      className="w-full border-gray-300 text-black"
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Clean Token Selection */}
           <div className="w-full mb-6 sm:mb-8 bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm overflow-hidden">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
@@ -1680,7 +1584,9 @@ function CreateInvoicesBatch() {
             <Button
               className="bg-green-600 hover:bg-green-700 w-full sm:w-auto px-6 sm:px-8 py-3 text-white text-base sm:text-lg font-semibold"
               type="submit"
-              disabled={loading || !isConnected || validInvoices === 0}
+              disabled={
+                loading || profileLoading || !isConnected || validInvoices === 0
+              }
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">

@@ -1,5 +1,22 @@
-
 import ProductCatalogImport from "../components/ProductCatalogImport";
+import UserProfileSettings from "../components/UserProfileSettings";
+
+const SETTINGS_SECTIONS = [
+  {
+    id: "your-information",
+    title: "Your Information",
+    description:
+      "The sender details applied to every invoice you create. Saved on this device only.",
+    Content: UserProfileSettings,
+  },
+  {
+    id: "product-catalog",
+    title: "Product Catalog",
+    description:
+      "Manage your products for quick access when creating invoices.",
+    Content: ProductCatalogImport,
+  },
+];
 
 function Settings() {
   return (
@@ -14,16 +31,15 @@ function Settings() {
       </div>
 
       <div className="space-y-6 sm:space-y-8">
-        {/* Product Catalog Section */}
-        <section>
-          <div className="mb-4">
-            <h3 className="text-xl font-semibold text-white">Product Catalog</h3>
-            <p className="text-sm text-gray-400">
-              Manage your products for quick access when creating invoices.
-            </p>
-          </div>
-          <ProductCatalogImport />
-        </section>
+        {SETTINGS_SECTIONS.map(({ id, title, description, Content }) => (
+          <section key={id} id={id} className="scroll-mt-24">
+            <div className="mb-4">
+              <h3 className="text-xl font-semibold text-white">{title}</h3>
+              <p className="text-sm text-gray-400">{description}</p>
+            </div>
+            <Content />
+          </section>
+        ))}
       </div>
     </div>
   );
