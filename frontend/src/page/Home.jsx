@@ -62,6 +62,12 @@ const MENU_ITEMS = [
 const RAIL_WIDTH = 248;
 const RAIL_WIDTH_COLLAPSED = 68;
 const RAIL_COLLAPSED_KEY = "chainvoice_dashboard_rail_collapsed";
+const NAV_DRAWER_ID = "dashboard-nav-drawer";
+
+// Tailwind's lg, which the hamburger and the rail are keyed to. MUI's own `lg`
+// is 1200px, so relying on it here would leave the drawer mounted between
+// 1024px and 1199px where the hamburger that closes it is already hidden.
+const LG_QUERY = "(min-width: 1024px)";
 
 /**
  * Reads the rail preference synchronously. localStorage rather than the
@@ -170,6 +176,20 @@ export default function Home() {
     setShowOnboarding(!hasProfile && !onboardingDismissed);
   }, [profileLoading, hasProfile, onboardingDismissed]);
 
+  // Widening past lg hides the drawer and its hamburger by CSS, but the modal
+  // would stay open and keep the body scroll locked with nothing left to close
+  // it. Closing on the breakpoint keeps state and layout in step.
+  useEffect(() => {
+    const mq = window.matchMedia(LG_QUERY);
+    const handleChange = (e) => {
+      if (e.matches) setNavOpen(false);
+    };
+
+    handleChange(mq);
+    mq.addEventListener("change", handleChange);
+    return () => mq.removeEventListener("change", handleChange);
+  }, []);
+
   const activeRoute =
     MENU_ITEMS.find((item) => location.pathname.includes(item.route))?.route ??
     "create";
@@ -187,17 +207,17 @@ export default function Home() {
     [navigate]
   );
 
+  // The write stays outside the updater: React may call an updater more than
+  // once per dispatch, and updaters are expected to be pure.
   const toggleRail = useCallback(() => {
-    setRailCollapsed((prev) => {
-      const next = !prev;
-      try {
-        window.localStorage.setItem(RAIL_COLLAPSED_KEY, String(next));
-      } catch {
-        // A lost preference is not worth failing the interaction over.
-      }
-      return next;
-    });
-  }, []);
+    const next = !railCollapsed;
+    try {
+      window.localStorage.setItem(RAIL_COLLAPSED_KEY, String(next));
+    } catch {
+      // A lost preference is not worth failing the interaction over.
+    }
+    setRailCollapsed(next);
+  }, [railCollapsed]);
 
   const railWidth = railCollapsed ? RAIL_WIDTH_COLLAPSED : RAIL_WIDTH;
 
@@ -209,7 +229,7 @@ export default function Home() {
         onSkip={dismissOnboarding}
       />
 
-      {/* Same cap as the navbar, so the rail and content share its edges. */}
+      {/* Same gutter as the navbar, so the rail and content share its edges. */}
       <div className={SHELL}>
         {/* Mobile / tablet: the hamburger doubles as the current-section label */}
         <div className="flex items-center gap-2 py-2 lg:hidden">
@@ -218,6 +238,7 @@ export default function Home() {
             onClick={() => setNavOpen(true)}
             aria-label="Open dashboard menu"
             aria-expanded={navOpen}
+            aria-controls={NAV_DRAWER_ID}
             className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white transition-colors hover:bg-white/10"
           >
             <Menu className="h-5 w-5" />
@@ -226,11 +247,13 @@ export default function Home() {
         </div>
 
         <Drawer
+          id={NAV_DRAWER_ID}
           open={navOpen}
           onClose={() => setNavOpen(false)}
           ModalProps={{ keepMounted: true }}
           sx={{
-            display: { xs: "block", lg: "none" },
+            display: "block",
+            [`@media ${LG_QUERY}`]: { display: "none" },
             "& .MuiDrawer-paper": {
               width: RAIL_WIDTH,
               backgroundColor: "#161920",

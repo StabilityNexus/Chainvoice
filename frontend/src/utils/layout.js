@@ -1,7 +1,7 @@
 /**
  * Shared spacing for the app shell.
  *
- * One width cap for the navbar and every page, so the logo, the nav links and
+ * One gutter for the navbar and every page, so the logo, the nav links and
  * the page content all line up on the same left and right edges. Pages add no
  * max-width of their own — an inner `max-w-*` on top of the dashboard sidebar
  * left a large dead gutter on one side only.
@@ -15,7 +15,7 @@
  * sharing a right edge, not the page being wide — so the blocks align instead
  * and the shell simply uses the screen.
  */
-export const SHELL = "mx-auto w-full px-3 sm:px-4 lg:px-6";
+export const SHELL = "w-full px-3 sm:px-4 lg:px-6";
 
 /** Outer wrapper for a page rendered inside the dashboard outlet. */
 export const PAGE_CONTAINER = "w-full px-0 sm:px-1";

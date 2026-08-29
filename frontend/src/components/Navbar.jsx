@@ -140,8 +140,8 @@ function Navbar() {
         : "bg-[#161920]"
         }`}
     >
-      {/* Shares the page shell's cap so the logo and wallet button line up with
-          the content edges instead of hugging the screen on a wide display. */}
+      {/* Shares the page shell's gutter so the logo and wallet button line up
+          with the content edges. */}
       <div className={cn(SHELL, "z-10")}>
         <div className="flex justify-between items-center h-24">
           <motion.div
