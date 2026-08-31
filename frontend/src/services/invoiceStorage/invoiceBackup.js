@@ -19,18 +19,18 @@ function isObject(value) {
 
 function isSerializedInteger(value) {
   if (typeof value === "number") {
-    return Number.isInteger(value) && value >= 0;
+    return Number.isSafeInteger(value) && value >= 0;
   }
 
   if (typeof value === "string") {
-    return /^\d+$/.test(value);
+    return /^(0|[1-9]\d*)$/.test(value);
   }
 
   return (
     isObject(value) &&
     value.__type === "bigint" &&
     typeof value.value === "string" &&
-    /^\d+$/.test(value.value)
+    /^(0|[1-9]\d*)$/.test(value.value)
   );
 }
 
@@ -64,10 +64,51 @@ function validateInvoiceRecord(record, index) {
   }
 
   if (!isObject(record.data)) {
-    throw new Error(
-      `Invoice record ${index + 1} is missing its invoice payload.`
-    );
-  }
+  throw new Error(
+    `Invoice record ${index + 1} is missing its invoice payload.`
+  );
+}
+
+const payload = record.data;
+
+if (
+  typeof payload.amountDue !== "string" ||
+  payload.amountDue.trim() === ""
+) {
+  throw new Error(
+    `Invoice record ${index + 1} has an invalid invoice payload amount.`
+  );
+}
+
+if (
+  !isObject(payload.paymentToken) ||
+  typeof payload.paymentToken.address !== "string"
+) {
+  throw new Error(
+    `Invoice record ${index + 1} has an invalid payment token.`
+  );
+}
+
+if (!isObject(payload.user) || typeof payload.user.address !== "string") {
+  throw new Error(
+    `Invoice record ${index + 1} has an invalid sender information.`
+  );
+}
+
+if (
+  !isObject(payload.client) ||
+  typeof payload.client.address !== "string"
+) {
+  throw new Error(
+    `Invoice record ${index + 1} has an invalid client information.`
+  );
+}
+
+if (!Array.isArray(payload.items)) {
+  throw new Error(
+    `Invoice record ${index + 1} has an invalid invoice items list.`
+  );
+}
 
   if (
     record.compositeKey !== undefined &&
