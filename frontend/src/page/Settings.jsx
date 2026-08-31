@@ -1,3 +1,4 @@
+import InvoiceBackupSettings from "../components/InvoiceBackupSettings";
 import ProductCatalogImport from "../components/ProductCatalogImport";
 import UserProfileSettings from "../components/UserProfileSettings";
 
@@ -15,6 +16,13 @@ const SETTINGS_SECTIONS = [
     description:
       "Manage your products for quick access when creating invoices.",
     Content: ProductCatalogImport,
+  },
+  {
+    id: "invoice-backup",
+    title: "Invoice Backup",
+    description:
+      "Export your locally stored invoices or restore them from a backup file.",
+    Content: InvoiceBackupSettings,
   },
 ];
 
