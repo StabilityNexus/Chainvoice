@@ -18,6 +18,7 @@ import { useInvoiceExport } from "@/hooks/useInvoiceExport";
 import { getSentInvoices as getLocalSentInvoices, getInvoiceById, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
 import { verifyInvoiceHash } from "@/services/relay/invoiceHashUtils.js";
 import { sendEncryptedInvoice } from "@/services/relay/relayInvoiceMessaging.js";
+import ShareInvoiceDialog from "@/components/ShareInvoiceDialog";
 import { fetchPublicKeyFromChain } from "@/services/relay/relayKeyManager.js";
 
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
@@ -48,6 +49,7 @@ import UnpaidIcon from "@mui/icons-material/Pending";
 import DownloadIcon from "@mui/icons-material/Download";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import DataObjectIcon from "@mui/icons-material/DataObject";
+import ShareIcon from "@mui/icons-material/Share";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import CancelIcon from "@mui/icons-material/Cancel";
 import SendIcon from "@mui/icons-material/Send";
@@ -508,6 +510,12 @@ function SentInvoice() {
     open: false,
     selectedInvoice: null,
   });
+
+  // Invoice currently open in the share dialog, by id. Held as an id rather
+  // than the invoice object because the dialog reads the payload it shares
+  // from IndexedDB — the object rendered here has been enriched with token
+  // logos and status, which would change its hash.
+  const [shareInvoiceId, setShareInvoiceId] = useState(null);
 
   const toggleDrawer = (invoice) => (event) => {
     if (
@@ -1292,6 +1300,19 @@ function SentInvoice() {
                       </ListItemIcon>
                       <ListItemText>Export as JSON</ListItemText>
                     </MenuItem>
+                    <MenuItem
+                      onClick={() => {
+                        setShareInvoiceId(
+                          drawerState.selectedInvoice?.id?.toString() ?? null
+                        );
+                        handleExportClose();
+                      }}
+                    >
+                      <ListItemIcon>
+                        <ShareIcon fontSize="small" sx={{ color: "#22c55e" }} />
+                      </ListItemIcon>
+                      <ListItemText>Share link or QR</ListItemText>
+                    </MenuItem>
                   </Menu>
                 </div>
               </div>
@@ -1347,6 +1368,13 @@ function SentInvoice() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <ShareInvoiceDialog
+          open={shareInvoiceId !== null}
+          onClose={() => setShareInvoiceId(null)}
+          invoiceId={shareInvoiceId}
+          chainId={chainId}
+        />
       </div>
     </>
   );
