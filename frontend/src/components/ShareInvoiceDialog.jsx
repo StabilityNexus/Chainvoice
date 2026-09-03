@@ -10,14 +10,12 @@ import {
   Loader2,
   QrCode,
   Share2,
+  X,
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import Dialog from "@mui/material/Dialog";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import IconButton from "@mui/material/IconButton";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { getInvoiceById } from "@/services/invoiceStorage/invoiceDB.js";
@@ -37,6 +35,12 @@ import {
  * messaging key on-chain. Until they do, the invoice is on-chain but its
  * details have nowhere to go. A share link carries the details itself, so it
  * works with no key registered and with the relay down.
+ *
+ * Built on MUI's Dialog rather than the shadcn one because it opens over the
+ * MUI SwipeableDrawer on the invoice pages. Those are separate portal stacks:
+ * the drawer sits at z-index 1200 and the shadcn dialog at 50, so the drawer
+ * painted over it and the right-hand buttons could not be reached. MUI's modal
+ * manager stacks the two for us.
  *
  * The payload is read from IndexedDB rather than taken from the invoice
  * object the caller is displaying. Those are not the same thing: the list
@@ -210,18 +214,31 @@ const ShareInvoiceDialog = ({ open, onClose, invoiceId, chainId }) => {
     typeof navigator !== "undefined" && typeof navigator.share === "function";
 
   return (
-    <Dialog open={open} onOpenChange={(next) => !next && onClose?.()}>
-      <DialogContent className="max-w-lg bg-white text-gray-900">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-gray-900">
-            <Share2 className="h-5 w-5 text-green-600" />
-            Share invoice #{id}
-          </DialogTitle>
-          <DialogDescription>
-            Send the invoice details directly, without waiting for your client
-            to register an encryption key.
-          </DialogDescription>
-        </DialogHeader>
+    <Dialog
+      open={open}
+      onClose={() => onClose?.()}
+      maxWidth="sm"
+      fullWidth
+      PaperProps={{ sx: { borderRadius: 2 } }}
+    >
+      <DialogTitle sx={{ pb: 1 }}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-2 text-base font-semibold text-gray-900">
+              <Share2 className="h-5 w-5 text-green-600" />
+              Share invoice #{id}
+            </p>
+            <p className="mt-1 text-sm font-normal text-gray-500">
+              Send the invoice details directly, without waiting for your
+              client to register an encryption key.
+            </p>
+          </div>
+          <IconButton size="small" onClick={() => onClose?.()} aria-label="Close">
+            <X className="h-4 w-4 text-gray-500" />
+          </IconButton>
+        </div>
+      </DialogTitle>
+      <DialogContent dividers>
 
         {loadState === "loading" && (
           <div className="flex items-center gap-2 py-8 text-sm text-gray-600">

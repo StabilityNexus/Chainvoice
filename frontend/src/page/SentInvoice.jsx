@@ -897,6 +897,25 @@ function SentInvoice() {
                                       </span>
                                     </Tooltip>
                                   )}
+                                {!invoice._onChainOnly && (
+                                  <Tooltip title="Share as link or QR code">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() =>
+                                        setShareInvoiceId(invoice.id.toString())
+                                      }
+                                      sx={{
+                                        backgroundColor: "#dcfce7",
+                                        "&:hover": { backgroundColor: "#bbf7d0" },
+                                      }}
+                                    >
+                                      <ShareIcon
+                                        fontSize="small"
+                                        sx={{ color: "#16a34a" }}
+                                      />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
                                 <Tooltip title="View Details">
                                   <IconButton
                                     size="small"
@@ -1255,65 +1274,68 @@ function SentInvoice() {
                 >
                   Close
                 </button>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={handleExportClick}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
-                    aria-haspopup="true"
-                    aria-expanded={openExportMenu}
-                  >
-                    <DownloadIcon className="mr-2" fontSize="small" />
-                    Export Invoice
-                  </button>
-                  <Menu
-                    anchorEl={anchorEl}
-                    open={openExportMenu}
-                    onClose={handleExportClose}
-                    anchorOrigin={{
-                      vertical: "top",
-                      horizontal: "right",
-                    }}
-                    transformOrigin={{
-                      vertical: "bottom",
-                      horizontal: "right",
-                    }}
-                    PaperProps={{
-                      sx: { mb: 1, width: 200 }
-                    }}
-                  >
-                    <MenuItem onClick={() => { handlePrint(); handleExportClose(); }}>
-                      <ListItemIcon>
-                        <PictureAsPdfIcon fontSize="small" sx={{ color: "#ef4444" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as PDF</ListItemText>
-                    </MenuItem>
-                    <MenuItem onClick={handleExportCSV}>
-                      <ListItemIcon>
-                        <TableChartIcon fontSize="small" sx={{ color: "#16a34a" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as CSV</ListItemText>
-                    </MenuItem>
-                    <MenuItem onClick={handleExportJSON}>
-                      <ListItemIcon>
-                        <DataObjectIcon fontSize="small" sx={{ color: "#3b82f6" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as JSON</ListItemText>
-                    </MenuItem>
-                    <MenuItem
-                      onClick={() => {
+                <div className="flex items-center gap-2">
+                  {!drawerState.selectedInvoice._onChainOnly && (
+                    <button
+                      type="button"
+                      onClick={() =>
                         setShareInvoiceId(
                           drawerState.selectedInvoice?.id?.toString() ?? null
-                        );
-                        handleExportClose();
+                        )
+                      }
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium flex items-center"
+                    >
+                      <ShareIcon className="mr-2" fontSize="small" />
+                      Share
+                    </button>
+                  )}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={handleExportClick}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
+                      aria-haspopup="true"
+                      aria-expanded={openExportMenu}
+                    >
+                      <DownloadIcon className="mr-2" fontSize="small" />
+                      Export Invoice
+                    </button>
+                    <Menu
+                      anchorEl={anchorEl}
+                      open={openExportMenu}
+                      onClose={handleExportClose}
+                      anchorOrigin={{
+                        vertical: "top",
+                        horizontal: "right",
+                      }}
+                      transformOrigin={{
+                        vertical: "bottom",
+                        horizontal: "right",
+                      }}
+                      PaperProps={{
+                        sx: { mb: 1, width: 200 }
                       }}
                     >
-                      <ListItemIcon>
-                        <ShareIcon fontSize="small" sx={{ color: "#22c55e" }} />
-                      </ListItemIcon>
-                      <ListItemText>Share link or QR</ListItemText>
-                    </MenuItem>
-                  </Menu>
+                      <MenuItem onClick={() => { handlePrint(); handleExportClose(); }}>
+                        <ListItemIcon>
+                          <PictureAsPdfIcon fontSize="small" sx={{ color: "#ef4444" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as PDF</ListItemText>
+                      </MenuItem>
+                      <MenuItem onClick={handleExportCSV}>
+                        <ListItemIcon>
+                          <TableChartIcon fontSize="small" sx={{ color: "#16a34a" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as CSV</ListItemText>
+                      </MenuItem>
+                      <MenuItem onClick={handleExportJSON}>
+                        <ListItemIcon>
+                          <DataObjectIcon fontSize="small" sx={{ color: "#3b82f6" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as JSON</ListItemText>
+                      </MenuItem>
+                    </Menu>
+                  </div>
                 </div>
               </div>
             </div>
