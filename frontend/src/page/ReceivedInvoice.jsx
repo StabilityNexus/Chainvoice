@@ -1,4 +1,8 @@
 import Paper from "@mui/material/Paper";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -65,6 +69,7 @@ import WalletConnectionAlert from "@/components/WalletConnectionAlert";
 
 const columns = [
   { id: "select", label: "", minWidth: 50 },
+  { id: "exportSelect", label: "", minWidth: 50 },
   { id: "fname", label: "Client", minWidth: 120 },
   { id: "to", label: "Sender", minWidth: 150 },
   { id: "amountDue", label: "Amount", minWidth: 100, align: "right" },
@@ -112,6 +117,12 @@ function ReceivedInvoice() {
   const [selectedInvoices, setSelectedInvoices] = useState(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchSuggestions, setBatchSuggestions] = useState([]);
+
+  // Bulk export states (kept separate from batch-payment selection)
+  const [selectedExportInvoices, setSelectedExportInvoices] = useState(new Set());
+  const [bulkExportOpen, setBulkExportOpen] = useState(false);
+  const [bulkExportFormat, setBulkExportFormat] = useState("csv");
+  const [bulkExportMode, setBulkExportMode] = useState("single");
 
   // Drawer state
   const [drawerState, setDrawerState] = useState({
@@ -356,6 +367,50 @@ function ReceivedInvoice() {
 
   const handleClearAll = () => {
     setSelectedInvoices(new Set());
+  };
+
+  // Bulk export selection is intentionally separate from payment selection.
+  const handleExportSelect = (invoiceId) => {
+    const id = String(invoiceId);
+    setSelectedExportInvoices((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllForExport = () => {
+    if (selectedExportInvoices.size === receivedInvoices.length) {
+      setSelectedExportInvoices(new Set());
+    } else {
+      setSelectedExportInvoices(
+        new Set(receivedInvoices.map((invoice) => String(invoice.id)))
+      );
+    }
+  };
+
+  const selectedExportInvoiceList = receivedInvoices.filter((invoice) =>
+    selectedExportInvoices.has(String(invoice.id))
+  );
+
+  const handleBulkExportSubmit = async () => {
+    if (!selectedExportInvoiceList.length) {
+      toast.error("Select at least one invoice");
+      return;
+    }
+
+    await handleBulkExport(
+      selectedExportInvoiceList,
+      bulkExportFormat,
+      bulkExportMode
+    );
+
+    setBulkExportOpen(false);
+    setSelectedExportInvoices(new Set());
   };
 
   const selectBatchSuggestion = (suggestion) => {
@@ -831,7 +886,7 @@ function ReceivedInvoice() {
     };
 
     fetchReceivedInvoices();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletClient, address, tokens, chainId, refreshTrigger]);
 
   // Relay ingestion runs independently of the display fetch above. Keeping it
@@ -863,8 +918,8 @@ function ReceivedInvoice() {
      * only unseen invoices should wake the UI.
      *
      * The envelope is checked against the on-chain commitment before it is
-     * stored. Anyone can encrypt to this recipient — the public key is in the
-     * registry — so without that check a stranger could post an envelope
+     * stored. Anyone can encrypt to this recipient â€” the public key is in the
+     * registry â€” so without that check a stranger could post an envelope
      * claiming any invoice id, have it stored first, and permanently shadow
      * the real payload: the record would exist, so the genuine delivery would
      * be skipped as a duplicate and the invoice would sit unverifiable for good.
@@ -1015,7 +1070,11 @@ function ReceivedInvoice() {
     }
   };
 
-  const { handleExportCSV, handleExportJSON } = useInvoiceExport(
+  const {
+    handleExportCSV,
+    handleExportJSON,
+    handleBulkExport,
+  } = useInvoiceExport(
     drawerState.selectedInvoice,
     fee,
     handleExportClose
@@ -1056,6 +1115,15 @@ function ReceivedInvoice() {
                 Manage and pay your incoming invoices
               </p>
             </div>
+            <Button
+              startIcon={<DownloadIcon />}
+              onClick={() => setBulkExportOpen(true)}
+              variant="contained"
+              disabled={selectedExportInvoices.size === 0}
+              sx={{ whiteSpace: "nowrap" }}
+            >
+              Export Selected ({selectedExportInvoices.size})
+            </Button>
           </div>
 
           {/* Without a registered public key, senders have nothing to encrypt
@@ -1088,7 +1156,7 @@ function ReceivedInvoice() {
             </Alert>
           )}
 
-          {/* Registered on-chain, but this tab holds no private key — the key
+          {/* Registered on-chain, but this tab holds no private key â€” the key
               is derived from a signature and never stored beyond the session,
               so nothing can be decrypted until the user re-derives it. */}
           {isConnected && !isUnsupportedNetwork && isRegistered && !keys && (
@@ -1115,7 +1183,7 @@ function ReceivedInvoice() {
               }
             >
               Sign to unlock your inbox. Incoming invoice details stay encrypted
-              until you do — this signature is free and costs no gas.
+              until you do â€” this signature is free and costs no gas.
             </Alert>
           )}
 
@@ -1183,7 +1251,7 @@ function ReceivedInvoice() {
                 }}
               >
                 <LightbulbIcon sx={{ mr: 1, color: "#ff9800" }} />
-                💡 Smart Batch Suggestions
+                ðŸ’¡ Smart Batch Suggestions
               </Typography>
               {batchSuggestions.map((suggestion) => (
                 <Box
@@ -1516,6 +1584,20 @@ function ReceivedInvoice() {
                                 }
                                 label=""
                               />
+                            ) : column.id === "exportSelect" ? (
+                              <Checkbox
+                                indeterminate={
+                                  selectedExportInvoices.size > 0 &&
+                                  selectedExportInvoices.size < receivedInvoices.length
+                                }
+                                checked={
+                                  selectedExportInvoices.size === receivedInvoices.length &&
+                                  receivedInvoices.length > 0
+                                }
+                                onChange={handleSelectAllForExport}
+                                color="primary"
+                                inputProps={{ "aria-label": "Select invoices for export" }}
+                              />
                             ) : (
                               column.label
                             )}
@@ -1547,6 +1629,17 @@ function ReceivedInvoice() {
                                 onChange={() => handleSelectInvoice(invoice.id)}
                                 disabled={invoice.isPaid || invoice.isCancelled}
                                 color="success"
+                              />
+                            </TableCell>
+
+                            <TableCell>
+                              <Checkbox
+                                checked={selectedExportInvoices.has(String(invoice.id))}
+                                onChange={() => handleExportSelect(invoice.id)}
+                                color="primary"
+                                inputProps={{
+                                  "aria-label": `Select invoice ${invoice.id} for export`,
+                                }}
                               />
                             </TableCell>
 
@@ -1819,6 +1912,71 @@ function ReceivedInvoice() {
             )}
           </Paper>
         </div>
+
+        {/* Bulk Invoice Export Dialog */}
+        <Dialog
+          open={bulkExportOpen}
+          onClose={() => setBulkExportOpen(false)}
+          fullWidth
+          maxWidth="sm"
+        >
+          <DialogTitle>Export Selected Invoices</DialogTitle>
+          <DialogContent dividers>
+            <Typography sx={{ mb: 2 }}>
+              {selectedExportInvoices.size} invoice
+              {selectedExportInvoices.size !== 1 ? "s" : ""} selected.
+            </Typography>
+
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Export format
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+              {[
+                ["csv", "CSV", <TableChartIcon key="csv-icon" />],
+                ["json", "JSON", <DataObjectIcon key="json-icon" />],
+                ["pdf", "PDF", <PictureAsPdfIcon key="pdf-icon" />],
+              ].map(([value, label, icon]) => (
+                <Button
+                  key={value}
+                  variant={bulkExportFormat === value ? "contained" : "outlined"}
+                  startIcon={icon}
+                  onClick={() => setBulkExportFormat(value)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </Box>
+
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Export mode
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              <Button
+                variant={bulkExportMode === "single" ? "contained" : "outlined"}
+                onClick={() => setBulkExportMode("single")}
+              >
+                Single File
+              </Button>
+              <Button
+                variant={bulkExportMode === "separate" ? "contained" : "outlined"}
+                onClick={() => setBulkExportMode("separate")}
+              >
+                Separate Files (ZIP)
+              </Button>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setBulkExportOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleBulkExportSubmit}
+              variant="contained"
+              startIcon={<DownloadIcon />}
+              disabled={selectedExportInvoices.size === 0}
+            >
+              Export
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Invoice Detail Drawer */}
         <SwipeableDrawer
