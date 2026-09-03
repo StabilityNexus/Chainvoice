@@ -14,6 +14,7 @@ import DraftsIcon from "@mui/icons-material/Drafts";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import LinkIcon from "@mui/icons-material/Link";
 import SettingsIcon from "@mui/icons-material/Settings";
+import DownloadForOfflineIcon from "@mui/icons-material/DownloadForOffline";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { FileStackIcon, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
@@ -50,6 +51,12 @@ const MENU_ITEMS = [
     icon: <DraftsIcon />,
     route: "pending",
     color: "#60a5fa",
+  },
+  {
+    text: "Import Invoice",
+    icon: <DownloadForOfflineIcon />,
+    route: "import",
+    color: "#38bdf8",
   },
   {
     text: "Settings",
