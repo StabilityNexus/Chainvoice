@@ -178,13 +178,13 @@ jobs:
           # blank, which is worth an error rather than a puzzled contributor.
           # Stripped of anything but path characters before being echoed, since
           # the file came from the build.
-          built_base="$(tr -dc 'A-Za-z0-9/._-' < preview/.preview-base 2>/dev/null || true)"
+          built_base="$(tr -dc 'A-Za-z0-9/._-' < preview/preview-base 2>/dev/null || true)"
           if [ "$built_base" != "$EXPECTED_BASE" ]; then
             echo "::error::this build is for '${built_base:-<unset>}' but the site serves '${EXPECTED_BASE}'."
             echo "::error::set PREVIEW_PUBLIC_BASE=${{ needs.resolve.outputs.base_path }} in frontend/.env.preview"
             exit 1
           fi
-          rm -f preview/.preview-base
+          rm -f preview/preview-base
 
       - name: Publish to gh-pages
         env:
