@@ -1,5 +1,11 @@
-# Workflow for deploying static content to GitHub Pages via gh-pages branch.
-# Preserves any PR preview directories that already exist on gh-pages.
+# Production deploy: builds the frontend and publishes it to the gh-pages
+# branch, leaving the pr-preview/ tree that PR Preview owns in place.
+#
+# Publishing to a branch rather than through actions/deploy-pages is what makes
+# PR previews possible at all: the Pages artifact is a single tarball that
+# replaces the whole site, so there is nowhere for a per-PR subdirectory to
+# live. The trade-off is that the Pages source has to be the branch — see
+# Deployments.md for the one-time switch and the order it has to happen in.
 name: Deploy static content to Pages
 
 on:
@@ -7,31 +13,41 @@ on:
     branches: ['main']
     paths:
       - 'frontend/**'
+      - '.github/workflows/deploy.yml'
+      - '.github/scripts/**'
   workflow_dispatch:
 
-permissions:
-  # Required by peaceiris/actions-gh-pages to push built site to the gh-pages branch
-  contents: write
+permissions: {}
 
 concurrency:
-  group: 'gh-pages-deploy'
+  group: 'gh-pages-production'
   cancel-in-progress: false
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # pushes the built site to gh-pages
+      pages: read # reads the site's own URL and custom domain
     steps:
-      # Checkout repo
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      # Setup Node
+      # Where the site is served from decides what --base the bundle needs. It
+      # is / here because of the custom domain, but /<repo>/ on a fork, and a
+      # bundle built for the wrong one 404s on every asset.
+      - name: Resolve Pages location
+        id: pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAGES_SITE_URL: ${{ vars.PAGES_SITE_URL }}
+        run: bash .github/scripts/pages-config.sh
+
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
 
-      # Install dependencies with proper command detection
       - name: Install dependencies
         run: |
           if [ -f "./frontend/package-lock.json" ]; then
@@ -41,11 +57,11 @@ jobs:
           fi
         working-directory: ./frontend
 
-      # Build project
       - name: Build
-        run: npm run build
+        run: npm run build -- --base "$BASE_PATH"
         working-directory: ./frontend
         env:
+          BASE_PATH: ${{ steps.pages.outputs.base_path }}
           VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
           VITE_CONTRACT_ADDRESS_11155111: ${{ secrets.VITE_CONTRACT_ADDRESS_11155111 }}
           # Ethereum Classic and Polygon are deliberately not injected. Both
@@ -68,35 +84,19 @@ jobs:
           VITE_RELAY_API_KEY: ${{ vars.VITE_RELAY_API_KEY }}
           VITE_RELAY_TIMEOUT_MS: ${{ vars.VITE_RELAY_TIMEOUT_MS }}
 
-      # Restore PR preview directories from gh-pages branch (if present)
-      # so that a production redeploy does not wipe them out.
-      - name: Restore PR preview directories from gh-pages
-        run: |
-          git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1 || {
-            echo "gh-pages branch does not exist yet — skipping restore."
-            exit 0
-          }
+      # Pages keeps the custom domain only while a CNAME file sits at the root
+      # of what it serves, and it is this deploy that owns the root. Written
+      # from the domain Pages already has rather than a literal, so a fork —
+      # which has no custom domain, and could not claim this one — publishes
+      # without it.
+      - name: Write CNAME
+        if: steps.pages.outputs.cname != ''
+        env:
+          CNAME: ${{ steps.pages.outputs.cname }}
+        run: printf '%s\n' "$CNAME" > ./frontend/dist/CNAME
 
-          git fetch origin gh-pages --depth=1
-
-          # Copy the pr-preview tree into the freshly built dist so the
-          # subsequent deploy action includes it in the push.
-          git checkout origin/gh-pages -- pr-preview/ 2>/dev/null && {
-            cp -r pr-preview ./frontend/dist/pr-preview
-            rm -rf pr-preview
-          } || {
-            echo "No pr-preview directory on gh-pages yet — skipping restore."
-          }
-
-      # Add .nojekyll to prevent Jekyll processing
-      - name: Add .nojekyll
-        run: touch ./frontend/dist/.nojekyll
-
-      # Deploy to gh-pages branch
-      - name: Deploy to gh-pages branch
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./frontend/dist
-          cname: chainvoice.stability.nexus
-          commit_message: "deploy: production site from ${{ github.sha }}"
+      - name: Publish to gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT_MESSAGE: 'deploy: production site from ${{ github.sha }}'
+        run: bash .github/scripts/gh-pages-publish.sh publish ./frontend/dist .

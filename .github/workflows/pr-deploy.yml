@@ -1,271 +1,308 @@
-# Workflow 2 of 2 for PR previews (fork-safe).
-# Triggered by workflow_run after pr-build.yml completes.
-# Runs in the BASE REPOSITORY context — has write permissions and secrets,
-# so it can build with VITE_ env vars, push to gh-pages, and comment on PRs.
+# Workflow 2 of 2 for PR previews.
 #
-# SECURITY NOTES:
-# - This workflow ALWAYS runs the code from the default branch (main),
-#   so fork PRs cannot modify the deploy/cleanup logic.
-# - PR source code is checked out with persist-credentials: false,
-#   so build scripts cannot access GITHUB_TOKEN via git.
-# - GITHUB_TOKEN is only passed to the peaceiris deploy action, never to build steps.
+# Runs in the base repository's context, so it has the secrets the build needs
+# and a token that can push to gh-pages and comment on the pull request. Two
+# rules follow from that, and the job split below is what enforces them:
 #
-# PREREQUISITE (org admin action required):
-#   Go to github.com/StabilityNexus/Chainvoice/settings/actions
-#   → Workflow permissions → select "Read and write permissions"
+#   1. The job that runs the pull request's code holds no write token. A build
+#      executes whatever the fork put in its dependency tree and its vite
+#      config; were that the same job that pushes, it could reach the token
+#      through $GITHUB_PATH or $GITHUB_ENV and write to the repository.
+#   2. The job that holds the write token never checks out the pull request's
+#      code. It only unpacks the artifact the build produced.
 #
-# PRODUCTION IMPACT: None.
-#   - PR previews deploy to pr-preview/pr-N/ subdirectory only.
-#   - Production deploy.yml restores pr-preview/ dirs before deploying.
-#   - Different concurrency groups prevent conflicts.
+# Which pull request this is comes from the event payload, never from anything
+# the triggering run produced — see the resolve job.
 
-name: "PR Preview: Deploy"
+name: 'PR Preview: Deploy'
 
 on:
   workflow_run:
-    workflows: ["PR Preview: Build"]
+    workflows: ['PR Preview: Build']
     types: [completed]
 
-permissions:
-  contents: write
-  pull-requests: write
+permissions: {}
+
+# One preview in flight per head branch. Two pushes in quick succession would
+# otherwise race to publish, and the newer commit is always the one worth
+# showing.
+concurrency:
+  group: pr-preview-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: true
 
 jobs:
-  deploy-preview:
+  resolve:
+    name: Resolve target
+    if: github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
-    if: github.event.workflow_run.conclusion == 'success'
-    concurrency:
-      group: pr-preview-deploy
-      cancel-in-progress: false
+    permissions:
+      contents: read
+      pull-requests: read
+      pages: read
+    outputs:
+      mode: ${{ steps.pr.outputs.mode }}
+      number: ${{ steps.pr.outputs.number }}
+      sha: ${{ steps.pr.outputs.sha }}
+      base_path: ${{ steps.pages.outputs.base_path }}
+      site_url: ${{ steps.pages.outputs.site_url }}
     steps:
-      # ─── Download the metadata artifact to determine action ──────────────
-      - name: Download PR metadata
-        uses: actions/github-script@v7
-        id: metadata
+      # The base repository, for the scripts. Never the pull request's code.
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # This repository's own default branch, spelled out. Nothing in
+          # these three jobs may come from the pull request, and which
+          # commit checkout would pick by itself on a `workflow_run` is not
+          # worth relying on when that is what it decides.
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Resolve Pages location
+        id: pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAGES_SITE_URL: ${{ vars.PAGES_SITE_URL }}
+        run: bash .github/scripts/pages-config.sh
+
+      - name: Resolve pull request
+        id: pr
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
-            // List artifacts from the triggering workflow run
-            const artifacts = await github.rest.actions.listWorkflowRunArtifacts({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              run_id: context.payload.workflow_run.id,
-            });
+            const { owner, repo } = context.repo;
+            const run = context.payload.workflow_run;
 
-            // Find the metadata artifact
-            const metadataArtifact = artifacts.data.artifacts.find(
-              a => a.name.startsWith('pr-metadata-')
-            );
-            if (!metadataArtifact) {
-              core.setFailed('No PR metadata artifact found');
+            // Worked out from the event payload alone. A `pull_request` run
+            // executes the fork's own copy of pr-build.yml, so anything that
+            // run uploaded is attacker-controlled: a pull request that got to
+            // name a number could overwrite another one's preview, delete it,
+            // or post a bot comment on any issue in this repository.
+            const findPullRequest = async () => {
+              // Populated only when head and base are the same repository.
+              if (run.pull_requests?.length) {
+                const { data } = await github.rest.pulls.get({
+                  owner,
+                  repo,
+                  pull_number: run.pull_requests[0].number,
+                });
+                return data;
+              }
+              const prs = await github.paginate(github.rest.pulls.list, {
+                owner,
+                repo,
+                state: 'all',
+                head: `${run.head_repository.owner.login}:${run.head_branch}`,
+                per_page: 100,
+              });
+              // Prefer the pull request this exact commit belongs to. A newer
+              // push leaves this run's sha behind, and then the open pull
+              // request on the branch is the one meant; failing that, a branch
+              // reused across several closed pull requests resolves to
+              // whichever was touched most recently.
+              return (
+                prs.find((pr) => pr.head.sha === run.head_sha) ??
+                prs.find((pr) => pr.state === 'open') ??
+                prs.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))[0]
+              );
+            };
+
+            const pr = await findPullRequest();
+            if (!pr) {
+              core.info(
+                `No pull request for ${run.head_repository.full_name}:${run.head_branch}; nothing to do.`,
+              );
+              core.setOutput('mode', 'none');
               return;
             }
 
-            // Download and extract metadata
-            const download = await github.rest.actions.downloadArtifact({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              artifact_id: metadataArtifact.id,
-              archive_format: 'zip',
-            });
+            // A closed pull request loses its preview, merged or not. A deploy
+            // is for one that is still open, and always at the head it has
+            // now: this workflow can be reached by a run whose commit has
+            // since been superseded, and taking the sha from the pull request
+            // is also what guarantees the commit belongs to it.
+            core.setOutput('mode', pr.state === 'closed' ? 'cleanup' : 'deploy');
+            core.setOutput('number', String(pr.number));
+            core.setOutput('sha', pr.head.sha);
+            core.info(`PR #${pr.number} is ${pr.state}; head ${pr.head.sha.slice(0, 7)}.`);
 
-            const fs = require('fs');
-            fs.mkdirSync('./pr-metadata', { recursive: true });
-            fs.writeFileSync('./pr-metadata.zip', Buffer.from(download.data));
-
-      - name: Extract and validate metadata
-        run: |
-          unzip -o ./pr-metadata.zip -d ./pr-metadata
-
-          PR_NUMBER=$(cat ./pr-metadata/pr_number | tr -d '[:space:]')
-          PR_SHA=$(cat ./pr-metadata/sha | tr -d '[:space:]')
-          PR_ACTION=$(cat ./pr-metadata/action | tr -d '[:space:]')
-
-          # Validate PR number is a positive integer (prevents injection)
-          if ! echo "$PR_NUMBER" | grep -qE '^[0-9]+$'; then
-            echo "::error::Invalid PR number: '$PR_NUMBER'"
-            exit 1
-          fi
-
-          # Validate action is one of the expected values
-          if [ "$PR_ACTION" != "deploy" ] && [ "$PR_ACTION" != "cleanup" ]; then
-            echo "::error::Invalid action: '$PR_ACTION' (expected 'deploy' or 'cleanup')"
-            exit 1
-          fi
-
-          # Validate SHA looks like a hex commit hash
-          if ! echo "$PR_SHA" | grep -qE '^[0-9a-f]{40}$'; then
-            echo "::error::Invalid SHA: '$PR_SHA'"
-            exit 1
-          fi
-
-          echo "PR_NUMBER=$PR_NUMBER" >> $GITHUB_ENV
-          echo "PR_SHA=$PR_SHA" >> $GITHUB_ENV
-          echo "PR_ACTION=$PR_ACTION" >> $GITHUB_ENV
-          echo "✅ Metadata validated: PR #$PR_NUMBER, action=$PR_ACTION, sha=${PR_SHA:0:7}"
-
-      # ─── Deploy preview (when action == deploy) ─────────────────────────
-
-      # Checkout PR code with NO credentials persisted — build scripts
-      # cannot access GITHUB_TOKEN through git commands.
-      - name: Checkout PR code
-        if: env.PR_ACTION == 'deploy'
-        uses: actions/checkout@v4
+  build:
+    name: Build preview
+    needs: resolve
+    if: needs.resolve.outputs.mode == 'deploy'
+    runs-on: ubuntu-latest
+    # Read-only, and deliberately not the job that pushes: the steps below
+    # execute the pull request's code.
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout pull request code
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: ${{ env.PR_SHA }}
+          ref: ${{ needs.resolve.outputs.sha }}
           persist-credentials: false
 
       - name: Setup Node
-        if: env.PR_ACTION == 'deploy'
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 20
 
       - name: Install dependencies
-        if: env.PR_ACTION == 'deploy'
+        working-directory: ./frontend
         run: |
-          if [ -f "./frontend/package-lock.json" ]; then
-            npm ci
+          # --ignore-scripts: a dependency's install hooks have no business
+          # running in order to produce a static site. Vite plugins still
+          # execute during the build, so this narrows the surface rather than
+          # closing it — which is why this job holds no write token.
+          if [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
           else
-            npm install
+            npm install --ignore-scripts
           fi
-        working-directory: ./frontend
 
-      - name: Build preview site
-        if: env.PR_ACTION == 'deploy'
-        run: npm run build -- --base /${{ github.event.workflow_run.repository.name }}/pr-preview/pr-${{ env.PR_NUMBER }}/
+      - name: Build
         working-directory: ./frontend
+        run: npm run build -- --base "${BASE_PATH}pr-preview/pr-${PR_NUMBER}/"
         env:
-          # Secrets are available here because this workflow runs in the base
-          # repo context. This allows wallet connection to work in PR previews.
-          # Note: GITHUB_TOKEN is intentionally NOT passed to the build step.
-          VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
+          BASE_PATH: ${{ needs.resolve.outputs.base_path }}
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
+          # Sepolia only, which keeps a preview on testnet without any code
+          # having to know it is a preview: the app decides which networks it
+          # supports from which of these addresses is non-empty. Ethereum
+          # Classic and Polygon are left out for the same reason the production
+          # deploy leaves them out — both still run the v1 contract, whose ABI
+          # this frontend no longer matches. See Deployments.md.
           VITE_CONTRACT_ADDRESS_11155111: ${{ secrets.VITE_CONTRACT_ADDRESS_11155111 }}
-          VITE_CONTRACT_ADDRESS_61: ${{ secrets.VITE_CONTRACT_ADDRESS_61 }}
-          VITE_CONTRACT_ADDRESS_137: ${{ secrets.VITE_CONTRACT_ADDRESS_137 }}
+          # Reachable here, unlike in pr-build.yml, because this workflow runs
+          # in the base repository's context. Wallet connection needs it.
+          VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
+          # Repository variables, as in the production deploy — every VITE_
+          # value is published in the bundle. Without these the build inlines
+          # the http://localhost:3000 relay fallback, which the browser then
+          # blocks as mixed content on an https preview.
+          VITE_RELAY_URL: ${{ vars.VITE_RELAY_URL }}
+          VITE_RELAY_API_KEY: ${{ vars.VITE_RELAY_API_KEY }}
+          VITE_RELAY_TIMEOUT_MS: ${{ vars.VITE_RELAY_TIMEOUT_MS }}
 
-      - name: Add .nojekyll
-        if: env.PR_ACTION == 'deploy'
-        run: touch ./frontend/dist/.nojekyll
+      # A CNAME anywhere but the site root does nothing, and the root belongs
+      # to the production deploy. Dropped here so a preview can never be the
+      # thing that claims or releases the custom domain.
+      - name: Drop CNAME from the preview build
+        run: rm -f ./frontend/dist/CNAME
 
-      - name: Deploy preview to gh-pages
-        if: env.PR_ACTION == 'deploy'
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Upload preview build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./frontend/dist
-          destination_dir: pr-preview/pr-${{ env.PR_NUMBER }}
-          keep_files: true
-          user_name: "github-actions[bot]"
-          user_email: "github-actions[bot]@users.noreply.github.com"
-          commit_message: "deploy: preview for PR #${{ env.PR_NUMBER }} (${{ env.PR_SHA }})"
+          name: pr-preview-${{ needs.resolve.outputs.number }}
+          path: ./frontend/dist
+          retention-days: 1
 
-      - name: Post or update deploy comment on PR
-        if: env.PR_ACTION == 'deploy'
-        uses: actions/github-script@v7
+  publish:
+    name: Publish preview
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    # Holds the write token, so it never checks out or runs the pull request's
+    # code — only this repository's scripts, and the built artifact.
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          script: |
-            const prNumber = parseInt(process.env.PR_NUMBER);
-            const sha = process.env.PR_SHA.substring(0, 7);
-            const repoOwner = context.repo.owner;
-            const repoName = context.repo.repo;
+          # This repository's code, as in the resolve job.
+          ref: ${{ github.event.repository.default_branch }}
 
-            // Dynamically construct the preview environment URL.
-            // We use the default GitHub Pages domain format (https://<owner>.github.io/<repo>)
-            // because it universally supports both contributor forks and the main organization repository.
-            // If the main repository uses a custom domain (e.g., chainvoice.stability.nexus),
-            // GitHub Pages automatically redirects this standard URL to the custom domain.
-            const previewUrl = `https://${repoOwner}.github.io/${repoName}/pr-preview/pr-${prNumber}/`;
+      - name: Download preview build
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: pr-preview-${{ needs.resolve.outputs.number }}
+          path: preview
 
-            const marker = '<!-- pr-preview-bot -->';
-            const body =
-              `${marker}\n` +
-              `### 🔍 PR Preview\n\n` +
-              `| | |\n` +
-              `|---|---|\n` +
-              `| **Preview URL** | ${previewUrl} |\n` +
-              `| **Commit** | \`${sha}\` |\n` +
-              `| **Status** | ✅ Deployed |\n\n` +
-              `> This preview is updated on every commit and will be removed when the PR is closed.`;
-
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: repoOwner,
-              repo: repoName,
-              issue_number: prNumber,
-            });
-
-            const existing = comments.find(c => c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: repoOwner,
-                repo: repoName,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
-                owner: repoOwner,
-                repo: repoName,
-                issue_number: prNumber,
-                body,
-              });
-            }
-
-      # ─── Cleanup preview (when action == cleanup) ──────────────────────
-      - name: Checkout repository
-        if: env.PR_ACTION == 'cleanup'
-        uses: actions/checkout@v4
-
-      - name: Remove preview from gh-pages
-        if: env.PR_ACTION == 'cleanup'
+      - name: Check the build before publishing it
         run: |
-          # Guard: if gh-pages doesn't exist yet there is nothing to clean up.
-          git ls-remote --exit-code --heads origin gh-pages > /dev/null 2>&1 || {
-            echo "gh-pages branch does not exist — nothing to clean up."
-            exit 0
-          }
-
-          # Fetch and create a local tracking branch.
-          git fetch origin gh-pages:gh-pages --depth=1
-          git checkout gh-pages
-
-          PR_DIR="pr-preview/pr-${{ env.PR_NUMBER }}"
-          if [ -d "$PR_DIR" ]; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git rm -r -f "$PR_DIR"
-            git commit -m "cleanup: remove preview for PR #${{ env.PR_NUMBER }}"
-            git push --set-upstream origin gh-pages
-            echo "✅ Preview directory '$PR_DIR' removed from gh-pages."
-          else
-            echo "Preview directory '$PR_DIR' not found — nothing to clean up."
+          # The artifact holds whatever the fork's build wrote, so check the
+          # few things that would make committing it a bad idea. A symlink
+          # would go onto gh-pages as a symlink, and a .git entry would confuse
+          # the publish; a static site needs neither.
+          if [ -n "$(find preview -type l -print -quit)" ]; then
+            echo "::error::preview build contains symlinks"
+            exit 1
+          fi
+          if [ -e preview/.git ]; then
+            echo "::error::preview build contains a .git entry"
+            exit 1
+          fi
+          if [ ! -f preview/index.html ]; then
+            echo "::error::preview build has no index.html"
+            exit 1
           fi
 
-      - name: Update PR comment to indicate removal
-        if: env.PR_ACTION == 'cleanup'
-        uses: actions/github-script@v7
+      - name: Publish to gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
+          COMMIT_MESSAGE: >-
+            deploy: preview for PR #${{ needs.resolve.outputs.number }}
+            (${{ needs.resolve.outputs.sha }})
+        run: bash .github/scripts/gh-pages-publish.sh publish preview "pr-preview/pr-${PR_NUMBER}"
+
+      - name: Comment the preview URL
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
+          SITE_URL: ${{ needs.resolve.outputs.site_url }}
+          HEAD_SHA: ${{ needs.resolve.outputs.sha }}
         with:
           script: |
-            const prNumber = parseInt(process.env.PR_NUMBER);
-            const marker = '<!-- pr-preview-bot -->';
+            const upsert = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/upsert-comment.js`);
+            const prNumber = Number(process.env.PR_NUMBER);
+            const url = `${process.env.SITE_URL}pr-preview/pr-${prNumber}/`;
+            const sha = process.env.HEAD_SHA.slice(0, 7);
             const body =
-              `${marker}\n` +
-              `### 🔍 PR Preview\n\n` +
-              `| | |\n` +
-              `|---|---|\n` +
-              `| **Status** | 🗑️ Preview removed (PR closed) |\n`;
+              '### 🔍 PR Preview\n\n' +
+              '| | |\n|---|---|\n' +
+              `| **Preview** | ${url} |\n` +
+              `| **Commit** | \`${sha}\` |\n` +
+              '| **Networks** | Ethereum Sepolia only |\n\n' +
+              '> Rebuilt on every commit, and removed when this pull request closes.';
+            await upsert({ github, context, core }, prNumber, body);
 
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
+  cleanup:
+    name: Remove preview
+    needs: resolve
+    if: needs.resolve.outputs.mode == 'cleanup'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # This repository's code, as in the resolve job.
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Remove the preview from gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
+          COMMIT_MESSAGE: 'cleanup: remove preview for PR #${{ needs.resolve.outputs.number }}'
+        run: bash .github/scripts/gh-pages-publish.sh remove "pr-preview/pr-${PR_NUMBER}"
+
+      - name: Note the removal on the pull request
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
+        with:
+          script: |
+            const upsert = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/upsert-comment.js`);
+            const body =
+              '### 🔍 PR Preview\n\n' +
+              '| | |\n|---|---|\n' +
+              '| **Status** | 🗑️ Removed — this pull request is closed |\n';
+            // onlyIfPresent: a pull request that never had a preview should not
+            // acquire a comment announcing that its preview is gone.
+            await upsert({ github, context, core }, Number(process.env.PR_NUMBER), body, {
+              onlyIfPresent: true,
             });
-
-            const existing = comments.find(c => c.body.includes(marker));
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            }

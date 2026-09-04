@@ -1,17 +1,17 @@
-# Workflow 1 of 2 for PR previews (fork-safe).
-# This is a lightweight trigger — it only uploads metadata.
-# The actual build and deploy is handled by pr-deploy.yml via workflow_run,
-# which runs in the base repository context with secrets and write permissions.
+# Workflow 1 of 2 for PR previews.
 #
-# WHY TWO WORKFLOWS?
-# 1. Single workflow with `pull_request` + `contents: write` fails with 403
-#    on org repos where GITHUB_TOKEN defaults to read-only.
-# 2. Fork PRs never get secrets on `pull_request` trigger (GitHub blocks this).
-#    By building in pr-deploy.yml (workflow_run context), we get secrets so
-#    features like wallet connection work in PR previews.
-# 3. Fork code never gets write access — pr-deploy.yml always runs from main.
+# This one runs in the pull request's own context, which means it gets a
+# read-only token and no secrets — and, because a `pull_request` run uses the
+# workflow file from the pull request itself, a fork can rewrite every line of
+# it. So it is deliberately empty. Its only purpose is to finish, which fires
+# the `workflow_run` that starts pr-deploy.yml in the base repository's
+# context, where the write token and the secrets live.
+#
+# Nothing it produced would be trustworthy, so it produces nothing: pr-deploy
+# works out which pull request it is looking at from the event payload instead.
+# test.yml and pr-report.yml pair up the same way, for the same reason.
 
-name: "PR Preview: Build"
+name: 'PR Preview: Build'
 
 on:
   pull_request:
@@ -19,48 +19,20 @@ on:
     paths:
       - 'frontend/**'
 
-# Read-only permissions — this workflow only uploads metadata.
-permissions:
-  contents: read
+permissions: {}
+
+# No concurrency group on purpose. This job is free, and cancelling it would
+# also cancel the deploy or the cleanup it exists to trigger — including the
+# cleanup for a pull request that has just been closed, whose preview would
+# then sit on gh-pages forever. pr-deploy.yml carries the concurrency group,
+# where the expensive work actually is.
 
 jobs:
-  # ─── Signal a deploy when PR is opened or updated ───────────────────────
-  signal-deploy:
-    if: github.event.action != 'closed'
-    runs-on: ubuntu-latest
-    concurrency:
-      group: pr-preview-build-${{ github.event.pull_request.number }}
-      cancel-in-progress: true
-    steps:
-      - name: Save deploy metadata
-        run: |
-          mkdir -p ./pr-metadata
-          echo "${{ github.event.pull_request.number }}" > ./pr-metadata/pr_number
-          echo "${{ github.event.pull_request.head.sha }}" > ./pr-metadata/sha
-          echo "deploy" > ./pr-metadata/action
-
-      - name: Upload PR metadata
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-metadata-${{ github.event.pull_request.number }}
-          path: ./pr-metadata
-          retention-days: 1
-
-  # ─── Signal cleanup when PR is closed (merged or abandoned) ─────────────
-  signal-cleanup:
-    if: github.event.action == 'closed'
+  signal:
+    name: Signal the deploy workflow
     runs-on: ubuntu-latest
     steps:
-      - name: Save cleanup metadata
+      - name: Nothing to build here
         run: |
-          mkdir -p ./pr-metadata
-          echo "${{ github.event.pull_request.number }}" > ./pr-metadata/pr_number
-          echo "${{ github.event.pull_request.head.sha }}" > ./pr-metadata/sha
-          echo "cleanup" > ./pr-metadata/action
-
-      - name: Upload PR metadata
-        uses: actions/upload-artifact@v4
-        with:
-          name: pr-metadata-${{ github.event.pull_request.number }}
-          path: ./pr-metadata
-          retention-days: 1
+          echo "Pull request #${{ github.event.pull_request.number }}: ${{ github.event.action }}."
+          echo "The preview is built and published by 'PR Preview: Deploy'."

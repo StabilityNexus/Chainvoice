@@ -49,4 +49,6 @@ All static file references (images, icons, fonts, etc.) must use `import.meta.en
 **2. PR Preview Deployments:**
 When a pull request modifies files inside `frontend/`, a live preview is automatically deployed to GitHub Pages. A bot comment with the preview URL will be posted on your PR. The preview is cleaned up automatically when the PR is closed or merged.
 
+A preview is built with the Sepolia contract address only, so connect a wallet on Ethereum Sepolia when testing one — every other network will report itself as unsupported, exactly as it does in production. Previews are served from the same site as production under `/pr-preview/pr-<n>/`; see [Deployments.md](Deployments.md#frontend-site) for how that works.
+
 Thank you for your cooperation and continued contributions.
