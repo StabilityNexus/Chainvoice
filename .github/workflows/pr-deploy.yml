@@ -1,18 +1,16 @@
 # Workflow 2 of 2 for PR previews.
 #
-# Runs in the base repository's context, so it has the secrets the build needs
-# and a token that can push to gh-pages and comment on the pull request. Two
-# rules follow from that, and the job split below is what enforces them:
+# Runs in the base repository's context, so it holds a token that can push to
+# gh-pages and comment on the pull request. It therefore never checks out or
+# executes the pull request's code: pr-build.yml already built it, in the
+# pull request's own context, and this workflow only unpacks that artifact.
 #
-#   1. The job that runs the pull request's code holds no write token. A build
-#      executes whatever the fork put in its dependency tree and its vite
-#      config; were that the same job that pushes, it could reach the token
-#      through $GITHUB_PATH or $GITHUB_ENV and write to the repository.
-#   2. The job that holds the write token never checks out the pull request's
-#      code. It only unpacks the artifact the build produced.
-#
-# Which pull request this is comes from the event payload, never from anything
-# the triggering run produced — see the resolve job.
+# Two things arrive here untrusted, and both are treated that way:
+#   - The artifact, which is whatever a fork's build wrote. Checked before it is
+#     committed, and only ever written under pr-preview/pr-<n>/.
+#   - The triggering run's identity. Which pull request this is comes from the
+#     workflow_run payload, resolved against the API — never from a file the
+#     other workflow produced, because a fork controls its own copy of it.
 
 name: 'PR Preview: Deploy'
 
@@ -33,7 +31,12 @@ concurrency:
 jobs:
   resolve:
     name: Resolve target
-    if: github.event.workflow_run.event == 'pull_request'
+    # A failed build has nothing worth publishing, and it already shows up as a
+    # failed check on the pull request. A closed pull request's run succeeds
+    # with its build job skipped, so cleanup still gets here.
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -46,19 +49,16 @@ jobs:
       base_path: ${{ steps.pages.outputs.base_path }}
       site_url: ${{ steps.pages.outputs.site_url }}
     steps:
-      # The base repository, for the scripts. Never the pull request's code.
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          # This repository's own default branch, spelled out. Nothing in
-          # these three jobs may come from the pull request, and which
-          # commit checkout would pick by itself on a `workflow_run` is not
-          # worth relying on when that is what it decides.
+          # This repository's own default branch, spelled out. Nothing in these
+          # jobs may come from the pull request, and which commit checkout would
+          # pick by itself on a `workflow_run` is not worth relying on when that
+          # is what it decides.
           ref: ${{ github.event.repository.default_branch }}
-          # Nothing in this job uses git: the publish script clones with
-          # GH_TOKEN of its own. Persisting the token into .git/config
-          # would only leave a write-capable credential lying in the
-          # workspace while the build runs.
+          # Nothing here uses git: the publish script clones with a GH_TOKEN of
+          # its own.
           persist-credentials: false
 
       - name: Resolve Pages location
@@ -77,10 +77,9 @@ jobs:
             const run = context.payload.workflow_run;
 
             // Worked out from the event payload alone. A `pull_request` run
-            // executes the fork's own copy of pr-build.yml, so anything that
-            // run uploaded is attacker-controlled: a pull request that got to
-            // name a number could overwrite another one's preview, delete it,
-            // or post a bot comment on any issue in this repository.
+            // executes the fork's own copy of pr-build.yml, so a number coming
+            // from that run could name any pull request in this repository —
+            // and this workflow can delete previews and post bot comments.
             const findPullRequest = async () => {
               // Populated only when head and base are the same repository.
               if (run.pull_requests?.length) {
@@ -119,121 +118,47 @@ jobs:
               return;
             }
 
-            // A closed pull request loses its preview, merged or not. A deploy
-            // is for one that is still open, and always at the head it has
-            // now: this workflow can be reached by a run whose commit has
-            // since been superseded, and taking the sha from the pull request
-            // is also what guarantees the commit belongs to it.
+            // A closed pull request loses its preview, merged or not.
             core.setOutput('mode', pr.state === 'closed' ? 'cleanup' : 'deploy');
             core.setOutput('number', String(pr.number));
             core.setOutput('sha', pr.head.sha);
             core.info(`PR #${pr.number} is ${pr.state}; head ${pr.head.sha.slice(0, 7)}.`);
 
-  build:
-    name: Build preview
+  publish:
+    name: Publish preview
     needs: resolve
     if: needs.resolve.outputs.mode == 'deploy'
     runs-on: ubuntu-latest
-    # Read-only, and deliberately not the job that pushes: the steps below
-    # execute the pull request's code.
     permissions:
-      contents: read
-    steps:
-      - name: Checkout pull request code
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-        with:
-          ref: ${{ needs.resolve.outputs.sha }}
-          persist-credentials: false
-
-      - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        working-directory: ./frontend
-        run: |
-          # --ignore-scripts: a dependency's install hooks have no business
-          # running in order to produce a static site. Vite plugins still
-          # execute during the build, so this narrows the surface rather than
-          # closing it — which is why this job holds no write token.
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            npm install --ignore-scripts
-          fi
-
-      - name: Build
-        working-directory: ./frontend
-        run: npm run build -- --base "${BASE_PATH}pr-preview/pr-${PR_NUMBER}/"
-        env:
-          BASE_PATH: ${{ needs.resolve.outputs.base_path }}
-          PR_NUMBER: ${{ needs.resolve.outputs.number }}
-          # Sepolia only, which keeps a preview on testnet without any code
-          # having to know it is a preview: the app decides which networks it
-          # supports from which of these addresses is non-empty. Ethereum
-          # Classic and Polygon are left out for the same reason the production
-          # deploy leaves them out — both still run the v1 contract, whose ABI
-          # this frontend no longer matches. See Deployments.md.
-          VITE_CONTRACT_ADDRESS_11155111: ${{ secrets.VITE_CONTRACT_ADDRESS_11155111 }}
-          # Reachable here, unlike in pr-build.yml, because this workflow runs
-          # in the base repository's context. Wallet connection needs it.
-          VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
-          # Repository variables, as in the production deploy — every VITE_
-          # value is published in the bundle. Without these the build inlines
-          # the http://localhost:3000 relay fallback, which the browser then
-          # blocks as mixed content on an https preview.
-          VITE_RELAY_URL: ${{ vars.VITE_RELAY_URL }}
-          VITE_RELAY_API_KEY: ${{ vars.VITE_RELAY_API_KEY }}
-          VITE_RELAY_TIMEOUT_MS: ${{ vars.VITE_RELAY_TIMEOUT_MS }}
-
-      # A CNAME anywhere but the site root does nothing, and the root belongs
-      # to the production deploy. Dropped here so a preview can never be the
-      # thing that claims or releases the custom domain.
-      - name: Drop CNAME from the preview build
-        run: rm -f ./frontend/dist/CNAME
-
-      - name: Upload preview build
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: pr-preview-${{ needs.resolve.outputs.number }}
-          path: ./frontend/dist
-          retention-days: 1
-
-  publish:
-    name: Publish preview
-    needs: [resolve, build]
-    runs-on: ubuntu-latest
-    # Holds the write token, so it never checks out or runs the pull request's
-    # code — only this repository's scripts, and the built artifact.
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
+      contents: write # pushes the preview to gh-pages
+      pull-requests: write # comments the preview URL
+      issues: write # listComments/createComment go through the issues API
+      actions: read # reads the build's artifact from the triggering run
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          # This repository's code, as in the resolve job.
           ref: ${{ github.event.repository.default_branch }}
-          # Nothing in this job uses git: the publish script clones with
-          # GH_TOKEN of its own. Persisting the token into .git/config
-          # would only leave a write-capable credential lying in the
-          # workspace while the build runs.
           persist-credentials: false
 
       - name: Download preview build
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: pr-preview-${{ needs.resolve.outputs.number }}
+          name: pr-preview-dist
           path: preview
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check the build before publishing it
+        env:
+          EXPECTED_BASE: ${{ needs.resolve.outputs.base_path }}pr-preview/pr-${{ needs.resolve.outputs.number }}/
         run: |
-          # The artifact holds whatever the fork's build wrote, so check the
-          # few things that would make committing it a bad idea. A symlink
-          # would go onto gh-pages as a symlink, and a .git entry would confuse
-          # the publish; a static site needs neither.
+          set -euo pipefail
+
+          # The artifact holds whatever a fork's build wrote, so check the few
+          # things that would make committing it a bad idea. A symlink would go
+          # onto gh-pages as a symlink, and a .git entry would confuse the
+          # publish; a static site needs neither.
           if [ -n "$(find preview -type l -print -quit)" ]; then
             echo "::error::preview build contains symlinks"
             exit 1
@@ -246,6 +171,20 @@ jobs:
             echo "::error::preview build has no index.html"
             exit 1
           fi
+
+          # The build had to be told the site root, because it runs without a
+          # token that could ask the Pages API. This job can ask, so it checks —
+          # a mismatch means every asset would 404 and the preview would come up
+          # blank, which is worth an error rather than a puzzled contributor.
+          # Stripped of anything but path characters before being echoed, since
+          # the file came from the build.
+          built_base="$(tr -dc 'A-Za-z0-9/._-' < preview/.preview-base 2>/dev/null || true)"
+          if [ "$built_base" != "$EXPECTED_BASE" ]; then
+            echo "::error::this build is for '${built_base:-<unset>}' but the site serves '${EXPECTED_BASE}'."
+            echo "::error::set PREVIEW_PUBLIC_BASE=${{ needs.resolve.outputs.base_path }} in frontend/.env.preview"
+            exit 1
+          fi
+          rm -f preview/.preview-base
 
       - name: Publish to gh-pages
         env:
@@ -290,12 +229,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          # This repository's code, as in the resolve job.
           ref: ${{ github.event.repository.default_branch }}
-          # Nothing in this job uses git: the publish script clones with
-          # GH_TOKEN of its own. Persisting the token into .git/config
-          # would only leave a write-capable credential lying in the
-          # workspace while the build runs.
           persist-credentials: false
 
       - name: Remove the preview from gh-pages

@@ -73,7 +73,20 @@ until someone opens the site. Where the API is not an option, set a
 
 ### What a preview build gets
 
-Only `VITE_CONTRACT_ADDRESS_11155111`, so a preview reaches Ethereum Sepolia and
-nothing else: the app treats any network with a non-empty contract address as
-supported, so omitting the rest is all it takes to keep previews on testnet.
-Relay settings come from repository variables, the same ones production uses.
+`frontend/.env.preview`, loaded by `vite build --mode preview` — committed, and
+not from secrets or variables. GitHub passes neither to a workflow triggered by
+a pull request from a fork, and a fork's code has to be built somewhere that has
+no token worth stealing: `actions/checkout` refuses outright to fetch fork code
+into a `workflow_run` job, because such a job holds the base repository's
+secrets, cache scope and runner. Nothing in that file is a credential — Vite
+inlines every `VITE_` value into the bundle it emits, so all of them are already
+readable on the production site.
+
+It sets `VITE_CONTRACT_ADDRESS_11155111` and no other chain, which is the whole
+of what keeps a preview on testnet: the app treats a network as supported
+exactly when its contract address is non-empty.
+
+`PREVIEW_PUBLIC_BASE` in that file is the path Pages serves this site from —
+`/` here, `/<repo>/` on a fork. The build has no token to ask the Pages API
+with, so it is told; the publish job does ask, and refuses a build made for the
+wrong path rather than serve a page whose every asset 404s.
