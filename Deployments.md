@@ -52,10 +52,24 @@ switching before the branch has a `CNAME` file would drop the custom domain.
    Pages is still serving the old artifact at this point, so nothing changes
    for visitors.
 3. Settings → Pages → Source → **Deploy from a branch** → `gh-pages` / `/ (root)`.
-4. Settings → Actions → General → Workflow permissions → **Read and write**.
 
-Previews only appear once step 4 is done, and only for pull requests that get a
-new `PR Preview: Build` run afterwards — a push, or closing and reopening.
+Leave Settings → Actions → General → Workflow permissions at **read-only**.
+That setting is the token every workflow gets when it declares no `permissions:`
+of its own, so raising it hands write access to whichever future workflow forgets
+to ask. Each workflow here asks per job instead. If the publish step in step 2
+fails with a 403, that is the signal to raise it — not before.
+
+Previews appear once step 3 is done, and only for pull requests that get a new
+`PR Preview: Build` run afterwards — a push, or closing and reopening.
+
+### Forks
+
+A fork needs GitHub Pages enabled (Settings → Pages → any source) before a
+preview can be published, because `pages-config.sh` reads the site's address
+from the Pages API and fails rather than guess — a wrong base path is invisible
+until someone opens the site. Where the API is not an option, set a
+`PAGES_SITE_URL` repository variable to the site root instead, e.g.
+`https://<owner>.github.io/Chainvoice/`.
 
 ### What a preview build gets
 

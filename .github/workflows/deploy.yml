@@ -32,6 +32,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Nothing in this job uses git: the publish script clones with
+          # GH_TOKEN of its own. Persisting the token into .git/config
+          # would only leave a write-capable credential lying in the
+          # workspace while the build runs.
+          persist-credentials: false
 
       # Where the site is served from decides what --base the bundle needs. It
       # is / here because of the custom domain, but /<repo>/ on a fork, and a
