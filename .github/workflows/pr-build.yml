@@ -1,15 +1,21 @@
 # Workflow 1 of 2 for PR previews.
 #
-# This one runs in the pull request's own context, which means it gets a
-# read-only token and no secrets — and, because a `pull_request` run uses the
-# workflow file from the pull request itself, a fork can rewrite every line of
-# it. So it is deliberately empty. Its only purpose is to finish, which fires
-# the `workflow_run` that starts pr-deploy.yml in the base repository's
-# context, where the write token and the secrets live.
+# Runs in the pull request's own context, which is the only context a fork's
+# code may be built in. A `pull_request` run gets a read-only token, no secrets
+# and no repository variables, and its workflow file is the fork's own copy —
+# so nothing here is trusted with anything, and nothing it produces is trusted
+# by pr-deploy.yml either.
 #
-# Nothing it produced would be trustworthy, so it produces nothing: pr-deploy
-# works out which pull request it is looking at from the event payload instead.
-# test.yml and pr-report.yml pair up the same way, for the same reason.
+# That is why the build lives here rather than in the workflow that has the
+# secrets. Building in the base repository's context would mean executing a
+# fork's dependency tree and vite config in a job holding this repository's
+# token, secrets and default-branch cache scope — the "pwn request" shape that
+# actions/checkout refuses by default. The settings the build needs are
+# committed in frontend/.env.preview instead; none of them is a credential.
+#
+# pr-deploy.yml picks the artifact up over workflow_run, checks it, and
+# publishes it. Which pull request that is, it works out from the event
+# payload — never from anything in here.
 
 name: 'PR Preview: Build'
 
@@ -19,20 +25,88 @@ on:
     paths:
       - 'frontend/**'
 
-permissions: {}
+permissions:
+  contents: read
 
-# No concurrency group on purpose. This job is free, and cancelling it would
-# also cancel the deploy or the cleanup it exists to trigger — including the
-# cleanup for a pull request that has just been closed, whose preview would
-# then sit on gh-pages forever. pr-deploy.yml carries the concurrency group,
-# where the expensive work actually is.
+# Supersede a build that a newer push has already made stale. A close event
+# cancels an in-flight build for the same pull request too, which is the right
+# order: the preview is about to be removed either way.
+concurrency:
+  group: pr-preview-build-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
 
 jobs:
-  signal:
-    name: Signal the deploy workflow
+  build:
+    name: Build preview
+    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
-      - name: Nothing to build here
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Nothing here uses git, and this job builds unreviewed code.
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        working-directory: ./frontend
         run: |
-          echo "Pull request #${{ github.event.pull_request.number }}: ${{ github.event.action }}."
-          echo "The preview is built and published by 'PR Preview: Deploy'."
+          # --ignore-scripts: a dependency's install hooks have no business
+          # running in order to produce a static site.
+          if [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
+          else
+            npm install --ignore-scripts
+          fi
+
+      - name: Build
+        working-directory: ./frontend
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          site_base="$(sed -n 's/^PREVIEW_PUBLIC_BASE=//p' .env.preview | tail -n 1)"
+          case "$site_base" in
+            /|/*/) ;;
+            *)
+              echo "::error::PREVIEW_PUBLIC_BASE in frontend/.env.preview must open and close with '/' (got '${site_base}')"
+              exit 1
+              ;;
+          esac
+
+          base="${site_base}pr-preview/pr-${PR_NUMBER}/"
+          echo "Building for ${base}"
+          # --mode preview is what loads .env.preview.
+          npm run build -- --mode preview --base "$base"
+
+          # Recorded so the publish job can refuse a build made for the wrong
+          # path, instead of publishing a page that loads nothing.
+          printf '%s' "$base" > dist/.preview-base
+
+          # A CNAME means something only at the site root, and the root belongs
+          # to the production deploy.
+          rm -f dist/CNAME
+
+      - name: Upload preview build
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pr-preview-dist
+          path: ./frontend/dist
+          retention-days: 1
+
+  # A closed pull request has nothing to build, but this workflow still has to
+  # finish: finishing is what fires the workflow_run that removes the preview.
+  closed:
+    name: Signal cleanup
+    if: github.event.action == 'closed'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Nothing to build
+        run: |
+          echo "Pull request #${{ github.event.pull_request.number }} is closed."
+          echo "'PR Preview: Deploy' removes its preview from gh-pages."
