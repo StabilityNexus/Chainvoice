@@ -65,10 +65,13 @@ const GenerateLink = () => {
   const generateLink = () => {
     const tokenToUse = useCustomToken ? verifiedToken : selectedToken;
 
+    // The app is not always at the origin root — a PR preview is served from a
+    // subdirectory — and BASE_URL is the path the bundle was built for. Built
+    // the same way as the share links in services/share.
+    const appRoot = `${window.location.origin}${import.meta.env.BASE_URL}`;
+
     if (!tokenToUse) {
-      return `${window.location.origin}/#/dashboard/create?clientAddress=${
-        address || ""
-      }`;
+      return `${appRoot}#/dashboard/create?clientAddress=${address || ""}`;
     }
 
     const params = new URLSearchParams({
@@ -85,7 +88,7 @@ const GenerateLink = () => {
       params.append("description", description);
     }
 
-    return `${window.location.origin}/#/dashboard/create?${params.toString()}`;
+    return `${appRoot}#/dashboard/create?${params.toString()}`;
   };
 
   const copyToClipboard = async () => {

@@ -417,12 +417,12 @@ function BatchPayment() {
                     symbol,
                     name,
                     decimals: Number(decimals),
-                    logo: "/tokenImages/generic.png",
+                    logo: `${import.meta.env.BASE_URL}tokenImages/generic.png`,
                   };
                 } catch (error) {
                   console.error("Failed to fetch token info:", error);
                   parsed.paymentToken.logo =
-                    parsed.paymentToken.logo || "/tokenImages/generic.png";
+                    parsed.paymentToken.logo || `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                 }
               }
             }
@@ -901,7 +901,7 @@ function BatchPayment() {
                                   alt={group.symbol}
                                   className="w-6 h-6"
                                   onError={(e) => {
-                                    e.target.src = "/tokenImages/generic.png";
+                                    e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                                   }}
                                 />
                               ) : (
@@ -1088,7 +1088,7 @@ function BatchPayment() {
                                   alt={invoice.paymentToken.symbol}
                                   className="w-5 h-5 mr-2"
                                   onError={(e) => {
-                                    e.target.src = "/tokenImages/generic.png";
+                                    e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                                   }}
                                 />
                               ) : (
@@ -1371,7 +1371,7 @@ function BatchPayment() {
                         alt={drawerState.selectedInvoice.paymentToken.symbol}
                         className="w-6 h-6 mr-2"
                         onError={(e) => {
-                          e.target.src = "/tokenImages/generic.png";
+                          e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                         }}
                       />
                     ) : (

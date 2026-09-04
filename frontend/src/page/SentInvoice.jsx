@@ -109,7 +109,7 @@ function SentInvoice() {
       tokenInfo?.image ||
       tokenInfo?.logo ||
       fallbackLogo ||
-      "/tokenImages/generic.png"
+      `${import.meta.env.BASE_URL}tokenImages/generic.png`
     );
   };
 
@@ -270,7 +270,7 @@ function SentInvoice() {
                     symbol,
                     name,
                     decimals: Number(decimals),
-                    logo: "/tokenImages/generic.png", // Generic fallback
+                    logo: `${import.meta.env.BASE_URL}tokenImages/generic.png`, // Generic fallback
                   };
                 } catch (error) {
                   console.error(
@@ -279,7 +279,7 @@ function SentInvoice() {
                   );
                   // Keep existing data or set defaults
                   parsed.paymentToken.logo =
-                    parsed.paymentToken.logo || "/tokenImages/generic.png";
+                    parsed.paymentToken.logo || `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                 }
               }
             }
@@ -734,7 +734,7 @@ function SentInvoice() {
                                     alt={invoice.paymentToken.symbol}
                                     className="w-5 h-5 mr-2 rounded-full"
                                     onError={(e) => {
-                                      e.target.src = "/tokenImages/generic.png";
+                                      e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                                     }}
                                   />
                                 ) : (
@@ -1125,7 +1125,7 @@ function SentInvoice() {
                       alt={drawerState.selectedInvoice.paymentToken.symbol}
                       className="w-6 h-6 mr-2"
                       onError={(e) => {
-                        e.target.src = "/tokenImages/generic.png";
+                        e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                       }}
                     />
                   ) : (

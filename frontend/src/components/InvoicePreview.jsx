@@ -243,7 +243,7 @@ const InvoicePreview = ({
                   alt={invoice.paymentToken.symbol}
                   className="w-7 h-7 sm:w-8 sm:h-8 object-contain"
                   onError={(e) => {
-                    e.target.src = "/tokenImages/generic.png";
+                    e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                   }}
                 />
               </div>
