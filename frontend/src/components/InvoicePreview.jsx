@@ -68,7 +68,7 @@ const InvoicePreview = ({
             <div className="flex items-center space-x-4">
               <div className="bg-white p-3.5 rounded-xl border-2 border-gray-200 shadow-lg flex-shrink-0 hover:shadow-xl transition-shadow duration-200">
                 <img
-                  src="/logo.png"
+                  src={`${import.meta.env.BASE_URL}logo.png`}
                   alt="Chainvoice"
                   className="h-14 w-14 sm:h-16 sm:w-16 md:h-20 md:w-20 object-contain"
                   onError={(e) => {
@@ -243,7 +243,7 @@ const InvoicePreview = ({
                   alt={invoice.paymentToken.symbol}
                   className="w-7 h-7 sm:w-8 sm:h-8 object-contain"
                   onError={(e) => {
-                    e.target.src = "/tokenImages/generic.png";
+                    e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                   }}
                 />
               </div>

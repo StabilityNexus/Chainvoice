@@ -784,11 +784,11 @@ function ReceivedInvoice() {
                     symbol,
                     name,
                     decimals: Number(decimals),
-                    logo: "/tokenImages/generic.png",
+                    logo: `${import.meta.env.BASE_URL}tokenImages/generic.png`,
                   };
                 } catch {
                   parsed.paymentToken.logo =
-                    parsed.paymentToken.logo || "/tokenImages/generic.png";
+                    parsed.paymentToken.logo || `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                 }
               }
             }
@@ -1368,7 +1368,7 @@ function ReceivedInvoice() {
                               alt={group.symbol}
                               style={{ width: 24, height: 24 }}
                               onError={(e) => {
-                                e.target.src = "/tokenImages/generic.png";
+                                e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                               }}
                             />
                           ) : (
@@ -1609,7 +1609,7 @@ function ReceivedInvoice() {
                                     alt={invoice.paymentToken.symbol}
                                     className="w-5 h-5 mr-2"
                                     onError={(e) => {
-                                      e.target.src = "/tokenImages/generic.png";
+                                      e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                                     }}
                                   />
                                 ) : (
@@ -1842,7 +1842,7 @@ function ReceivedInvoice() {
                     <div className="flex items-center space-x-4">
                       <div className="bg-white p-3.5 rounded-xl border-2 border-gray-200 shadow-lg flex-shrink-0">
                         <img
-                          src="/logo.png"
+                          src={`${import.meta.env.BASE_URL}logo.png`}
                           alt="Chainvoice"
                           className="h-16 w-16 object-contain"
                           onError={(e) => {
@@ -2013,7 +2013,7 @@ function ReceivedInvoice() {
                         alt={drawerState.selectedInvoice.paymentToken.symbol}
                         className="w-6 h-6 mr-2"
                         onError={(e) => {
-                          e.target.src = "/tokenImages/generic.png";
+                          e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                         }}
                       />
                     ) : (

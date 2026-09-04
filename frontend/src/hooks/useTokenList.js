@@ -69,7 +69,7 @@ export function useTokenList(chainId) {
           contract_address: token.contract_address || token.address,
           symbol: token.symbol,
           name: token.name,
-          image: token.image || token.logo || "/tokenImages/generic.png",
+          image: token.image || token.logo || `${import.meta.env.BASE_URL}tokenImages/generic.png`,
         }));
 
         // Cache the tokens
