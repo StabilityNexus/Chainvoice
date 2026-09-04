@@ -85,8 +85,10 @@ jobs:
           npm run build -- --mode preview --base "$base"
 
           # Recorded so the publish job can refuse a build made for the wrong
-          # path, instead of publishing a page that loads nothing.
-          printf '%s' "$base" > dist/.preview-base
+          # path, instead of publishing a page that loads nothing. Not a
+          # dotfile: actions/upload-artifact leaves hidden files out of the
+          # artifact by default, and this has to survive the trip.
+          printf '%s' "$base" > dist/preview-base
 
           # A CNAME means something only at the site root, and the root belongs
           # to the production deploy.
