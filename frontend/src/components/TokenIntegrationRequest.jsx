@@ -1,4 +1,4 @@
-function TokenIntegrationRequest({ address }) {
+function TokenIntegrationRequest() {
   return (
     <div className="text-xs text-gray-500 pt-2">
       Using this token frequently?{" "}

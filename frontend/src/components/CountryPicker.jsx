@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Input } from "./ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ const CountryPicker = ({
   placeholder = "Select country",
   className,
   disabled = false,
+  id,
 }) => {
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -59,6 +60,7 @@ const CountryPicker = ({
       <PopoverTrigger asChild>
         <button
           type="button"
+          id={id}
           ref={inputRef}
           disabled={disabled}
           className={cn(

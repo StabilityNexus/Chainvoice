@@ -6,7 +6,6 @@ import {
 } from "@rainbow-me/rainbowkit";
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-import * as chains from "wagmi/chains";
 import { mainnet as wagmiMainnet, classic, base, bsc, polygon, sepolia } from "wagmi/chains";
 
 import { HashRouter as Router, Route, Routes } from "react-router-dom";
@@ -37,6 +36,7 @@ const mainnet = {
 
 const AllChains = [mainnet, classic, base, bsc, polygon, sepolia, citreaTestnet];
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const config = getDefaultConfig({
   appName: "Chainvoice",
   projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
@@ -47,8 +47,8 @@ const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
 const GenerateLink = lazy(() => import("./page/GenerateLink"));
 const CreateInvoicesBatch = lazy(() => import("./page/CreateInvoicesBatch"));
-const BatchPayment = lazy(() => import("./page/BatchPayment"));
 const NotFound = lazy(() => import("./page/NotFound"));
+const Settings = lazy(() => import("./page/Settings"));
 
 function App() {
   return (
@@ -107,6 +107,7 @@ function App() {
                           path="batch-invoice"
                           element={<CreateInvoicesBatch />}
                         />
+                        <Route path="settings" element={<Settings />} />
                       </Route>
                       <Route path="feature" element={<Feature />} />
                       <Route path="about" element={<About />} />

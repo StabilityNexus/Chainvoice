@@ -193,6 +193,7 @@ export const useProductCatalog = () => {
       memoryCache = metadata;
       setCatalogMetadata(metadata);
       broadcastCatalogUpdate(metadata);
+       
     } catch (err) {
       console.error('Failed to save catalog to IndexedDB:', err);
       throw err;
@@ -215,6 +216,7 @@ export const useProductCatalog = () => {
         memoryCache = null;
         setCatalogMetadata(null);
       }
+       
     } catch (err) {
       console.error('Failed to load catalog from IndexedDB:', err);
     } finally {
@@ -226,6 +228,7 @@ export const useProductCatalog = () => {
     try {
       const url = await get(LAST_URL_KEY);
       setSavedUrl(url || null);
+       
     } catch (err) {
       console.error('Failed to load saved URL from IndexedDB:', err);
       setSavedUrl(null);
@@ -287,6 +290,7 @@ export const useProductCatalog = () => {
     let response;
     try {
       response = await fetch(requestUrl, { cache: 'no-store' });
+      // eslint-disable-next-line no-unused-vars
     } catch (err) {
       throw new Error('Network error: Failed to fetch. Ensure the URL is valid and the server supports CORS.');
     }

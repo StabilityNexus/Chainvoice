@@ -67,7 +67,7 @@ const Treasure = () => {
     };
 
     fetchTreasureAmount();
-  }, [walletClient]);
+  }, [walletClient, chainId]);
 
   const handleSetTreasuryAddress = async () => {
     if (!ethers.isAddress(newTreasuryAddress)) {

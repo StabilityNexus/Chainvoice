@@ -13,6 +13,12 @@
 </p>
 
 <p align="center">
+  <a href="https://scorecard.dev/viewer/?uri=github.com/StabilityNexus/Chainvoice">
+    <img src="https://api.scorecard.dev/projects/github.com/StabilityNexus/Chainvoice/badge" alt="OpenSSF Scorecard"/>
+  </a>
+</p>
+
+<p align="center">
   <a href="https://t.me/StabilityNexus"><img src="https://img.shields.io/badge/Telegram-24A1DE?style=flat&logo=telegram&logoColor=white" alt="Telegram"></a>
   &nbsp;
   <a href="https://x.com/StabilityNexus"><img src="https://img.shields.io/twitter/follow/StabilityNexus" alt="X (Twitter)"></a>
@@ -71,7 +77,7 @@ Chainvoice/
 1. **Fork the repository**
 2. **Clone your fork**
 
-git clone https://github.com/yourusername/Chainvoice.git  
+git clone https://github.com/YOUR_USERNAME/Chainvoice.git  
 cd Chainvoice
 
 ## Frontend Setup
@@ -133,8 +139,11 @@ forge create contracts/src/Chainvoice.sol:Chainvoice
 
 5. **Configure frontend**  
 cp frontend/.env.example frontend/.env  
-Edit frontend/.env and set:  
-VITE_CONTRACT_ADDRESS=your_deployed_contract_address_here  
+Edit frontend/.env and set the variable for the chain you deployed to — the
+frontend reads `VITE_CONTRACT_ADDRESS_<chainId>`, not a single shared variable.
+For Ethereum Classic that is:  
+VITE_CONTRACT_ADDRESS_61=your_deployed_contract_address_here  
+See [Environment Variables](#environment-variables) for the full list.  
 
 6. **Restart frontend development server**  
 cd frontend  
@@ -145,18 +154,54 @@ npm run dev
 ### Frontend Configuration (`frontend/.env`)  
 ```.env
 #Ethereum Sepolia (11155111)
-VITE_CONTRACT_ADDRESS_11155111=0x54a542dCDC306eE281b5De4613EcEfe6e6ABc562
-#Ethereum Classic (61)
-VITE_CONTRACT_ADDRESS_61=0xD044A85a5daC307217B9bF313A90E8a60AF7DdCe
-#Polygon Mainnet (137)
-VITE_CONTRACT_ADDRESS_137=0xD044A85a5daC307217B9bF313A90E8a60AF7DdCe
+VITE_CONTRACT_ADDRESS_11155111=0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b
+#Ethereum Classic (61) — blank until redeployed, see note below
+VITE_CONTRACT_ADDRESS_61=
+#Polygon Mainnet (137) — blank until redeployed, see note below
+VITE_CONTRACT_ADDRESS_137=
 #Project ID
 VITE_WALLETCONNECT_PROJECT_ID=Your Project ID can be obtained from https://dashboard.reown.com/ 
 ```
+
+> ⚠️ Renaming the key registry functions changed their selectors, so only a
+> contract deployed from the current `contracts/src/Chainvoice.sol` will answer.
+> The Sepolia address above is such a deployment — see
+> [Deployments.md](./Deployments.md). Keys registered against an earlier
+> deployment do not carry over; those users must register again.
+>
+> ⚠️ Ethereum Classic and Polygon are left blank on purpose. Both still run the
+> v1 contract, which stores invoice payloads on-chain as strings and has no
+> public key registry, so it does not match the current ABI. The app treats any
+> non-empty address as supported, so filling these in would send calls those
+> contracts cannot decode. Populate them only after redeploying.
+>
 > ⚠️ **Security Note:** Never commit `.env` files to version control. Keep your private keys secure.
 
+### Relay configuration
+
+Invoice payloads travel encrypted over a [ThruBox](https://github.com/AOSSIE-Org/ThruBox-Server) relay, configured with:
+
+```env
+VITE_RELAY_URL=http://localhost:3000
+VITE_RELAY_API_KEY=
+VITE_RELAY_TIMEOUT_MS=
+```
+
+- **`VITE_RELAY_URL`** — in development this is the target the Vite dev server proxies `/relay` to, so the browser stays same-origin. In production, either an absolute `https://` URL (which requires CORS on the relay) or a path such as `/relay` that your host rewrites to it (Vercel rewrites, Netlify redirects, nginx `proxy_pass`), which avoids CORS entirely.
+- **`VITE_RELAY_API_KEY`** — only needed if the relay sets `security.api_key`. **This is not a secret:** Vite inlines every `VITE_`-prefixed variable into the built JavaScript, so any visitor can read it. Treat it as a spam speed-bump, not access control. To keep a relay key private, proxy relay calls server-side and inject it there.
+- **`VITE_RELAY_TIMEOUT_MS`** — request timeout, default `15000`. Raise it (around `60000`) on hosts that suspend idle instances: a cold start can take most of a minute, and sends are deliberately not retried, so a timeout means an undelivered invoice.
+
+
 ## Deployed Contracts
+
+### Current (hash-based invoice storage)
+Stores only `keccak256` of the invoice data on-chain and exposes the public key
+registry. Addresses are tracked in [Deployments.md](./Deployments.md).
+- Ethereum Sepolia (11155111)
+```0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b```
+
 ### v1 (Mainnet Deployment — Jan 1)
+Stores the invoice payload on-chain as strings. Superseded, kept for reference.
 - Ethereum Sepolia (11155111)
 ```0x54a542dCDC306eE281b5De4613EcEfe6e6ABc562```
 - Ethereum Classic (61)

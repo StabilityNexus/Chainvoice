@@ -1,4 +1,4 @@
-import React from 'react'
+
 import { Lock, Send, Layers, BarChart } from 'lucide-react'
 import { Link } from 'react-router-dom';
 function Feature() {

@@ -1,6 +1,24 @@
 import { ethers } from "ethers";
 import { getLineAmountDetails, parseNumericInputToWei } from "./invoiceCalculations";
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/**
+ * Required-text check shared by the invoice forms and the saved user profile,
+ * so a value accepted in Settings is never rejected at invoice submit time.
+ */
+export const getRequiredTextError = (value, label) =>
+  String(value ?? "").trim() ? "" : `${label} is required`;
+
+/**
+ * Email check shared by the same callers as getRequiredTextError.
+ */
+export const getEmailError = (value) => {
+  const trimmed = String(value ?? "").trim();
+  if (!trimmed) return "Email is required";
+  return EMAIL_PATTERN.test(trimmed) ? "" : "Invalid email address";
+};
+
 export const getClientAddressError = (value, options = {}) => {
   const { required = false, ownerAddress } = options;
   const trimmed = (value || "").trim();
@@ -106,30 +124,18 @@ export const validateSingleInvoiceData = ({
     hasFieldErrors = true;
   }
   
-  if (!userFname || !userFname.trim()) {
-    fieldErrors.userFname = "First name is required";
-    hasFieldErrors = true;
-  }
-  
-  if (!userEmail || !userEmail.trim()) {
-    fieldErrors.userEmail = "Email is required";
-    hasFieldErrors = true;
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userEmail)) {
-    fieldErrors.userEmail = "Invalid email address";
-    hasFieldErrors = true;
-  }
-  
-  if (!clientFname || !clientFname.trim()) {
-    fieldErrors.clientFname = "First name is required";
-    hasFieldErrors = true;
-  }
-  
-  if (!clientEmail || !clientEmail.trim()) {
-    fieldErrors.clientEmail = "Email is required";
-    hasFieldErrors = true;
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)) {
-    fieldErrors.clientEmail = "Invalid email address";
-    hasFieldErrors = true;
+  const partyErrors = {
+    userFname: getRequiredTextError(userFname, "First name"),
+    userEmail: getEmailError(userEmail),
+    clientFname: getRequiredTextError(clientFname, "First name"),
+    clientEmail: getEmailError(clientEmail),
+  };
+
+  for (const [field, error] of Object.entries(partyErrors)) {
+    if (error) {
+      fieldErrors[field] = error;
+      hasFieldErrors = true;
+    }
   }
 
   let hasItemErrors = false;
@@ -204,17 +210,16 @@ export const validateBatchInvoiceData = ({
   
   let globalHasErrors = false;
   
-  if (!userInfo?.userFname || !userInfo.userFname.trim()) {
-    pendingFieldErrors.userFname = "First name is required";
-    globalHasErrors = true;
-  }
-  
-  if (!userInfo?.userEmail || !userInfo.userEmail.trim()) {
-    pendingFieldErrors.userEmail = "Email is required";
-    globalHasErrors = true;
-  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userInfo.userEmail)) {
-    pendingFieldErrors.userEmail = "Invalid email address";
-    globalHasErrors = true;
+  const userInfoErrors = {
+    userFname: getRequiredTextError(userInfo?.userFname, "First name"),
+    userEmail: getEmailError(userInfo?.userEmail),
+  };
+
+  for (const [field, error] of Object.entries(userInfoErrors)) {
+    if (error) {
+      pendingFieldErrors[field] = error;
+      globalHasErrors = true;
+    }
   }
 
   for (let rowIndex = 0; rowIndex < normalizedRows.length; rowIndex += 1) {
@@ -236,17 +241,16 @@ export const validateBatchInvoiceData = ({
       globalHasErrors = true;
     }
     
-    if (!row.clientFname || !row.clientFname.trim()) {
-      pendingFieldErrors[`${rowIndex}_clientFname`] = "First name is required";
-      globalHasErrors = true;
-    }
-    
-    if (!row.clientEmail || !row.clientEmail.trim()) {
-      pendingFieldErrors[`${rowIndex}_clientEmail`] = "Email is required";
-      globalHasErrors = true;
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.clientEmail)) {
-      pendingFieldErrors[`${rowIndex}_clientEmail`] = "Invalid email address";
-      globalHasErrors = true;
+    const rowClientErrors = {
+      clientFname: getRequiredTextError(row.clientFname, "First name"),
+      clientEmail: getEmailError(row.clientEmail),
+    };
+
+    for (const [field, error] of Object.entries(rowClientErrors)) {
+      if (error) {
+        pendingFieldErrors[`${rowIndex}_${field}`] = error;
+        globalHasErrors = true;
+      }
     }
 
     const normalizedAddress = row.clientAddress.toLowerCase();

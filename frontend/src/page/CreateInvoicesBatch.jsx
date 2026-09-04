@@ -1,5 +1,5 @@
 // pages/CreateInvoicesBatch.jsx - Clean & Professional
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "../components/ui/input";
 import { Button } from "../components/ui/button";
 import {
@@ -29,7 +29,6 @@ import {
   ChevronDown,
   ChevronRight,
   AlertTriangle,
-  Users,
   Receipt,
   AlertCircle,
 } from "lucide-react";
@@ -38,6 +37,10 @@ import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
+import { computeInvoiceHash } from "../services/relay/invoiceHashUtils.js";
+import { sendEncryptedInvoice } from "../services/relay/relayInvoiceMessaging.js";
+import { fetchPublicKeyFromChain } from "../services/relay/relayKeyManager.js";
 
 
 
@@ -57,7 +60,11 @@ import {
   getClientAddressError,
   validateBatchInvoiceData,
 } from "@/utils/invoiceValidation";
-import ProductCatalogImport from "@/components/ProductCatalogImport";
+import { toInvoiceUserDetails } from "@/utils/userProfile";
+import { useUserProfile } from "@/hooks/useUserProfile";
+import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
+import SenderSummary from "@/components/SenderSummary";
+
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
 import { useProductCatalog } from "@/hooks/useProductCatalog";
 import {
@@ -81,7 +88,7 @@ function CreateInvoicesBatch() {
   const { isConnected, chainId } = useAccount();
   const account = useAccount();
   const [dueDate, setDueDate] = useState(new Date());
-  const [issueDate, setIssueDate] = useState(new Date());
+  const [issueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -117,15 +124,13 @@ function CreateInvoicesBatch() {
     },
   ]);
 
-  // User info (shared across all invoices)
-  const [userInfo, setUserInfo] = useState({
-    userFname: "",
-    userLname: "",
-    userEmail: "",
-    userCountry: "",
-    userCity: "",
-    userPostalcode: "",
-  });
+  // Sender details are shared across all invoices and live in Settings now.
+  const {
+    profile,
+    isComplete: hasProfile,
+    loading: profileLoading,
+  } = useUserProfile();
+  const [showProfilePrompt, setShowProfilePrompt] = useState(false);
 
   const { catalogMetadata } = useProductCatalog();
 
@@ -147,6 +152,7 @@ function CreateInvoicesBatch() {
         };
       })
     );
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceRows.map((r) => JSON.stringify(r.itemData)).join(",")]);
 
 
@@ -419,17 +425,6 @@ function CreateInvoicesBatch() {
     return "Failed to create invoice batch. Please try again.";
   };
 
-  const handleFieldChange = (name, value) => {
-    setUserInfo((prev) => ({ ...prev, [name]: value }));
-    if (fieldErrors[name]) {
-      setFieldErrors((prev) => {
-        const newErrors = { ...prev };
-        delete newErrors[name];
-        return newErrors;
-      });
-    }
-  };
-
   const handleInvoiceChange = (rowIndex, field, value) => {
     setInvoiceRows((prev) =>
       prev.map((row, i) => (i === rowIndex ? { ...row, [field]: value } : row))
@@ -451,20 +446,6 @@ function CreateInvoicesBatch() {
           return next;
         });
       }
-    }
-  };
-
-  const handleFieldBlur = (name, value) => {
-    let error = "";
-    if (name === "userFname") {
-      if (!value.trim()) error = "First name is required";
-    } else if (name === "userEmail") {
-      if (!value.trim()) error = "Email is required";
-      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) error = "Invalid email address";
-    }
-    
-    if (error) {
-      setFieldErrors((prev) => ({ ...prev, [name]: error }));
     }
   };
 
@@ -491,7 +472,7 @@ function CreateInvoicesBatch() {
       rows,
       paymentToken,
       ownerAddress: account.address,
-      userInfo: userInfo,
+      userInfo: profile,
     });
 
     if (!validation.isValid) {
@@ -500,6 +481,7 @@ function CreateInvoicesBatch() {
       setRowItemErrors(validation.itemErrors || {});
       setFieldErrors(validation.fieldErrors || {});
       
+      // eslint-disable-next-line no-unused-vars
       const hasFieldErrors = Object.keys(validation.addressErrors || {}).length > 0 || 
                              Object.keys(validation.totalErrors || {}).length > 0 ||
                              Object.keys(validation.itemErrors || {}).length > 0 ||
@@ -555,17 +537,18 @@ function CreateInvoicesBatch() {
       // Prepare batch arrays
       const tos = [];
       const amounts = [];
-      const encryptedPayloads = [];
-      const encryptedHashes = [];
+      const invoiceDataHashes = [];
 
 
 
       toast(`Processing ${validInvoices.length} invoices...`);
 
+      const invoicePayloads = [];
+
       // Process each invoice
       for (const [index, row] of validInvoices.entries()) {
         toast(
-          `Encrypting invoice ${index + 1} of ${validInvoices.length}...`
+          `Preparing invoice ${index + 1} of ${validInvoices.length}...`
         );
 
         const invoicePayload = {
@@ -577,15 +560,7 @@ function CreateInvoicesBatch() {
             symbol: paymentToken.symbol,
             decimals: tokenDecimals,
           },
-          user: {
-            address: account?.address.toString(),
-            fname: userInfo.userFname,
-            lname: userInfo.userLname,
-            email: userInfo.userEmail,
-            country: userInfo.userCountry,
-            city: userInfo.userCity,
-            postalcode: userInfo.userPostalcode,
-          },
+          user: toInvoiceUserDetails(profile, account?.address),
           client: {
             address: row.clientAddress,
             fname: row.clientFname,
@@ -608,10 +583,11 @@ function CreateInvoicesBatch() {
           },
         };
 
-        const invoiceString = JSON.stringify(invoicePayload);
+        invoicePayloads.push(invoicePayload);
 
-        const encryptedStringBase64 = btoa(invoiceString);
-        const dataToEncryptHash = "";
+        // Only the commitment goes on-chain; the payload is delivered
+        // encrypted over the relay once the batch is confirmed.
+        const invoiceDataHash = computeInvoiceHash(invoicePayload);
 
         // Add to batch arrays
         tos.push(row.clientAddress);
@@ -629,11 +605,10 @@ function CreateInvoicesBatch() {
         }
 
         amounts.push(amountForContract);
-        encryptedPayloads.push(encryptedStringBase64);
-        encryptedHashes.push(dataToEncryptHash);
+        invoiceDataHashes.push(invoiceDataHash);
       }
 
-      toast.success("All invoices encrypted successfully!");
+      toast.success("All invoices prepared successfully!");
       toast("Submitting batch transaction to blockchain...");
 
       // Send to contract
@@ -651,12 +626,152 @@ function CreateInvoicesBatch() {
         tos,
         amounts,
         paymentToken.address,
-        encryptedPayloads,
-        encryptedHashes
+        invoiceDataHashes
       );
 
       toast("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
+
+      const iface = new ethers.Interface(ChainvoiceABI);
+      // Keep the recipient alongside each id. Payloads are paired with events
+      // by position, and position is only meaningful if the recipient matches —
+      // pairing the wrong way round would encrypt one client's invoice to
+      // another client's key.
+      const created = [];
+      for (const log of receipt.logs) {
+        try {
+          const parsed = iface.parseLog(log);
+          if (parsed?.name === 'InvoiceCreated') {
+            created.push({
+              id: parsed.args[0].toString(),
+              to: parsed.args[2].toLowerCase(),
+            });
+          }
+        } catch {
+          // ignore
+        }
+      }
+      const invoiceIds = created.map((c) => c.id);
+
+      if (invoiceIds.length !== invoicePayloads.length) {
+        console.warn(`Expected ${invoicePayloads.length} InvoiceCreated events, got ${invoiceIds.length}`);
+      }
+
+      // Deliver in bounded groups. A 50-invoice batch is 100 sequential round
+      // trips otherwise, all of it after the transaction has already confirmed,
+      // with the user watching a spinner. Kept small so the relay's per-IP rate
+      // limit is not the next thing to fail.
+      const DELIVERY_CONCURRENCY = 5;
+      let undelivered = 0;
+
+      let unmatched = 0;
+      const deliverOne = async (eventIndex) => {
+        const { id: invoiceId, to: eventTo } = created[eventIndex];
+        const payload = invoicePayloads[eventIndex];
+        if (!payload) {
+          // The invoice exists on-chain but we have no payload to pair with it,
+          // so nothing is stored and nothing can be delivered. Silence here
+          // would hand the user a success toast for an invoice whose details
+          // were never captured.
+          console.error(
+            `Invoice ${invoiceId}: no local payload for this event; details not captured`
+          );
+          unmatched++;
+          return;
+        }
+
+        const payloadTo = payload.client.address.toLowerCase();
+        if (eventTo !== payloadTo) {
+          // Positions disagree with the chain. Encrypting to the wrong
+          // recipient would disclose the invoice, so store locally and let the
+          // sender resend rather than guess.
+          console.error(
+            `Invoice ${invoiceId}: event recipient ${eventTo} does not match payload recipient ${payloadTo}; skipping relay delivery`
+          );
+          undelivered++;
+          try {
+            await storeInvoice({
+              invoiceId,
+              chainId: account.chainId,
+              from: account.address.toLowerCase(),
+              to: payloadTo,
+              isPaid: false,
+              isCancelled: false,
+              relayDelivered: false,
+              invoiceDataHash: invoiceDataHashes[eventIndex],
+              data: payload,
+            });
+          } catch (err) {
+            console.error(`Failed to store invoice ${invoiceId} locally:`, err);
+          }
+          return;
+        }
+
+        // Delivery is best-effort and per-recipient: one client without a
+        // registered key must not stop the rest of the batch from arriving.
+        let relayDelivered = false;
+        try {
+          const receiverPublicKey = await fetchPublicKeyFromChain(
+            contract,
+            payload.client.address
+          );
+          if (receiverPublicKey) {
+            await sendEncryptedInvoice({
+              invoiceData: payload,
+              receiverPublicKey,
+              receiverAddress: payload.client.address,
+              senderAddress: account.address,
+              chainId: account.chainId,
+              invoiceId,
+            });
+            relayDelivered = true;
+          }
+        } catch (relayErr) {
+          console.warn(
+            `Relay delivery for invoice ${invoiceId} failed (non-critical):`,
+            relayErr
+          );
+        }
+        if (!relayDelivered) undelivered++;
+
+        try {
+          await storeInvoice({
+            invoiceId,
+            chainId: account.chainId,
+            from: account.address.toLowerCase(),
+            to: payloadTo,
+            isPaid: false,
+            isCancelled: false,
+            relayDelivered,
+            invoiceDataHash: invoiceDataHashes[eventIndex],
+            data: payload,
+          });
+        } catch (err) {
+          console.error(`Failed to store invoice ${invoiceId} locally:`, err);
+        }
+      };
+
+      for (let i = 0; i < created.length; i += DELIVERY_CONCURRENCY) {
+        const group = [];
+        for (let j = i; j < Math.min(i + DELIVERY_CONCURRENCY, created.length); j++) {
+          group.push(deliverOne(j));
+        }
+        await Promise.all(group);
+      }
+
+      if (undelivered > 0) {
+        toast(
+          `${undelivered} of ${invoiceIds.length} invoices could not be delivered to the client yet. Resend them from Sent Invoices.`,
+          { icon: "⚠️" }
+        );
+      }
+
+      if (unmatched > 0) {
+        toast.error(
+          `${unmatched} of ${invoiceIds.length} invoices were created on-chain but their details could not be matched locally. Those invoices are payable but their details are lost — please re-create them.`,
+          { duration: 12000 }
+        );
+      }
 
       toast.success(
         `Successfully created ${validInvoices.length} invoices in batch!`
@@ -675,6 +790,20 @@ function CreateInvoicesBatch() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    // Until IndexedDB has been read the profile is still the empty default,
+    // which is indistinguishable from having none — prompting here would ask a
+    // returning user to re-enter details they already saved.
+    if (profileLoading) return;
+
+    // The sender details are required on-chain, so an empty profile has to be
+    // filled in before submitting rather than silently sending blanks.
+    if (!hasProfile) {
+      setShowProfilePrompt(true);
+      toast.error("Add your information before sending invoices");
+      return;
+    }
+
     await createInvoicesRequest();
   };
 
@@ -690,6 +819,14 @@ function CreateInvoicesBatch() {
 
   return (
     <>
+      <OnboardingProfileDialog
+        open={showProfilePrompt}
+        onOpenChange={setShowProfilePrompt}
+        required
+        title="Add your information"
+        description="Every invoice needs your name and email as the sender. Saved on this device and reused for future invoices."
+      />
+
       <div className="flex justify-center px-2 sm:px-4">
         <WalletConnectionAlert
           show={showWalletAlert}
@@ -705,9 +842,10 @@ function CreateInvoicesBatch() {
             Create Multiple Invoices
           </h2>
           <p className="text-sm sm:text-base text-gray-300">
-            Create a batch of invoices in a single transaction to save on gas fees
+            Create a batch of invoices in a single transaction to save on gas
             fees
           </p>
+          <SenderSummary className="mt-1" />
         </div>
 
         {/* Clean Date Selection */}
@@ -816,94 +954,6 @@ function CreateInvoicesBatch() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          {/* Clean User Information */}
-          <div className="mb-6 sm:mb-8">
-            <div className="w-full bg-white border border-gray-200 p-4 sm:p-6 rounded-lg shadow-sm overflow-hidden">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">
-                From (Your Information)
-              </h3>
-              <div className="mb-4">
-                <Label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Your Wallet Address
-                </Label>
-                <Input
-                  value={account?.address || "Not connected"}
-                  className="w-full bg-gray-50 border-gray-300 text-gray-600 font-mono text-sm"
-                  readOnly
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    First Name <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    placeholder="Your First Name"
-                    className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.userFname ? "border-red-500" : ""}`}
-                    value={userInfo.userFname}
-                    onChange={(e) => handleFieldChange("userFname", e.target.value)}
-                    onBlur={(e) => handleFieldBlur("userFname", e.target.value)}
-                  />
-                  {fieldErrors.userFname && (
-                    <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.userFname}</span></div>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Last Name *
-                  </Label>
-                  <Input
-                    placeholder="Your Last Name"
-                    className="w-full mt-1 border-gray-300 text-black"
-                    value={userInfo.userLname}
-                    onChange={(e) =>
-                      setUserInfo((prev) => ({
-                        ...prev,
-                        userLname: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Email <span className="text-red-500">*</span>
-                  </Label>
-                  <Input
-                    type="email"
-                    placeholder="your.email@example.com"
-                    className={`w-full mt-1 border-gray-300 text-black ${fieldErrors.userEmail ? "border-red-500" : ""}`}
-                    value={userInfo.userEmail}
-                    onChange={(e) => handleFieldChange("userEmail", e.target.value)}
-                    onBlur={(e) => handleFieldBlur("userEmail", e.target.value)}
-                  />
-                  {fieldErrors.userEmail && (
-                    <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{fieldErrors.userEmail}</span></div>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-sm font-medium text-gray-700">
-                    Country
-                  </Label>
-                  <div className="mt-1">
-                    <CountryPicker
-                      value={userInfo.userCountry}
-                      onChange={(value) =>
-                        setUserInfo((prev) => ({
-                          ...prev,
-                          userCountry: value,
-                        }))
-                      }
-                      placeholder="Select country"
-                      className="w-full border-gray-300 text-black"
-                      disabled={loading}
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Clean Token Selection */}
           <div className="w-full mb-6 sm:mb-8 bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm overflow-hidden">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
@@ -1055,8 +1105,6 @@ function CreateInvoicesBatch() {
               </div>
             </div>
           </div>
-
-          <ProductCatalogImport />
 
           {/* Clean Invoice Rows */}
           <div className="w-full mb-6 sm:mb-8 space-y-4">
@@ -1536,7 +1584,9 @@ function CreateInvoicesBatch() {
             <Button
               className="bg-green-600 hover:bg-green-700 w-full sm:w-auto px-6 sm:px-8 py-3 text-white text-base sm:text-lg font-semibold"
               type="submit"
-              disabled={loading || !isConnected || validInvoices === 0}
+              disabled={
+                loading || profileLoading || !isConnected || validInvoices === 0
+              }
             >
               {loading ? (
                 <div className="flex items-center justify-center gap-2">

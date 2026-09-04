@@ -1,5 +1,5 @@
 // pages/BatchPayment.jsx - Complete Enhanced Version
-import React, { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import { BrowserProvider, Contract, ethers } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
@@ -7,8 +7,10 @@ import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import html2canvas from "html2canvas";
 
 import { ERC20_ABI } from "../contractsABI/ERC20_ABI";
-import { toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import { getReceivedInvoices as getLocalReceivedInvoices } from "../services/invoiceStorage/invoiceDB.js";
+import { verifyInvoiceHash } from "../services/relay/invoiceHashUtils.js";
+import toast from "react-hot-toast";
+import { resolveInvoiceDecimals, formatInvoiceDate } from "../utils/invoiceAmounts.js";
 import {
   CheckCircle2,
   Loader2,
@@ -26,9 +28,11 @@ import {
 import { useTokenList } from "../hooks/useTokenList";
 import WalletConnectionAlert from "../components/WalletConnectionAlert";
 
+
+
 function BatchPayment() {
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const rowsPerPage = 10;
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId } = useAccount();
   const [loading, setLoading] = useState(true);
@@ -39,7 +43,6 @@ function BatchPayment() {
   const [error, setError] = useState(null);
 
   const [paymentLoading, setPaymentLoading] = useState({});
-  const [networkLoading, setNetworkLoading] = useState(false);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [balanceErrors, setBalanceErrors] = useState([]);
   const [batchSuggestions, setBatchSuggestions] = useState([]);
@@ -53,14 +56,6 @@ function BatchPayment() {
   // Get tokens from the hook
   const { tokens } = useTokenList(chainId || 1);
 
-  const handleChangePage = (event, newPage) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event) => {
-    setRowsPerPage(+event.target.value);
-    setPage(0);
-  };
 
   // Helper function to get token info
   const getTokenInfo = (tokenAddress) => {
@@ -99,7 +94,11 @@ function BatchPayment() {
     const groups = invoices
       .filter((inv) => !inv.isPaid && !inv.isCancelled)
       .reduce((acc, inv) => {
-        const issueDate = new Date(inv.issueDate).toDateString();
+        // Undated on-chain-only invoices would otherwise all share the
+        // "Invalid Date" key and be suggested as one bogus batch.
+        const issueDate = inv.issueDate
+          ? new Date(inv.issueDate).toDateString()
+          : `undated-${inv.id}`;
         const key = `${inv.user?.address}_${
           inv.paymentToken?.address || "ETH"
         }_${issueDate}`;
@@ -228,7 +227,7 @@ function BatchPayment() {
     }
 
     setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
-    toast.info(
+    toast(
       `Selected ${batchInvoices.length} invoices from batch #${batchId}`
     );
 
@@ -273,9 +272,7 @@ function BatchPayment() {
       if (!selectedInvoices.has(invoice.id)) return;
 
       const tokenAddress = invoice.paymentToken?.address || ethers.ZeroAddress;
-      const tokenKey = `${tokenAddress}_${
-        invoice.paymentToken?.symbol || "ETH"
-      }`;
+      const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"}`;
 
       if (!grouped.has(tokenKey)) {
         grouped.set(tokenKey, {
@@ -311,9 +308,6 @@ function BatchPayment() {
         setError(null);
         const provider = new BrowserProvider(walletClient);
         const signer = await provider.getSigner();
-        const network = await provider.getNetwork();
-
-
 
         const contractAddress = import.meta.env[
           `VITE_CONTRACT_ADDRESS_${chainId}`
@@ -335,6 +329,16 @@ function BatchPayment() {
 
         const decryptedInvoices = [];
 
+        // The payload lives in IndexedDB, delivered over the relay; the chain
+        // only holds a hash of it.
+        const localInvoices = await getLocalReceivedInvoices(address);
+        const localInvoiceMap = new Map();
+        for (const local of localInvoices) {
+          if (String(local.chainId) === String(chainId)) {
+            localInvoiceMap.set(String(local.invoiceId), local);
+          }
+        }
+
         for (const invoice of res) {
           try {
             const id = invoice[0];
@@ -342,19 +346,31 @@ function BatchPayment() {
             const to = invoice[2].toLowerCase();
             const isPaid = invoice[5];
             const isCancelled = invoice[6];
-            const encryptedStringBase64 = invoice[7];
-            const dataToEncryptHash = invoice[8];
-
-            if (!encryptedStringBase64 || !dataToEncryptHash) continue;
+            const invoiceDataHash = invoice[7];
 
             const currentUserAddress = address.toLowerCase();
             if (currentUserAddress !== from && currentUserAddress !== to) {
               continue;
             }
 
-            const decryptedString = atob(encryptedStringBase64);
+            const localInv = localInvoiceMap.get(id.toString());
+            // Only trust a payload that still matches its on-chain commitment.
+            const payloadTrusted =
+              localInv?.data && verifyInvoiceHash(localInv.data, invoiceDataHash);
 
-            const parsed = JSON.parse(decryptedString);
+            // Invoices whose details have not arrived are still payable: the
+            // amount and token come from the chain, which is authoritative.
+            const parsed = payloadTrusted
+              ? { ...localInv.data }
+              : {
+                  amountDue: invoice[3].toString(),
+                  user: { address: from },
+                  client: { address: to },
+                  paymentToken: { address: invoice[4] },
+                  issueDate: null,
+                  dueDate: null,
+                  _onChainOnly: true,
+                };
             parsed["id"] = id;
             parsed["isPaid"] = isPaid;
             parsed["isCancelled"] = isCancelled;
@@ -411,6 +427,21 @@ function BatchPayment() {
               }
             }
 
+            // On-chain amounts are raw token units; the stored payload carries
+            // an already-formatted decimal string, so only stubs need scaling.
+            if (parsed._onChainOnly) {
+              const decimals = resolveInvoiceDecimals(parsed.paymentToken);
+              if (decimals === null) {
+                // Showing a base-unit figure as if it were a token amount, or
+                // feeding it to parseUnits, is worse than omitting the invoice.
+                console.warn(
+                  `Invoice ${parsed.id}: cannot resolve token decimals, skipping`
+                );
+                continue;
+              }
+              parsed.amountDue = ethers.formatUnits(parsed.amountDue, decimals);
+            }
+
             decryptedInvoices.push(parsed);
           } catch (err) {
             console.error(`Error processing invoice ${invoice[0]}:`, err);
@@ -434,7 +465,8 @@ function BatchPayment() {
     };
 
     fetchReceivedInvoices();
-  }, [walletClient, address, tokens]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletClient, address, tokens, chainId]);
 
   // ENHANCED Batch payment function with pre-checks
   const handleBatchPayment = async () => {
@@ -459,10 +491,10 @@ function BatchPayment() {
       const grouped = getGroupedInvoices();
 
       // PRE-CHECK ALL BALANCES BEFORE ANY TRANSACTIONS
-      toast.info("Checking balances...");
+      toast("Checking balances...");
       const errors = [];
 
-      for (const [tokenKey, group] of grouped.entries()) {
+      for (const [, group] of grouped.entries()) {
         try {
           await checkPaymentCapability(group, signer);
         } catch (error) {
@@ -482,7 +514,7 @@ function BatchPayment() {
       toast.success("Balance checks passed! Processing payments...");
 
       // Process payments only after all checks pass
-      for (const [tokenKey, group] of grouped.entries()) {
+      for (const [, group] of grouped.entries()) {
         const { tokenAddress, symbol, decimals, invoices } = group;
         const invoiceIds = invoices.map((inv) => BigInt(inv.id));
 
@@ -525,7 +557,7 @@ function BatchPayment() {
           );
 
           if (currentAllowance < totalAmount) {
-            toast.info(`Approving ${symbol} for spending...`);
+            toast(`Approving ${symbol} for spending...`);
             const approveTx = await tokenContract.approve(
               contractAddress,
               totalAmount
@@ -726,10 +758,7 @@ function BatchPayment() {
     )}`;
   };
 
-  const formatDate = (issueDate) => {
-    const date = new Date(issueDate);
-    return date.toLocaleString();
-  };
+  const formatDate = formatInvoiceDate;
 
   const unpaidInvoices = receivedInvoices.filter(
     (inv) => !inv.isPaid && !inv.isCancelled
@@ -947,7 +976,7 @@ function BatchPayment() {
                     No Invoices Found
                   </h3>
                   <p className="text-gray-600">
-                    You don't have any received invoices yet.
+                    You don&apos;t have any received invoices yet.
                   </p>
                 </div>
               </div>
@@ -1387,15 +1416,11 @@ function BatchPayment() {
                   <div className="flex justify-between text-sm text-gray-500 mb-2">
                     <span>
                       Issued:{" "}
-                      {new Date(
-                        drawerState.selectedInvoice.issueDate
-                      ).toLocaleDateString()}
+                      {formatInvoiceDate(drawerState.selectedInvoice.issueDate)}
                     </span>
                     <span>
                       Due:{" "}
-                      {new Date(
-                        drawerState.selectedInvoice.dueDate
-                      ).toLocaleDateString()}
+                      {formatInvoiceDate(drawerState.selectedInvoice.dueDate)}
                     </span>
                   </div>
                 </div>

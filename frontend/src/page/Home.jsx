@@ -1,5 +1,6 @@
 // Home.js - Updated with Batch Creation AND Batch Payment sections
-import * as React from "react";
+
+import { useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import List from "@mui/material/List";
@@ -11,15 +12,32 @@ import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import DraftsIcon from "@mui/icons-material/Drafts";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import LinkIcon from "@mui/icons-material/Link";
+import SettingsIcon from "@mui/icons-material/Settings";
 import MenuItem from "@mui/material/MenuItem";
 import FormControl from "@mui/material/FormControl";
 import Select from "@mui/material/Select";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { FileStack, CreditCard, Layers3, PlusCircle, FileStackIcon } from "lucide-react";
+import { FileStackIcon } from "lucide-react";
+import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
+import { useUserProfile } from "@/hooks/useUserProfile";
 
 export default function Home() {
   const navigate = useNavigate();
   const location = useLocation();
+  const {
+    loading: profileLoading,
+    isComplete: hasProfile,
+    onboardingDismissed,
+    dismissOnboarding,
+  } = useUserProfile();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+
+  // First visit only: prompt for the sender details every invoice needs, once
+  // storage has actually been read and once the user has not already skipped.
+  useEffect(() => {
+    if (profileLoading) return;
+    setShowOnboarding(!hasProfile && !onboardingDismissed);
+  }, [profileLoading, hasProfile, onboardingDismissed]);
 
   // Get current active route for dropdown
   const getCurrentRoute = () => {
@@ -63,10 +81,22 @@ export default function Home() {
       route: "pending",
       color: "#60a5fa",
     },
+    {
+      text: "Settings",
+      icon: <SettingsIcon />,
+      route: "settings",
+      color: "#9ca3af",
+    },
   ];
 
   return (
     <>
+      <OnboardingProfileDialog
+        open={showOnboarding}
+        onOpenChange={setShowOnboarding}
+        onSkip={dismissOnboarding}
+      />
+
       <div className="px-2 sm:px-4 md:px-6 lg:px-10">
         <header className="mb-2">
           <h1 className="text-xl sm:text-2xl mt-4 text-white">

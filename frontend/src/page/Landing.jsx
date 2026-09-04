@@ -167,7 +167,7 @@ function Landing() {
               </motion.h3>
 
               <p className="text-gray-400 mb-6 leading-relaxed">
-                Chainvoice's smart contract architecture automatically handles
+                Chainvoice&apos;s smart contract architecture automatically handles
                 token conversions and verifications, while end-to-end encryption ensures
                 all payment details remain secure until settlement. Our
                 system supports:

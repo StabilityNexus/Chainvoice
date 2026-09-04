@@ -1,20 +1,16 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Link } from "react-router-dom";
 import {
   FiShield,
   FiZap,
   FiGlobe,
   FiCode,
   FiGithub,
-  FiTwitter,
-  FiLinkedin,
   FiArrowRight,
   FiTerminal,
   FiCheckCircle,
   FiPlus,
   FiCreditCard,
-  FiCpu,
   FiArrowUp,
 } from "react-icons/fi";
 
@@ -232,7 +228,7 @@ function About() {
                 Auditable Security.
               </h2>
               <p className="text-gray-400 text-lg leading-relaxed mb-8">
-                Chainvoice isn't a black box. Our core logic runs publicly on
+                Chainvoice isn&apos;t a black box. Our core logic runs publicly on
                 blockchains and is verifiable by anyone.
               </p>
               <a
@@ -301,21 +297,21 @@ function About() {
                   <span className="text-[#C586C0]">returns</span> (
                   <span className="text-[#4EC9B0]">uint256</span>) {"{"}
                 </p>
-                <p className="pl-4 text-[#6A9955]">// Verify inputs</p>
+                <p className="pl-4 text-[#6A9955]">{"// Verify inputs"}</p>
                 <p className="pl-4">
                   <span className="text-[#DCDCAA]">require</span>(_amount {">"}{" "}
                   <span className="text-[#B5CEA8]">0</span>,{" "}
-                  <span className="text-[#CE9178]">"Invalid amount"</span>);
+                  <span className="text-[#CE9178]">&quot;Invalid amount&quot;</span>);
                 </p>
                 <p className="pl-4">
                   <span className="text-[#DCDCAA]">require</span>(_recipient !=
                   <span className="text-[#4EC9B0]">address</span>(
                   <span className="text-[#B5CEA8]">0</span>),{" "}
-                  <span className="text-[#CE9178]">"Invalid address"</span>);
+                  <span className="text-[#CE9178]">&quot;Invalid address&quot;</span>);
                 </p>
                 <p className="pl-4">&nbsp;</p>
                 <p className="pl-4 text-[#6A9955]">
-                  // Emit event for indexers
+                  {"// Emit event for indexers"}
                 </p>
                 <p className="pl-4">
                   <span className="text-[#C586C0]">emit</span>{" "}

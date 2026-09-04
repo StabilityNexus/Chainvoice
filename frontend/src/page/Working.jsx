@@ -1,10 +1,6 @@
 import SwipeableDrawer from '@mui/material/SwipeableDrawer';
 import Button from '@mui/material/Button';
-import React, { Fragment, useState } from 'react';
-
-import { useRef } from "react";
-import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import { Fragment, useState } from 'react';
 
 export default function Working() {
   const [state, setState] = useState(false);
@@ -19,33 +15,7 @@ export default function Working() {
 
     setState((prevState) => !prevState);
   };
-  const contentRef = useRef();
-  const handlePrint = async () => {
-    const element = contentRef.current;
-    if (!element) {
-      return;
-    }
 
-    const canvas = await html2canvas(element, {
-      scale: 2,
-    });
-    const data = canvas.toDataURL("image/png");
-
-    // download feature (implement later on)
-    // const pdf = new jsPDF({
-    //   orientation: "portrait",
-    //   unit: "px",
-    //   format: "a4",
-    // });
-
-    // const imgProperties = pdf.getImageProperties(data);
-    // const pdfWidth = pdf.internal.pageSize.getWidth();
-
-    // const pdfHeight = (imgProperties.height * pdfWidth) / imgProperties.width;
-
-    // pdf.addImage(data, "PNG", 0, 0, pdfWidth, pdfHeight);
-    // pdf.save("invoice.pdf");
-  };
   
   return (
     <div >
@@ -59,7 +29,7 @@ export default function Working() {
         >
           <div style={{ width: 650, padding: 20 }}>
 
-            <div ref={contentRef} className="bg-white p-6  shadow-lg w-full max-w-2xl font-Montserrat">
+            <div className="bg-white p-6  shadow-lg w-full max-w-2xl font-Montserrat">
               <div className="flex justify-between items-center">
                 <img src="whiteLogo.png" alt="" width={100} />
                 <div>

@@ -38,7 +38,7 @@ contract Chainvoice {
     error TreasuryNotSet();
     error NoFeesAvailable();
     error WithdrawFailed();
-    error InvalidWakuKey();
+    error InvalidPublicKey();
     error InvalidInvoiceHash();
 
     // ========== Storage ==========
@@ -61,8 +61,8 @@ contract Chainvoice {
     mapping(address => uint256[]) public sentInvoices;
     mapping(address => uint256[]) public receivedInvoices;
 
-    // ========== Waku Public Key Registry ==========
-    mapping(address => bytes) private wakuPublicKeys;
+    // ========== Messaging Public Key Registry ==========
+    mapping(address => bytes) private messagingPublicKeys;
 
     address public owner;
     address public treasuryAddress;
@@ -76,7 +76,7 @@ contract Chainvoice {
     event InvoiceCancelled(uint256 indexed id, address indexed from, address indexed to, address tokenAddress);
     event InvoiceBatchCreated(address indexed creator, address indexed token, uint256 count, uint256[] ids);
     event InvoiceBatchPaid(address indexed payer, address indexed token, uint256 count, uint256 totalAmount, uint256[] ids);
-    event WakuKeyRegistered(address indexed user, bytes publicKey);
+    event PublicKeyRegistered(address indexed user, bytes publicKey);
 
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     event OwnershipTransferInitiated(address indexed currentOwner, address indexed pendingOwner);
@@ -118,20 +118,23 @@ contract Chainvoice {
         return success;
     }
 
-    // ========== Waku Key Management ==========
-    /// @notice Register or update the caller's Waku ECIES public key.
+    // ========== Messaging Key Management ==========
+    /// @notice Register or update the caller's ECIES public key.
+    /// @dev Used by clients to encrypt invoice payloads for this address. The
+    ///      registry is transport-agnostic: it says nothing about how the
+    ///      encrypted payload is delivered.
     /// @param publicKey The uncompressed secp256k1 public key (65 bytes).
-    function registerWakuPublicKey(bytes calldata publicKey) external {
-        if (publicKey.length != 65 || publicKey[0] != 0x04) revert InvalidWakuKey();
-        wakuPublicKeys[msg.sender] = publicKey;
-        emit WakuKeyRegistered(msg.sender, publicKey);
+    function registerPublicKey(bytes calldata publicKey) external {
+        if (publicKey.length != 65 || publicKey[0] != 0x04) revert InvalidPublicKey();
+        messagingPublicKeys[msg.sender] = publicKey;
+        emit PublicKeyRegistered(msg.sender, publicKey);
     }
 
-    /// @notice Get a user's registered Waku public key.
+    /// @notice Get a user's registered ECIES public key.
     /// @param user The address to look up.
     /// @return The public key bytes (empty if not registered).
-    function getWakuPublicKey(address user) external view returns (bytes memory) {
-        return wakuPublicKeys[user];
+    function getPublicKey(address user) external view returns (bytes memory) {
+        return messagingPublicKeys[user];
     }
 
     // ========== Single-invoice create ==========

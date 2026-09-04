@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { ArrowRightLeft } from 'lucide-react';
 
 export const AmountTypeToggle = ({ value, onChange, className = "" }) => {

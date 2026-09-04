@@ -8,18 +8,21 @@ import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { BrowserProvider, Contract, ethers } from "ethers";
-import React, { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
-import { useRef } from "react";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
+import { getReceivedInvoices as getLocalReceivedInvoices, getInvoiceById, storeInvoice, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
+import { verifyInvoiceHash } from "@/services/relay/invoiceHashUtils.js";
+import { fetchInvoiceMessages, pollInvoiceMessages } from "@/services/relay/relayInvoiceMessaging.js";
+import { useRelayKeys } from "@/hooks/useRelayKeys";
 
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
-import { toast } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
+import toast from "react-hot-toast";
+import { resolveInvoiceDecimals, formatInvoiceDate } from "@/utils/invoiceAmounts";
 import CancelIcon from "@mui/icons-material/Cancel";
 
 import {
@@ -52,11 +55,11 @@ import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import SelectAllIcon from "@mui/icons-material/SelectAll";
 import ClearAllIcon from "@mui/icons-material/ClearAll";
 import PaymentIcon from "@mui/icons-material/Payment";
-import WarningIcon from "@mui/icons-material/Warning";
 import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import LayersIcon from "@mui/icons-material/Layers";
 import CloseIcon from "@mui/icons-material/Close";
 import ErrorIcon from "@mui/icons-material/Error";
+import WarningIcon from "@mui/icons-material/Warning";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
 
@@ -69,6 +72,8 @@ const columns = [
   { id: "date", label: "Date", minWidth: 100 },
   { id: "actions", label: "Actions", minWidth: 150 },
 ];
+
+
 
 function ReceivedInvoice() {
   const [page, setPage] = useState(0);
@@ -86,8 +91,18 @@ function ReceivedInvoice() {
   const [error, setError] = useState(null);
 
   const [paymentLoading, setPaymentLoading] = useState({});
-  const [networkLoading, setNetworkLoading] = useState(false);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const {
+    keys,
+    isRegistered,
+    isUnsupportedNetwork,
+    isLoading: keysLoading,
+    error: keysError,
+    deriveAndRegister,
+    deriveKeysOnly,
+  } = useRelayKeys();
+  const relayStopRef = useRef(null);
 
   // Error handling states
   const [paymentError, setPaymentError] = useState("");
@@ -209,7 +224,11 @@ function ReceivedInvoice() {
     const groups = invoices
       .filter((inv) => !inv.isPaid && !inv.isCancelled)
       .reduce((acc, inv) => {
-        const issueDate = new Date(inv.issueDate).toDateString();
+        // Undated on-chain-only invoices would otherwise all share the
+        // "Invalid Date" key and be suggested as one bogus batch.
+        const issueDate = inv.issueDate
+          ? new Date(inv.issueDate).toDateString()
+          : `undated-${inv.id}`;
         const key = `${inv.user?.address}_${inv.paymentToken?.address || "ETH"
           }_${issueDate}`;
         if (!acc[key]) acc[key] = [];
@@ -284,8 +303,7 @@ function ReceivedInvoice() {
       if (!selectedInvoices.has(invoice.id)) return;
 
       const tokenAddress = invoice.paymentToken?.address || ethers.ZeroAddress;
-      const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"
-        }`;
+      const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"}`;
 
       if (!grouped.has(tokenKey)) {
         grouped.set(tokenKey, {
@@ -358,7 +376,7 @@ function ReceivedInvoice() {
     }
 
     setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
-    toast.info(
+    toast(
       `Selected ${batchInvoices.length} invoices from batch #${batchId}`
     );
 
@@ -431,7 +449,7 @@ function ReceivedInvoice() {
         const amountDueInWei = ethers.parseUnits(String(amountDue), decimals);
 
         if (currentAllowance < amountDueInWei) {
-          toast.info(`Requesting approval for ${tokenSymbol}...`);
+          toast(`Requesting approval for ${tokenSymbol}...`);
           const contractAddress = import.meta.env[
             `VITE_CONTRACT_ADDRESS_${chainId}`
           ];
@@ -443,16 +461,16 @@ function ReceivedInvoice() {
             contractAddress,
             amountDueInWei
           );
-          toast.info("Approval transaction submitted. Please wait...");
+          toast("Approval transaction submitted. Please wait...");
           await approveTx.wait();
           toast.success(`${tokenSymbol} approval completed successfully!`);
         }
 
-        toast.info("Submitting payment transaction...");
+        toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
           value: fee,
         });
-        toast.info(
+        toast(
           "Payment transaction submitted. Please wait for confirmation..."
         );
         await tx.wait();
@@ -461,11 +479,11 @@ function ReceivedInvoice() {
         const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
         const total = amountDueInWei + BigInt(fee);
 
-        toast.info("Submitting payment transaction...");
+        toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
           value: total,
         });
-        toast.info(
+        toast(
           "Payment transaction submitted. Please wait for confirmation..."
         );
         await tx.wait();
@@ -511,9 +529,9 @@ function ReceivedInvoice() {
       const grouped = getGroupedInvoices();
 
       // BALANCE CHECK (same as individual)
-      toast.info("Checking balances...");
+      toast("Checking balances...");
 
-      for (const [tokenKey, group] of grouped.entries()) {
+      for (const [, group] of grouped.entries()) {
         try {
           await checkBalance(
             group.tokenAddress,
@@ -535,7 +553,7 @@ function ReceivedInvoice() {
       toast.success("Balance checks passed! Processing payments...");
 
       // Process payments
-      for (const [tokenKey, group] of grouped.entries()) {
+      for (const [, group] of grouped.entries()) {
         const { tokenAddress, symbol, decimals, invoices } = group;
         const invoiceIds = invoices.map((inv) => BigInt(inv.id));
 
@@ -574,7 +592,7 @@ function ReceivedInvoice() {
           );
 
           if (currentAllowance < totalAmount) {
-            toast.info(`Approving ${symbol} for spending...`);
+            toast(`Approving ${symbol} for spending...`);
             const approveTx = await tokenContract.approve(
               contractAddress,
               totalAmount
@@ -661,27 +679,68 @@ function ReceivedInvoice() {
 
         const decryptedInvoices = [];
 
+        // 1. Fetch local invoices
+        const localInvoices = await getLocalReceivedInvoices(address);
+        const localInvoiceMap = new Map();
+        for (const local of localInvoices) {
+          if (String(local.chainId) === String(chainId)) {
+            localInvoiceMap.set(String(local.invoiceId), local);
+          }
+        }
+
         for (const invoice of res) {
           try {
-            const id = invoice[0];
+            const id = invoice[0].toString();
             const from = invoice[1].toLowerCase();
             const to = invoice[2].toLowerCase();
             const isPaid = invoice[5];
             const isCancelled = invoice[6];
-            const encryptedStringBase64 = invoice[7];
-            const dataToEncryptHash = invoice[8];
-
-            if (!encryptedStringBase64 || !dataToEncryptHash) continue;
+            const invoiceDataHash = invoice[7];
 
             const currentUserAddress = address.toLowerCase();
             if (currentUserAddress !== from && currentUserAddress !== to) {
               continue;
             }
 
-            const decryptedString = atob(encryptedStringBase64);
+            const localInv = localInvoiceMap.get(id);
+            let parsed;
 
-            const parsed = JSON.parse(decryptedString);
-            parsed["id"] = id;
+            // The payload lives only in IndexedDB, delivered over the relay.
+            // Recompute its hash and compare against the chain: a payload that
+            // does not match the sender's on-chain commitment is not trusted,
+            // and we fall back to the on-chain facts instead of showing it.
+            const payloadTrusted =
+              localInv?.data && verifyInvoiceHash(localInv.data, invoiceDataHash);
+
+            if (payloadTrusted) {
+              parsed = { ...localInv.data };
+
+              // Update local status if it changed
+              if (localInv.isPaid !== isPaid || localInv.isCancelled !== isCancelled) {
+                await updateInvoiceStatus(chainId, id, { isPaid, isCancelled });
+              }
+            } else {
+              if (localInv?.data) {
+                console.warn(
+                  `Invoice ${id}: stored payload does not match the on-chain hash; showing on-chain data only`
+                );
+              }
+              // Either nothing has arrived over the relay yet, or what did
+              // arrive failed verification. Build a stub from on-chain data so
+              // the invoice is still visible and payable.
+              parsed = {
+                amountDue: invoice[3].toString(),
+                user: { address: from },
+                client: { address: to },
+                paymentToken: { address: invoice[4] },
+                issueDate: null,
+                dueDate: null,
+                _onChainOnly: true,
+                _hashMismatch: Boolean(localInv?.data),
+              };
+            }
+
+            parsed["id"] = BigInt(id);
             parsed["isPaid"] = isPaid;
             parsed["isCancelled"] = isCancelled;
 
@@ -727,11 +786,26 @@ function ReceivedInvoice() {
                     decimals: Number(decimals),
                     logo: "/tokenImages/generic.png",
                   };
-                } catch (error) {
+                } catch {
                   parsed.paymentToken.logo =
                     parsed.paymentToken.logo || "/tokenImages/generic.png";
                 }
               }
+            }
+
+            // On-chain amounts are raw token units; the relay payload carries
+            // an already-formatted decimal string, so only stubs need scaling.
+            if (parsed._onChainOnly) {
+              const decimals = resolveInvoiceDecimals(parsed.paymentToken);
+              if (decimals === null) {
+                // Showing a base-unit figure as if it were a token amount, or
+                // feeding it to parseUnits, is worse than omitting the invoice.
+                console.warn(
+                  `Invoice ${parsed.id}: cannot resolve token decimals, skipping`
+                );
+                continue;
+              }
+              parsed.amountDue = ethers.formatUnits(parsed.amountDue, decimals);
             }
 
             decryptedInvoices.push(parsed);
@@ -757,7 +831,140 @@ function ReceivedInvoice() {
     };
 
     fetchReceivedInvoices();
-  }, [walletClient, address, tokens]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletClient, address, tokens, chainId, refreshTrigger]);
+
+  // Relay ingestion runs independently of the display fetch above. Keeping it
+  // out of the refreshTrigger cycle matters: if storing a message re-ran this
+  // effect, it would re-fetch the same mailbox, store the same invoices and
+  // bump the trigger again, forever.
+  //
+  // It keys off `keys` from the hook rather than probing the key cache
+  // directly, so that unlocking or registering starts polling immediately
+  // instead of only after some unrelated dependency happens to change.
+  useEffect(() => {
+    if (!isConnected || !address || !chainId || !walletClient) return;
+    if (!keys?.privateKey) return;
+
+    let cancelled = false;
+
+    const contractAddress = import.meta.env[`VITE_CONTRACT_ADDRESS_${chainId}`];
+    if (!contractAddress) return;
+    const contract = new Contract(
+      contractAddress,
+      ChainvoiceABI,
+      new BrowserProvider(walletClient)
+    );
+
+
+    /**
+     * Persist a relay invoice, reporting whether it was genuinely new.
+     * The relay has no cursor, so the same message is re-read on every poll;
+     * only unseen invoices should wake the UI.
+     *
+     * The envelope is checked against the on-chain commitment before it is
+     * stored. Anyone can encrypt to this recipient — the public key is in the
+     * registry — so without that check a stranger could post an envelope
+     * claiming any invoice id, have it stored first, and permanently shadow
+     * the real payload: the record would exist, so the genuine delivery would
+     * be skipped as a duplicate and the invoice would sit unverifiable for good.
+     */
+    const storeRelayInvoice = async ({ envelope }) => {
+      const sender = envelope.data?.user?.address;
+      if (!sender) {
+        console.warn("[ReceivedInvoice] Relay envelope has no sender address");
+        return false;
+      }
+      try {
+        if (Number(envelope.chainId) !== Number(chainId)) return false;
+
+        const onChain = await contract.getInvoice(envelope.invoiceId);
+        // Only the addressee may store an invoice, and it must be this account.
+        if (onChain[2].toLowerCase() !== address.toLowerCase()) {
+          console.warn(
+            `[ReceivedInvoice] Envelope for invoice ${envelope.invoiceId} is not addressed to this account; ignoring`
+          );
+          return false;
+        }
+        if (!verifyInvoiceHash(envelope.data, onChain[7])) {
+          console.warn(
+            `[ReceivedInvoice] Envelope for invoice ${envelope.invoiceId} does not match the on-chain hash; ignoring`
+          );
+          return false;
+        }
+
+        // Verified payloads may replace an unverified record, so an earlier
+        // bogus delivery cannot lock the real one out.
+        const existing = await getInvoiceById(envelope.chainId, envelope.invoiceId);
+        if (existing?.data && verifyInvoiceHash(existing.data, onChain[7])) {
+          return false;
+        }
+
+        await storeInvoice({
+          invoiceId: envelope.invoiceId,
+          chainId: envelope.chainId,
+          from: sender,
+          to: address,
+          isPaid: existing?.isPaid ?? false,
+          isCancelled: existing?.isCancelled ?? false,
+          data: envelope.data,
+        });
+        return true;
+      } catch (err) {
+        console.error("[ReceivedInvoice] Failed to store relay invoice:", err);
+        return false;
+      }
+    };
+
+    const startRelay = async () => {
+      try {
+        const { privateKey } = keys;
+
+        const pending = await fetchInvoiceMessages({
+          privateKey,
+          address,
+          chainId,
+        });
+        if (cancelled) return;
+
+        let stored = 0;
+        for (const item of pending) {
+          if (cancelled) return;
+          if (await storeRelayInvoice(item)) stored++;
+        }
+        if (stored > 0 && !cancelled) setRefreshTrigger((p) => p + 1);
+
+        const stop = pollInvoiceMessages({
+          privateKey,
+          address,
+          chainId,
+          knownMessageIds: pending.map((item) => item.messageId),
+          onInvoice: async (item) => {
+            if (cancelled) return;
+            if (await storeRelayInvoice(item)) {
+              setRefreshTrigger((p) => p + 1);
+              toast.success("New invoice received!");
+            }
+          },
+        });
+
+        if (cancelled) stop();
+        else relayStopRef.current = stop;
+      } catch (err) {
+        console.warn("[ReceivedInvoice] Relay setup failed:", err);
+      }
+    };
+
+    startRelay();
+
+    return () => {
+      cancelled = true;
+      if (typeof relayStopRef.current === "function") {
+        relayStopRef.current();
+        relayStopRef.current = null;
+      }
+    };
+  }, [isConnected, address, chainId, walletClient, keys]);
 
   const toggleDrawer = (invoice) => (event) => {
     if (
@@ -797,7 +1004,7 @@ function ReceivedInvoice() {
     }
 
     try {
-      toast.info("Generating PDF...");
+      toast("Generating PDF...");
       const pdf = await generateInvoicePDF(drawerState.selectedInvoice, fee);
       const fileName = `invoice-${drawerState.selectedInvoice.id.toString().padStart(6, "0")}.pdf`;
       pdf.save(fileName);
@@ -821,10 +1028,7 @@ function ReceivedInvoice() {
     )}`;
   };
 
-  const formatDate = (issueDate) => {
-    const date = new Date(issueDate);
-    return date.toLocaleString();
-  };
+  const formatDate = formatInvoiceDate;
 
   const unpaidInvoices = receivedInvoices.filter(
     (inv) => !inv.isPaid && !inv.isCancelled
@@ -853,6 +1057,73 @@ function ReceivedInvoice() {
               </p>
             </div>
           </div>
+
+          {/* Without a registered public key, senders have nothing to encrypt
+              to, so invoices arrive as on-chain summaries with no detail. */}
+          {isConnected && !isUnsupportedNetwork && !isRegistered && (
+            <Alert
+              severity="info"
+              sx={{ mb: 2 }}
+              action={
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={keysLoading}
+                  onClick={() =>
+                    deriveAndRegister().catch(() => {
+                      /* surfaced via the hook's error state */
+                    })
+                  }
+                >
+                  {keysLoading ? (
+                    <CircularProgress size={16} sx={{ color: "white" }} />
+                  ) : (
+                    "Register key"
+                  )}
+                </Button>
+              }
+            >
+              Register your encryption key to receive full invoice details.
+              Until you do, senders can only record invoices on-chain.
+            </Alert>
+          )}
+
+          {/* Registered on-chain, but this tab holds no private key — the key
+              is derived from a signature and never stored beyond the session,
+              so nothing can be decrypted until the user re-derives it. */}
+          {isConnected && !isUnsupportedNetwork && isRegistered && !keys && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2 }}
+              action={
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={keysLoading}
+                  onClick={() =>
+                    deriveKeysOnly(true).catch(() => {
+                      /* surfaced via the hook's error state */
+                    })
+                  }
+                >
+                  {keysLoading ? (
+                    <CircularProgress size={16} sx={{ color: "white" }} />
+                  ) : (
+                    "Unlock inbox"
+                  )}
+                </Button>
+              }
+            >
+              Sign to unlock your inbox. Incoming invoice details stay encrypted
+              until you do — this signature is free and costs no gas.
+            </Alert>
+          )}
+
+          {isConnected && keysError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {keysError}
+            </Alert>
+          )}
 
           {/* UNIFORM ERROR DISPLAY */}
           <Snackbar
@@ -1201,7 +1472,7 @@ function ReceivedInvoice() {
                     No Invoices Found
                   </h3>
                   <p className="text-gray-600 mt-1">
-                    You don't have any received invoices yet.
+                    You don&apos;t have any received invoices yet.
                   </p>
                 </div>
               </div>
@@ -1378,6 +1649,36 @@ function ReceivedInvoice() {
                                   size="small"
                                   icon={<UnpaidIcon />}
                                 />
+                              )}
+                              {invoice._onChainOnly && (
+                                <Tooltip
+                                  title={
+                                    invoice._hashMismatch
+                                      ? "The details delivered for this invoice do not match the hash the sender recorded on-chain, so they are not shown. Only the on-chain amount and addresses can be trusted."
+                                      : "Full details have not arrived yet. The amount and addresses shown come from the blockchain."
+                                  }
+                                >
+                                  <Chip
+                                    icon={
+                                      invoice._hashMismatch ? (
+                                        <ErrorIcon />
+                                      ) : (
+                                        <WarningIcon />
+                                      )
+                                    }
+                                    label={
+                                      invoice._hashMismatch
+                                        ? "Unverified"
+                                        : "Details pending"
+                                    }
+                                    color={
+                                      invoice._hashMismatch ? "error" : "default"
+                                    }
+                                    size="small"
+                                    variant="outlined"
+                                    sx={{ mt: 0.5 }}
+                                  />
+                                </Tooltip>
                               )}
                             </TableCell>
                             <TableCell>
@@ -1759,15 +2060,11 @@ function ReceivedInvoice() {
                   <div className="flex justify-between text-sm text-gray-500 mb-2">
                     <span>
                       Issued:{" "}
-                      {new Date(
-                        drawerState.selectedInvoice.issueDate
-                      ).toLocaleDateString()}
+                      {formatInvoiceDate(drawerState.selectedInvoice.issueDate)}
                     </span>
                     <span>
                       Due:{" "}
-                      {new Date(
-                        drawerState.selectedInvoice.dueDate
-                      ).toLocaleDateString()}
+                      {formatInvoiceDate(drawerState.selectedInvoice.dueDate)}
                     </span>
                   </div>
                 </div>
