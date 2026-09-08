@@ -1,6 +1,6 @@
-// Home.js - Updated with Batch Creation AND Batch Payment sections
+// Home.js - dashboard shell: collapsible nav rail on desktop, drawer below lg
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Box from "@mui/material/Box";
 import Drawer from "@mui/material/Drawer";
 import List from "@mui/material/List";
@@ -8,18 +8,153 @@ import ListItem from "@mui/material/ListItem";
 import ListItemButton from "@mui/material/ListItemButton";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
+import Tooltip from "@mui/material/Tooltip";
 import MailOutlineIcon from "@mui/icons-material/MailOutline";
 import DraftsIcon from "@mui/icons-material/Drafts";
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
 import LinkIcon from "@mui/icons-material/Link";
 import SettingsIcon from "@mui/icons-material/Settings";
-import MenuItem from "@mui/material/MenuItem";
-import FormControl from "@mui/material/FormControl";
-import Select from "@mui/material/Select";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { FileStackIcon } from "lucide-react";
+import { FileStackIcon, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { SHELL } from "@/utils/layout";
+
+const MENU_ITEMS = [
+  {
+    text: "Send Invoice",
+    icon: <AddCircleOutlineIcon />,
+    route: "create",
+    color: "#f472b6",
+  },
+  {
+    text: "Send Multiple Invoices",
+    icon: <FileStackIcon />,
+    route: "batch-invoice",
+    color: "#22c55e",
+  },
+  {
+    text: "Sent Invoices",
+    icon: <MailOutlineIcon />,
+    route: "sent",
+    color: "#4ade80",
+  },
+  {
+    text: "Request Invoices",
+    icon: <LinkIcon />,
+    route: "generate-link",
+    color: "#a78bfa",
+  },
+  {
+    text: "Received Invoices",
+    icon: <DraftsIcon />,
+    route: "pending",
+    color: "#60a5fa",
+  },
+  {
+    text: "Settings",
+    icon: <SettingsIcon />,
+    route: "settings",
+    color: "#9ca3af",
+  },
+];
+
+const RAIL_WIDTH = 248;
+const RAIL_WIDTH_COLLAPSED = 68;
+const RAIL_COLLAPSED_KEY = "chainvoice_dashboard_rail_collapsed";
+const NAV_DRAWER_ID = "dashboard-nav-drawer";
+
+// Tailwind's lg, which the hamburger and the rail are keyed to. MUI's own `lg`
+// is 1200px, so relying on it here would leave the drawer mounted between
+// 1024px and 1199px where the hamburger that closes it is already hidden.
+const LG_QUERY = "(min-width: 1024px)";
+
+/**
+ * Reads the rail preference synchronously. localStorage rather than the
+ * IndexedDB used for app data: an async read would render the rail expanded
+ * and then snap it closed on every load.
+ */
+const readRailCollapsed = () => {
+  try {
+    return window.localStorage.getItem(RAIL_COLLAPSED_KEY) === "true";
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * The dashboard navigation list. Rendered by the desktop rail (expanded or
+ * collapsed to icons) and by the mobile drawer, so the variants cannot drift.
+ */
+function DashboardNav({ activeRoute, onNavigate, collapsed = false }) {
+  return (
+    <List className="space-y-1" sx={{ py: 0 }}>
+      {MENU_ITEMS.map((item) => {
+        const isActive = activeRoute === item.route;
+
+        return (
+          <ListItem key={item.route} disablePadding className="text-white">
+            <Tooltip
+              title={collapsed ? item.text : ""}
+              placement="right"
+              arrow
+              disableHoverListener={!collapsed}
+            >
+              <ListItemButton
+                onClick={() => onNavigate(item.route)}
+                selected={isActive}
+                aria-label={item.text}
+                sx={{
+                  borderRadius: "8px",
+                  transition: "all 0.2s ease",
+                  justifyContent: collapsed ? "center" : "flex-start",
+                  backgroundColor: isActive
+                    ? "rgba(255, 255, 255, 0.08)"
+                    : "transparent",
+                  "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.05)" },
+                  "&.Mui-selected": { borderLeft: `4px solid ${item.color}` },
+                  padding: collapsed ? "10px 0" : "9px 14px",
+                }}
+              >
+                <ListItemIcon
+                  sx={{
+                    minWidth: collapsed ? 0 : "32px",
+                    justifyContent: "center",
+                    color: item.color,
+                    fontSize: "1.15rem",
+                  }}
+                >
+                  {item.icon}
+                </ListItemIcon>
+                {!collapsed && (
+                  <ListItemText
+                    primary={item.text}
+                    primaryTypographyProps={{
+                      fontSize: "0.925rem",
+                      fontWeight: isActive ? 600 : 500,
+                    }}
+                  />
+                )}
+              </ListItemButton>
+            </Tooltip>
+          </ListItem>
+        );
+      })}
+    </List>
+  );
+}
+
+/**
+ * The dashboard greeting. The connected address and network deliberately are
+ * not repeated here — the navbar already shows both.
+ */
+function RailGreeting() {
+  return (
+    <p className="text-base text-white">
+      Welcome <span className="font-medium text-green-400">Back!</span>
+    </p>
+  );
+}
 
 export default function Home() {
   const navigate = useNavigate();
@@ -31,6 +166,8 @@ export default function Home() {
     dismissOnboarding,
   } = useUserProfile();
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const [railCollapsed, setRailCollapsed] = useState(readRailCollapsed);
 
   // First visit only: prompt for the sender details every invoice needs, once
   // storage has actually been read and once the user has not already skipped.
@@ -39,55 +176,50 @@ export default function Home() {
     setShowOnboarding(!hasProfile && !onboardingDismissed);
   }, [profileLoading, hasProfile, onboardingDismissed]);
 
-  // Get current active route for dropdown
-  const getCurrentRoute = () => {
-    const currentPath = location.pathname;
-    const matchedItem = menuItems.find(item => currentPath.includes(item.route));
-    return matchedItem ? matchedItem.route : 'create';
-  };
+  // Widening past lg hides the drawer and its hamburger by CSS, but the modal
+  // would stay open and keep the body scroll locked with nothing left to close
+  // it. Closing on the breakpoint keeps state and layout in step.
+  useEffect(() => {
+    const mq = window.matchMedia(LG_QUERY);
+    const handleChange = (e) => {
+      if (e.matches) setNavOpen(false);
+    };
 
-  const handleDropdownChange = (event) => {
-    navigate(event.target.value);
-  };
+    handleChange(mq);
+    mq.addEventListener("change", handleChange);
+    return () => mq.removeEventListener("change", handleChange);
+  }, []);
 
-  const menuItems = [
-    {
-      text: "Send Invoice",
-      icon: <AddCircleOutlineIcon />,
-      route: "create",
-      color: "#f472b6",
+  const activeRoute =
+    MENU_ITEMS.find((item) => location.pathname.includes(item.route))?.route ??
+    "create";
+
+  const activeLabel =
+    MENU_ITEMS.find((item) => item.route === activeRoute)?.text ?? "Dashboard";
+
+  // Navigating from the drawer has to close it, or the overlay stays parked
+  // over the page the user just asked for.
+  const handleNavigate = useCallback(
+    (route) => {
+      navigate(route);
+      setNavOpen(false);
     },
-    {
-      text: "Send Multiple Invoices",
-      icon: <FileStackIcon/>,
-      route: "batch-invoice",
-      color: "#22c55e",
-    },
-    {
-      text: "Sent Invoices",
-      icon: <MailOutlineIcon />,
-      route: "sent",
-      color: "#4ade80",
-    },
-    {
-      text: "Request Invoices",
-      icon: <LinkIcon />,
-      route: "generate-link",
-      color: "#a78bfa",
-    },
-    {
-      text: "Received Invoices",
-      icon: <DraftsIcon />,
-      route: "pending",
-      color: "#60a5fa",
-    },
-    {
-      text: "Settings",
-      icon: <SettingsIcon />,
-      route: "settings",
-      color: "#9ca3af",
-    },
-  ];
+    [navigate]
+  );
+
+  // The write stays outside the updater: React may call an updater more than
+  // once per dispatch, and updaters are expected to be pure.
+  const toggleRail = useCallback(() => {
+    const next = !railCollapsed;
+    try {
+      window.localStorage.setItem(RAIL_COLLAPSED_KEY, String(next));
+    } catch {
+      // A lost preference is not worth failing the interaction over.
+    }
+    setRailCollapsed(next);
+  }, [railCollapsed]);
+
+  const railWidth = railCollapsed ? RAIL_WIDTH_COLLAPSED : RAIL_WIDTH;
 
   return (
     <>
@@ -97,154 +229,96 @@ export default function Home() {
         onSkip={dismissOnboarding}
       />
 
-      <div className="px-2 sm:px-4 md:px-6 lg:px-10">
-        <header className="mb-2">
-          <h1 className="text-xl sm:text-2xl mt-4 text-white">
-            Welcome <span className="font-medium text-green-400">Back!</span>
-          </h1>
-        </header>
+      {/* Same gutter as the navbar, so the rail and content share its edges. */}
+      <div className={SHELL}>
+        {/* Mobile / tablet: the hamburger doubles as the current-section label */}
+        <div className="flex items-center gap-2 py-2 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setNavOpen(true)}
+            aria-label="Open dashboard menu"
+            aria-expanded={navOpen}
+            aria-controls={NAV_DRAWER_ID}
+            className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-white transition-colors hover:bg-white/10"
+          >
+            <Menu className="h-5 w-5" />
+            <span className="text-sm font-medium">{activeLabel}</span>
+          </button>
+        </div>
+
+        <Drawer
+          id={NAV_DRAWER_ID}
+          open={navOpen}
+          onClose={() => setNavOpen(false)}
+          ModalProps={{ keepMounted: true }}
+          sx={{
+            display: "block",
+            [`@media ${LG_QUERY}`]: { display: "none" },
+            "& .MuiDrawer-paper": {
+              width: RAIL_WIDTH,
+              backgroundColor: "#161920",
+              borderRight: "1px solid rgba(255, 255, 255, 0.08)",
+              padding: "12px 8px",
+            },
+          }}
+        >
+          <div className="px-3 pb-2">
+            <RailGreeting />
+          </div>
+          <DashboardNav activeRoute={activeRoute} onNavigate={handleNavigate} />
+        </Drawer>
 
         <Box
           sx={{
             display: "flex",
             flexDirection: { xs: "column", lg: "row" },
-            minHeight: { xs: "auto", lg: "calc(100vh - 180px)" },
-            gap: { xs: "12px", sm: "24px" },
+            minHeight: { xs: "auto", lg: "calc(100vh - 130px)" },
+            gap: { xs: "8px", lg: "16px" },
           }}
         >
-          {/* Mobile Dropdown Menu */}
-          <Box
-            className="lg:hidden"
-            sx={{
-              width: "100%",
-              flexShrink: 0,
-            }}
-          >
-            <FormControl fullWidth>
-              <Select
-                value={getCurrentRoute()}
-                onChange={handleDropdownChange}
-                sx={{
-                  backgroundColor: "rgba(255, 255, 255, 0.05)",
-                  color: "white",
-                  borderRadius: "8px",
-                  "& .MuiOutlinedInput-notchedOutline": {
-                    borderColor: "rgba(255, 255, 255, 0.1)",
-                  },
-                  "&:hover .MuiOutlinedInput-notchedOutline": {
-                    borderColor: "rgba(255, 255, 255, 0.2)",
-                  },
-                  "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-                    borderColor: "rgba(255, 255, 255, 0.3)",
-                  },
-                  "& .MuiSvgIcon-root": {
-                    color: "white",
-                  },
-                }}
-                MenuProps={{
-                  PaperProps: {
-                    sx: {
-                      backgroundColor: "#1f2937",
-                      color: "white",
-                      "& .MuiMenuItem-root": {
-                        "&:hover": {
-                          backgroundColor: "rgba(255, 255, 255, 0.1)",
-                        },
-                        "&.Mui-selected": {
-                          backgroundColor: "rgba(255, 255, 255, 0.15)",
-                          "&:hover": {
-                            backgroundColor: "rgba(255, 255, 255, 0.2)",
-                          },
-                        },
-                      },
-                    },
-                  },
-                }}
-              >
-                {menuItems.map((item) => (
-                  <MenuItem key={item.route} value={item.route}>
-                    <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                      <Box sx={{ color: item.color, display: "flex", alignItems: "center" }}>
-                        {item.icon}
-                      </Box>
-                      <span>{item.text}</span>
-                    </Box>
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Box>
-
-          {/* Desktop Vertical Menu */}
+          {/* Desktop nav rail */}
           <Box
             className="hidden lg:block"
             sx={{
-              width: { lg: "264px" },
+              width: { lg: `${railWidth}px` },
               flexShrink: 0,
+              transition: "width 0.2s ease",
             }}
           >
-            <Drawer
-              variant="permanent"
-              sx={{
-                "& .MuiDrawer-paper": {
-                  width: "100%",
-                  border: "none",
-                  backgroundColor: "transparent",
-                  position: "relative",
-                  height: "auto",
-                  top: 0,
-                  zIndex: 1,
-                },
-              }}
+            {/* Greeting and the collapse toggle share one row; collapsed, only
+                the toggle remains. */}
+            <div
+              className={`flex items-center gap-2 pb-2 pt-1 ${
+                railCollapsed ? "justify-center" : "justify-between px-3"
+              }`}
             >
-              <List className="space-y-2">
-                {menuItems.map((item) => (
-                  <ListItem
-                    key={item.route}
-                    disablePadding
-                    className="text-white"
-                  >
-                    <ListItemButton
-                      onClick={() => navigate(item.route)}
-                      selected={location.pathname.includes(item.route)}
-                      sx={{
-                        borderRadius: "8px",
-                        transition: "all 0.2s ease",
-                        backgroundColor: location.pathname.includes(item.route)
-                          ? "rgba(255, 255, 255, 0.08)"
-                          : "transparent",
-                        "&:hover": {
-                          backgroundColor: "rgba(255, 255, 255, 0.05)",
-                        },
-                        "&.Mui-selected": {
-                          borderLeft: "4px solid " + item.color,
-                        },
-                        padding: "12px 16px",
-                      }}
-                    >
-                      <ListItemIcon
-                        sx={{
-                          minWidth: "36px",
-                          color: item.color,
-                          fontSize: "1.25rem",
-                        }}
-                      >
-                        {item.icon}
-                      </ListItemIcon>
-                      <ListItemText
-                        primary={item.text}
-                        primaryTypographyProps={{
-                          fontSize: "1rem",
-                          fontWeight: location.pathname.includes(item.route)
-                            ? 600
-                            : 500,
-                        }}
-                      />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
-              </List>
-            </Drawer>
+              {!railCollapsed && <RailGreeting />}
+              <Tooltip
+                title={railCollapsed ? "Expand menu" : "Collapse menu"}
+                placement="right"
+                arrow
+              >
+                <button
+                  type="button"
+                  onClick={toggleRail}
+                  aria-label={railCollapsed ? "Expand menu" : "Collapse menu"}
+                  aria-expanded={!railCollapsed}
+                  className="rounded-lg p-1.5 text-gray-400 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  {railCollapsed ? (
+                    <PanelLeftOpen className="h-5 w-5" />
+                  ) : (
+                    <PanelLeftClose className="h-5 w-5" />
+                  )}
+                </button>
+              </Tooltip>
+            </div>
+
+            <DashboardNav
+              activeRoute={activeRoute}
+              onNavigate={handleNavigate}
+              collapsed={railCollapsed}
+            />
           </Box>
 
           {/* Main Content */}
@@ -252,13 +326,12 @@ export default function Home() {
             component="main"
             sx={{
               flexGrow: 1,
-              px: { xs: 0, sm: 1 },
-              maxHeight: { xs: "none", lg: "calc(100vh - 180px)" },
+              minWidth: 0,
+              pl: { xs: 0, lg: 1.5 },
+              maxHeight: { xs: "none", lg: "calc(100vh - 130px)" },
               overflowY: { xs: "visible", lg: "auto" },
               scrollbarWidth: "none",
-              "&::-webkit-scrollbar": {
-                display: "none",
-              },
+              "&::-webkit-scrollbar": { display: "none" },
               transition: "all 0.3s ease",
               borderLeft: { lg: "2px solid #1f2937" },
             }}

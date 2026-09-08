@@ -55,6 +55,7 @@ import { toInvoiceUserDetails } from "@/utils/userProfile";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import SenderSummary from "@/components/SenderSummary";
+import { CARD, PAGE_CONTAINER } from "@/utils/layout";
 import toast from "react-hot-toast";
 import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
 import { computeInvoiceHash } from "../services/relay/invoiceHashUtils.js";
@@ -798,7 +799,7 @@ function CreateInvoice() {
       </div>
 
       {showUnsupportedNetwork && (
-        <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
+        <div className={PAGE_CONTAINER}>
           <div className="bg-white border border-amber-200 rounded-lg p-6 shadow-sm">
             <h2 className="text-xl font-bold mb-2 text-gray-800">
               Unsupported network
@@ -812,16 +813,11 @@ function CreateInvoice() {
         </div>
       )}
 
-      <div
-        className={cn(
-          "w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6",
-          showUnsupportedNetwork && "hidden"
-        )}
-      >
+      <div className={cn(PAGE_CONTAINER, showUnsupportedNetwork && "hidden")}>
         {(searchParams.get("clientAddress") ||
           searchParams.get("amount") ||
           searchParams.get("description")) && (
-          <div className="mb-6 bg-green-50 border border-green-200 rounded-lg p-4 overflow-hidden">
+          <div className="mb-3 bg-green-50 border border-green-200 rounded-lg p-3 overflow-hidden">
             <div className="flex items-center gap-3">
               <CheckCircle2 className="h-5 w-5 text-green-600" />
               <div>
@@ -837,42 +833,46 @@ function CreateInvoice() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-4 sm:mb-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 mb-3">
           <h2 className="text-xl sm:text-2xl font-bold text-white">
             Create New Invoice
           </h2>
           <SenderSummary />
         </div>
 
-        <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-3 sm:gap-4 mb-6 sm:mb-8 bg-gray-50 p-4 rounded-lg shadow-sm overflow-hidden">
+        {/* Full width so its right edge lands on the same line as the Payment
+            Currency card and the items table below. Every block on the page
+            shares one left and one right edge. */}
+        <div className="w-full flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-4 bg-gray-50 p-3 rounded-lg shadow-sm overflow-hidden">
           <div className="flex items-center space-x-2 w-full sm:w-auto">
-            <Label className="text-sm sm:text-md font-medium text-gray-700">
+            <Label className="text-sm font-medium text-gray-700">
               Invoice #
             </Label>
             <Input
               value="1"
-              className="w-24 bg-gray-100 border-gray-300 text-gray-700"
+              className="w-16 bg-gray-100 border-gray-300 text-gray-700"
               disabled
             />
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
-            <Label className="text-sm sm:text-md font-medium text-gray-700">
+            <Label className="text-sm font-medium text-gray-700">
               Issued Date
             </Label>
             <Button
+              type="button"
               className={cn(
-                "w-full sm:w-[220px] justify-start text-left font-normal bg-white border border-gray-300 text-gray-700 hover:bg-gray-50",
+                "w-full sm:w-auto justify-start text-left font-normal bg-white border border-gray-300 text-gray-700 hover:bg-gray-50",
                 !issueDate && "text-black"
               )}
             >
               <CalendarIcon className="mr-2 h-4 w-4" />
-              {format(issueDate, "PPP")}
+              {format(issueDate, "PP")}
             </Button>
           </div>
 
           <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-2 w-full sm:w-auto">
-            <Label className="text-sm sm:text-md font-medium text-gray-700">
+            <Label className="text-sm font-medium text-gray-700">
               Due Date
             </Label>
             <Popover>
@@ -880,13 +880,13 @@ function CreateInvoice() {
                 <Button
                   variant="outline"
                   className={cn(
-                    "w-full sm:w-[220px] justify-start text-left font-normal text-gray-700",
+                    "w-full sm:w-auto justify-start text-left font-normal text-gray-700",
                     !dueDate && "text-muted-foreground"
                   )}
                 >
                   <CalendarIcon className="mr-2 h-4 w-4" />
                   {dueDate ? (
-                    format(dueDate, "PPP")
+                    format(dueDate, "PP")
                   ) : (
                     <span className="text-gray-700">Pick a due date</span>
                   )}
@@ -915,9 +915,11 @@ function CreateInvoice() {
         <form onSubmit={handleSubmit}>
           {/* Client details and payment token sit side by side so the invoice
               items stay above the fold on desktop. */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 mb-6 sm:mb-8 items-start">
+          {/* items-stretch keeps both cards the same height; the two differ a
+              lot in content and a ragged bottom edge reads as unfinished. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-3 sm:mb-4 items-stretch">
             {/* Client Information — the sender's own details come from Settings */}
-            <div className="w-full border border-gray-200 p-4 sm:p-6 rounded-lg shadow-sm bg-white overflow-hidden">
+            <div className={CARD}>
               <h3 className="text-base sm:text-lg font-semibold mb-4 text-gray-800">
                 Client Information
               </h3>
@@ -1122,7 +1124,7 @@ function CreateInvoice() {
               </div>
             </div>
 
-            <div className="bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+            <div className={CARD}>
               <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
@@ -1364,7 +1366,7 @@ function CreateInvoice() {
 
 
           {/* Invoice Items Section */}
-          <div className="mb-6 sm:mb-8">
+          <div className="mb-4">
             {/* Desktop Header - Hidden on mobile */}
             <div className="hidden md:grid bg-green-500 text-white py-3 px-4 rounded-t-lg font-medium text-sm gap-2 items-center" style={{ gridTemplateColumns: 'repeat(16, minmax(0, 1fr))' }}>
               <div className="col-span-4">DESCRIPTION</div>
@@ -1414,7 +1416,7 @@ function CreateInvoice() {
             </div>
 
             <div className="border border-gray-200 rounded-b-lg bg-white">
-              <div className="p-3 sm:p-4 space-y-4 md:space-y-3">
+              <div className="p-2 sm:p-3 space-y-3 md:space-y-2">
                 {itemData.map((item, index) => (
                   <div className="relative" key={item.id} style={{ zIndex: Math.max(1, 50 - index) }}>
                     {/* Mobile Layout - Stacked */}
@@ -1710,8 +1712,10 @@ function CreateInvoice() {
                 Add Item
               </Button>
 
-              <div className="bg-gray-50 p-2 rounded-lg w-full md:w-1/3">
-                <div className="flex justify-between items-center mb-2">
+              {/* Capped rather than a fraction of the row: at 1/3 of a wide
+                  content column the label and amount drifted far apart. */}
+              <div className="bg-gray-50 p-2 rounded-lg w-full sm:w-auto sm:min-w-[260px]">
+                <div className="flex justify-between items-center gap-6">
                   <span className="font-medium text-gray-700">Total:</span>
                   <span className="font-bold text-lg text-black">
                     {totalAmountDue}{" "}
@@ -1722,7 +1726,7 @@ function CreateInvoice() {
                 </div>
                 {totalAmountError && (
                   <div className="flex items-center justify-end gap-1.5 mt-1 text-red-600">
-                    <AlertCircle className="w-4 h-4" />
+                    <AlertCircle className="w-4 h-4 shrink-0" />
                     <span className="text-sm font-medium">{totalAmountError}</span>
                   </div>
                 )}
@@ -1731,7 +1735,7 @@ function CreateInvoice() {
           </div>
 
           {/* Form Actions */}
-          <div className="flex flex-col-reverse sm:flex-row justify-between items-center gap-4 mt-6">
+          <div className="flex flex-col-reverse sm:flex-row justify-between items-center gap-3 mt-4 pb-4">
             <Button
               className="bg-green-600 hover:bg-green-700 px-8 py-2 text-white"
               type="submit"
