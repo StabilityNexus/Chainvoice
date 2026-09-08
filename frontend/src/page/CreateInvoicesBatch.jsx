@@ -64,6 +64,7 @@ import { toInvoiceUserDetails } from "@/utils/userProfile";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import SenderSummary from "@/components/SenderSummary";
+import { CARD, PAGE_CONTAINER, PAGE_HEADER, SECTION_GAP } from "@/utils/layout";
 
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
 import { useProductCatalog } from "@/hooks/useProductCatalog";
@@ -835,9 +836,9 @@ function CreateInvoicesBatch() {
         />
       </div>
 
-      <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
+      <div className={PAGE_CONTAINER}>
         {/* Simple Header */}
-        <div className="mb-6 sm:mb-8">
+        <div className={PAGE_HEADER}>
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
             Create Multiple Invoices
           </h2>
@@ -849,7 +850,7 @@ function CreateInvoicesBatch() {
         </div>
 
         {/* Clean Date Selection */}
-        <div className="w-full bg-white p-4 sm:p-6 rounded-lg shadow-sm mb-6 sm:mb-8 border border-gray-200 overflow-hidden">
+        <div className={cn(CARD, SECTION_GAP)}>
           <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-4 sm:gap-6">
             <div className="flex items-center space-x-3 w-full sm:w-auto">
               <div className="flex items-center justify-center gap-3">
@@ -955,7 +956,7 @@ function CreateInvoicesBatch() {
 
         <form onSubmit={handleSubmit}>
           {/* Clean Token Selection */}
-          <div className="w-full mb-6 sm:mb-8 bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+          <div className={cn(CARD, SECTION_GAP)}>
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
               Payment Currency
             </h3>

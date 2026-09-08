@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import toast from "react-hot-toast";
+import { cn } from "@/lib/utils";
+import { SHELL } from "@/utils/layout";
 
 const Treasure = () => {
   const [treasureAmount, setTreasureAmount] = useState(0);
@@ -174,7 +176,7 @@ const Treasure = () => {
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+    <div className={cn(SHELL, "py-10")}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

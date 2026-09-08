@@ -85,4 +85,35 @@ export function tryDecryptPayload(privateKey, base64Ciphertext) {
   }
 }
 
-export { bytesToBase64, base64ToBytes };
+/**
+ * Encode bytes as base64url (RFC 4648 section 5): URL-safe alphabet, padding stripped.
+ *
+ * Standard base64 cannot travel in a URL — `+` decodes as a space and `/`
+ * splits the path — so anything destined for a link or a QR code uses this
+ * form instead.
+ */
+function bytesToBase64Url(bytes) {
+  return bytesToBase64(bytes)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+/**
+ * Decode a base64url string back into bytes.
+ *
+ * Throws on anything that is not valid base64url, which is what callers
+ * parsing a hand-edited or truncated link want: a mangled payload must fail
+ * loudly rather than decode into plausible-looking garbage.
+ */
+function base64UrlToBytes(base64url) {
+  const standard = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const remainder = standard.length % 4;
+  if (remainder === 1) {
+    throw new Error('Invalid base64url: truncated');
+  }
+  const padded = remainder === 0 ? standard : standard + '='.repeat(4 - remainder);
+  return base64ToBytes(padded);
+}
+
+export { bytesToBase64, base64ToBytes, bytesToBase64Url, base64UrlToBytes };

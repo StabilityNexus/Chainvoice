@@ -18,6 +18,7 @@ import { useInvoiceExport } from "@/hooks/useInvoiceExport";
 import { getSentInvoices as getLocalSentInvoices, getInvoiceById, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
 import { verifyInvoiceHash } from "@/services/relay/invoiceHashUtils.js";
 import { sendEncryptedInvoice } from "@/services/relay/relayInvoiceMessaging.js";
+import ShareInvoiceDialog from "@/components/ShareInvoiceDialog";
 import { fetchPublicKeyFromChain } from "@/services/relay/relayKeyManager.js";
 
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
@@ -48,6 +49,7 @@ import UnpaidIcon from "@mui/icons-material/Pending";
 import DownloadIcon from "@mui/icons-material/Download";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import DataObjectIcon from "@mui/icons-material/DataObject";
+import ShareIcon from "@mui/icons-material/Share";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import CancelIcon from "@mui/icons-material/Cancel";
 import SendIcon from "@mui/icons-material/Send";
@@ -56,6 +58,8 @@ import WarningIcon from "@mui/icons-material/Warning";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
+import { PAGE_CONTAINER } from "@/utils/layout";
+import { cn } from "@/lib/utils";
 
 const columns = [
   { id: "fname", label: "Client", minWidth: 120 },
@@ -507,6 +511,12 @@ function SentInvoice() {
     selectedInvoice: null,
   });
 
+  // Invoice currently open in the share dialog, by id. Held as an id rather
+  // than the invoice object because the dialog reads the payload it shares
+  // from IndexedDB — the object rendered here has been enriched with token
+  // logos and status, which would change its hash.
+  const [shareInvoiceId, setShareInvoiceId] = useState(null);
+
   const toggleDrawer = (invoice) => (event) => {
     if (
       event &&
@@ -600,8 +610,8 @@ function SentInvoice() {
           onDismiss={() => setShowWalletAlert(false)}
         />
       </div>
-      <div className=" md:p-6 ">
-        <div className="max-w-8xl mx-auto">
+      <div className={cn(PAGE_CONTAINER, "py-3 sm:py-4")}>
+        <div className="w-full">
           <div className="flex justify-between items-center mb-2">
             <div>
               <h2 className="text-2xl font-bold text-white">Sent Invoices</h2>
@@ -887,6 +897,25 @@ function SentInvoice() {
                                       </span>
                                     </Tooltip>
                                   )}
+                                {!invoice._onChainOnly && (
+                                  <Tooltip title="Share as link or QR code">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() =>
+                                        setShareInvoiceId(invoice.id.toString())
+                                      }
+                                      sx={{
+                                        backgroundColor: "#dcfce7",
+                                        "&:hover": { backgroundColor: "#bbf7d0" },
+                                      }}
+                                    >
+                                      <ShareIcon
+                                        fontSize="small"
+                                        sx={{ color: "#16a34a" }}
+                                      />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
                                 <Tooltip title="View Details">
                                   <IconButton
                                     size="small"
@@ -1245,52 +1274,68 @@ function SentInvoice() {
                 >
                   Close
                 </button>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={handleExportClick}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
-                    aria-haspopup="true"
-                    aria-expanded={openExportMenu}
-                  >
-                    <DownloadIcon className="mr-2" fontSize="small" />
-                    Export Invoice
-                  </button>
-                  <Menu
-                    anchorEl={anchorEl}
-                    open={openExportMenu}
-                    onClose={handleExportClose}
-                    anchorOrigin={{
-                      vertical: "top",
-                      horizontal: "right",
-                    }}
-                    transformOrigin={{
-                      vertical: "bottom",
-                      horizontal: "right",
-                    }}
-                    PaperProps={{
-                      sx: { mb: 1, width: 200 }
-                    }}
-                  >
-                    <MenuItem onClick={() => { handlePrint(); handleExportClose(); }}>
-                      <ListItemIcon>
-                        <PictureAsPdfIcon fontSize="small" sx={{ color: "#ef4444" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as PDF</ListItemText>
-                    </MenuItem>
-                    <MenuItem onClick={handleExportCSV}>
-                      <ListItemIcon>
-                        <TableChartIcon fontSize="small" sx={{ color: "#16a34a" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as CSV</ListItemText>
-                    </MenuItem>
-                    <MenuItem onClick={handleExportJSON}>
-                      <ListItemIcon>
-                        <DataObjectIcon fontSize="small" sx={{ color: "#3b82f6" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as JSON</ListItemText>
-                    </MenuItem>
-                  </Menu>
+                <div className="flex items-center gap-2">
+                  {!drawerState.selectedInvoice._onChainOnly && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShareInvoiceId(
+                          drawerState.selectedInvoice?.id?.toString() ?? null
+                        )
+                      }
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium flex items-center"
+                    >
+                      <ShareIcon className="mr-2" fontSize="small" />
+                      Share
+                    </button>
+                  )}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={handleExportClick}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
+                      aria-haspopup="true"
+                      aria-expanded={openExportMenu}
+                    >
+                      <DownloadIcon className="mr-2" fontSize="small" />
+                      Export Invoice
+                    </button>
+                    <Menu
+                      anchorEl={anchorEl}
+                      open={openExportMenu}
+                      onClose={handleExportClose}
+                      anchorOrigin={{
+                        vertical: "top",
+                        horizontal: "right",
+                      }}
+                      transformOrigin={{
+                        vertical: "bottom",
+                        horizontal: "right",
+                      }}
+                      PaperProps={{
+                        sx: { mb: 1, width: 200 }
+                      }}
+                    >
+                      <MenuItem onClick={() => { handlePrint(); handleExportClose(); }}>
+                        <ListItemIcon>
+                          <PictureAsPdfIcon fontSize="small" sx={{ color: "#ef4444" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as PDF</ListItemText>
+                      </MenuItem>
+                      <MenuItem onClick={handleExportCSV}>
+                        <ListItemIcon>
+                          <TableChartIcon fontSize="small" sx={{ color: "#16a34a" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as CSV</ListItemText>
+                      </MenuItem>
+                      <MenuItem onClick={handleExportJSON}>
+                        <ListItemIcon>
+                          <DataObjectIcon fontSize="small" sx={{ color: "#3b82f6" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as JSON</ListItemText>
+                      </MenuItem>
+                    </Menu>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1345,6 +1390,13 @@ function SentInvoice() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <ShareInvoiceDialog
+          open={shareInvoiceId !== null}
+          onClose={() => setShareInvoiceId(null)}
+          invoiceId={shareInvoiceId}
+          chainId={chainId}
+        />
       </div>
     </>
   );
