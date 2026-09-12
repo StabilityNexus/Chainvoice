@@ -7,13 +7,29 @@ import TextField from "@mui/material/TextField";
 import Button from "@mui/material/Button";
 import FilterListOffIcon from "@mui/icons-material/FilterListOff";
 
+const FILTER_BAR_LABELS = {
+  status: "Status",
+  allStatuses: "All Statuses",
+  paid: "Paid",
+  pending: "Pending",
+  overdue: "Overdue",
+  cancelled: "Cancelled",
+  fromDate: "From Date",
+  toDate: "To Date",
+  token: "Token",
+  allTokens: "All Tokens",
+  minAmount: "Min Amount",
+  maxAmount: "Max Amount",
+  clearFilters: "Clear Filters",
+};
+
 /**
  * Filter bar component for invoice tables (Sent/Received).
  *
  * @param {Object} props
- * @param {Object} props.filters - Current filter values ({ status, fromDate, toDate, token })
+ * @param {Object} props.filters - Current filter values ({ status, fromDate, toDate, token, minAmount, maxAmount })
  * @param {Function} props.setFilter - Callback to set a specific filter
- * @param {Array<string>} props.availableTokens - Available token symbols in loaded invoices
+ * @param {Array<Object>} props.availableTokens - Available token objects in loaded invoices
  * @param {Function} props.clearFilters - Callback to clear all active filters
  * @param {boolean} props.hasActiveFilters - Whether any filter is currently applied
  * @param {number} props.totalCount - Count of filtered invoices
@@ -44,27 +60,28 @@ export default function InvoiceFilterBar({
           {/* Status Filter */}
           <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel id="invoice-status-filter-label" sx={{ fontSize: "0.875rem" }}>
-              Status
+              {FILTER_BAR_LABELS.status}
             </InputLabel>
             <Select
               labelId="invoice-status-filter-label"
               id="invoice-status-filter"
               value={filters.status || "all"}
-              label="Status"
+              label={FILTER_BAR_LABELS.status}
               onChange={(e) => setFilter("status", e.target.value)}
               sx={{ borderRadius: "8px", fontSize: "0.875rem" }}
             >
-              <MenuItem value="all">All Statuses</MenuItem>
-              <MenuItem value="paid">Paid</MenuItem>
-              <MenuItem value="pending">Pending</MenuItem>
-              <MenuItem value="cancelled">Cancelled</MenuItem>
+              <MenuItem value="all">{FILTER_BAR_LABELS.allStatuses}</MenuItem>
+              <MenuItem value="paid">{FILTER_BAR_LABELS.paid}</MenuItem>
+              <MenuItem value="pending">{FILTER_BAR_LABELS.pending}</MenuItem>
+              <MenuItem value="overdue">{FILTER_BAR_LABELS.overdue}</MenuItem>
+              <MenuItem value="cancelled">{FILTER_BAR_LABELS.cancelled}</MenuItem>
             </Select>
           </FormControl>
 
           {/* Date Range: From */}
           <TextField
             id="invoice-date-from-filter"
-            label="From Date"
+            label={FILTER_BAR_LABELS.fromDate}
             type="date"
             size="small"
             value={filters.fromDate || ""}
@@ -81,7 +98,7 @@ export default function InvoiceFilterBar({
           {/* Date Range: To */}
           <TextField
             id="invoice-date-to-filter"
-            label="To Date"
+            label={FILTER_BAR_LABELS.toDate}
             type="date"
             size="small"
             value={filters.toDate || ""}
@@ -98,17 +115,17 @@ export default function InvoiceFilterBar({
           {/* Token Filter */}
           <FormControl size="small" sx={{ minWidth: 140 }}>
             <InputLabel id="invoice-token-filter-label" sx={{ fontSize: "0.875rem" }}>
-              Token
+              {FILTER_BAR_LABELS.token}
             </InputLabel>
             <Select
               labelId="invoice-token-filter-label"
               id="invoice-token-filter"
               value={filters.token ? filters.token.toLowerCase() : "all"}
-              label="Token"
+              label={FILTER_BAR_LABELS.token}
               onChange={(e) => setFilter("token", e.target.value)}
               sx={{ borderRadius: "8px", fontSize: "0.875rem" }}
             >
-              <MenuItem value="all">All Tokens</MenuItem>
+              <MenuItem value="all">{FILTER_BAR_LABELS.allTokens}</MenuItem>
               {availableTokens.map((tok) => (
                 <MenuItem key={tok.address} value={tok.address}>
                   {tok.label}
@@ -120,7 +137,7 @@ export default function InvoiceFilterBar({
           {/* Min Amount Filter */}
           <TextField
             id="invoice-min-amount-filter"
-            label="Min Amount"
+            label={FILTER_BAR_LABELS.minAmount}
             type="number"
             size="small"
             value={filters.minAmount || ""}
@@ -136,7 +153,7 @@ export default function InvoiceFilterBar({
           {/* Max Amount Filter */}
           <TextField
             id="invoice-max-amount-filter"
-            label="Max Amount"
+            label={FILTER_BAR_LABELS.maxAmount}
             type="number"
             size="small"
             value={filters.maxAmount || ""}
