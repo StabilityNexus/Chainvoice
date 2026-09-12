@@ -103,7 +103,7 @@ export default function InvoiceFilterBar({
             <Select
               labelId="invoice-token-filter-label"
               id="invoice-token-filter"
-              value={filters.token || "all"}
+              value={filters.token ? filters.token.toLowerCase() : "all"}
               label="Token"
               onChange={(e) => setFilter("token", e.target.value)}
               sx={{ borderRadius: "8px", fontSize: "0.875rem" }}
@@ -116,6 +116,38 @@ export default function InvoiceFilterBar({
               ))}
             </Select>
           </FormControl>
+
+          {/* Min Amount Filter */}
+          <TextField
+            id="invoice-min-amount-filter"
+            label="Min Amount"
+            type="number"
+            size="small"
+            value={filters.minAmount || ""}
+            onChange={(e) => setFilter("minAmount", e.target.value)}
+            inputProps={{ min: 0, step: "any" }}
+            sx={{
+              width: 120,
+              "& .MuiOutlinedInput-root": { borderRadius: "8px" },
+              "& .MuiInputBase-input": { fontSize: "0.875rem" },
+            }}
+          />
+
+          {/* Max Amount Filter */}
+          <TextField
+            id="invoice-max-amount-filter"
+            label="Max Amount"
+            type="number"
+            size="small"
+            value={filters.maxAmount || ""}
+            onChange={(e) => setFilter("maxAmount", e.target.value)}
+            inputProps={{ min: 0, step: "any" }}
+            sx={{
+              width: 120,
+              "& .MuiOutlinedInput-root": { borderRadius: "8px" },
+              "& .MuiInputBase-input": { fontSize: "0.875rem" },
+            }}
+          />
 
           {/* Clear Filters Button */}
           {hasActiveFilters && (

@@ -102,7 +102,7 @@ function SentInvoice() {
 
   useEffect(() => {
     setPage(0);
-  }, [filters.status, filters.fromDate, filters.toDate, filters.token, filters.sortBy, filters.sortDir]);
+  }, [filters.status, filters.fromDate, filters.toDate, filters.token, filters.minAmount, filters.maxAmount, filters.sortBy, filters.sortDir]);
 
   // Get tokens from the hook
   const { tokens } = useTokenList(chainId || 1);

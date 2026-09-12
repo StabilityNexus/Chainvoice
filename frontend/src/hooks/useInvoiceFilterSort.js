@@ -16,6 +16,8 @@ export function useInvoiceFilterSort(invoices = [], { isSent = false } = {}) {
   const fromDate = searchParams.get("from") || "";
   const toDate = searchParams.get("to") || "";
   const token = searchParams.get("token") || "all";
+  const minAmount = searchParams.get("minAmount") || searchParams.get("min") || "";
+  const maxAmount = searchParams.get("maxAmount") || searchParams.get("max") || "";
   const sortBy = searchParams.get("sortBy") || "date";
   const sortDir = searchParams.get("sortDir") || "desc";
 
@@ -71,6 +73,10 @@ export function useInvoiceFilterSort(invoices = [], { isSent = false } = {}) {
         params.delete("from");
         params.delete("to");
         params.delete("token");
+        params.delete("minAmount");
+        params.delete("min");
+        params.delete("maxAmount");
+        params.delete("max");
         params.delete("sortBy");
         params.delete("sortDir");
         return params;
@@ -83,7 +89,9 @@ export function useInvoiceFilterSort(invoices = [], { isSent = false } = {}) {
     (status && status !== "all") ||
       fromDate ||
       toDate ||
-      (token && token !== "all")
+      (token && token !== "all") ||
+      minAmount ||
+      maxAmount
   );
 
   const availableTokens = useMemo(() => {
@@ -153,6 +161,43 @@ export function useInvoiceFilterSort(invoices = [], { isSent = false } = {}) {
         }
       }
 
+      // 4. Amount Range Filter
+      const toBigDecimal = (val) => {
+        const s = String(val || "0");
+        const [int, frac = ""] = s.split(".");
+        return { int, frac };
+      };
+
+      if (minAmount) {
+        try {
+          const decInv = toBigDecimal(inv.amountDue);
+          const decMin = toBigDecimal(minAmount);
+          const maxFrac = Math.max(decInv.frac.length, decMin.frac.length);
+          const scaledInv = BigInt(decInv.int + decInv.frac.padEnd(maxFrac, "0"));
+          const scaledMin = BigInt(decMin.int + decMin.frac.padEnd(maxFrac, "0"));
+          if (scaledInv < scaledMin) return false;
+        } catch {
+          const invVal = parseFloat(inv.amountDue);
+          const minVal = parseFloat(minAmount);
+          if (!isNaN(minVal) && (isNaN(invVal) || invVal < minVal)) return false;
+        }
+      }
+
+      if (maxAmount) {
+        try {
+          const decInv = toBigDecimal(inv.amountDue);
+          const decMax = toBigDecimal(maxAmount);
+          const maxFrac = Math.max(decInv.frac.length, decMax.frac.length);
+          const scaledInv = BigInt(decInv.int + decInv.frac.padEnd(maxFrac, "0"));
+          const scaledMax = BigInt(decMax.int + decMax.frac.padEnd(maxFrac, "0"));
+          if (scaledInv > scaledMax) return false;
+        } catch {
+          const invVal = parseFloat(inv.amountDue);
+          const maxVal = parseFloat(maxAmount);
+          if (!isNaN(maxVal) && (isNaN(invVal) || invVal > maxVal)) return false;
+        }
+      }
+
       return true;
     });
 
@@ -209,12 +254,12 @@ export function useInvoiceFilterSort(invoices = [], { isSent = false } = {}) {
     }
 
     return result;
-  }, [invoices, status, fromDate, toDate, token, sortBy, sortDir, isSent]);
+  }, [invoices, status, fromDate, toDate, token, minAmount, maxAmount, sortBy, sortDir, isSent]);
 
   return {
     filteredAndSortedInvoices,
     availableTokens,
-    filters: { status, fromDate, toDate, token, sortBy, sortDir },
+    filters: { status, fromDate, toDate, token, minAmount, maxAmount, sortBy, sortDir },
     setFilter,
     handleSort,
     clearFilters,

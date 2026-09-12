@@ -143,7 +143,7 @@ function ReceivedInvoice() {
 
   useEffect(() => {
     setPage(0);
-  }, [filters.status, filters.fromDate, filters.toDate, filters.token]);
+  }, [filters.status, filters.fromDate, filters.toDate, filters.token, filters.minAmount, filters.maxAmount]);
 
   useEffect(() => {
     setPage(0);
