@@ -34,9 +34,9 @@ export default function InvoiceFilterBar({
       sx={{
         p: 2,
         mb: 3,
-        backgroundColor: "white",
+        backgroundColor: "hsl(var(--card))",
         borderRadius: "12px",
-        boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
+        boxShadow: "0 4px 20px hsl(var(--card-shadow))",
       }}
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -109,9 +109,9 @@ export default function InvoiceFilterBar({
               sx={{ borderRadius: "8px", fontSize: "0.875rem" }}
             >
               <MenuItem value="all">All Tokens</MenuItem>
-              {availableTokens.map((tokenSym) => (
-                <MenuItem key={tokenSym} value={tokenSym}>
-                  {tokenSym}
+              {availableTokens.map((tok) => (
+                <MenuItem key={tok.address} value={tok.address}>
+                  {tok.label}
                 </MenuItem>
               ))}
             </Select>

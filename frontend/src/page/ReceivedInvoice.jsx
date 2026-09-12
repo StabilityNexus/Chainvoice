@@ -133,8 +133,21 @@ function ReceivedInvoice() {
   } = useInvoiceFilterSort(receivedInvoices, { isSent: false });
 
   useEffect(() => {
+    setSelectedInvoices((prev) => {
+      const visibleIds = new Set(filteredAndSortedInvoices.map((inv) => inv.id));
+      const pruned = new Set([...prev].filter((id) => visibleIds.has(id)));
+      if (pruned.size === prev.size) return prev;
+      return pruned;
+    });
+  }, [filteredAndSortedInvoices]);
+
+  useEffect(() => {
     setPage(0);
-  }, [filters.status, filters.fromDate, filters.toDate, filters.token, filters.sortBy, filters.sortDir]);
+  }, [filters.status, filters.fromDate, filters.toDate, filters.token]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filters.sortBy, filters.sortDir]);
 
   const { tokens } = useTokenList(chainId || 1);
 

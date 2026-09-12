@@ -88,12 +88,27 @@ export function useInvoiceFilterSort(invoices = [], { isSent = false } = {}) {
 
   const availableTokens = useMemo(() => {
     if (!Array.isArray(invoices)) return [];
-    const tokenSet = new Set();
+    const tokenMap = new Map();
     invoices.forEach((inv) => {
+      const addr = inv.paymentToken?.address?.toLowerCase();
       const sym = inv.paymentToken?.symbol;
-      if (sym) tokenSet.add(sym);
+      if (addr && sym && !tokenMap.has(addr)) {
+        tokenMap.set(addr, sym);
+      }
     });
-    return Array.from(tokenSet).sort();
+    const symbolCount = new Map();
+    for (const sym of tokenMap.values()) {
+      symbolCount.set(sym, (symbolCount.get(sym) || 0) + 1);
+    }
+    return Array.from(tokenMap.entries())
+      .map(([addr, sym]) => ({
+        address: addr,
+        symbol: sym,
+        label: symbolCount.get(sym) > 1
+          ? `${sym} (${addr.slice(0, 6)}…${addr.slice(-4)})`
+          : sym,
+      }))
+      .sort((a, b) => a.symbol.localeCompare(b.symbol));
   }, [invoices]);
 
   const filteredAndSortedInvoices = useMemo(() => {
@@ -130,10 +145,10 @@ export function useInvoiceFilterSort(invoices = [], { isSent = false } = {}) {
 
       // 3. Token Filter
       if (token && token !== "all") {
-        const filterUpper = token.toUpperCase();
-        const sym = inv.paymentToken?.symbol?.toUpperCase();
+        const tokenLower = token.toLowerCase();
         const addr = inv.paymentToken?.address?.toLowerCase();
-        if (sym !== filterUpper && addr !== filterUpper.toLowerCase()) {
+        const sym = inv.paymentToken?.symbol?.toLowerCase();
+        if (addr !== tokenLower && sym !== tokenLower) {
           return false;
         }
       }
@@ -151,9 +166,21 @@ export function useInvoiceFilterSort(invoices = [], { isSent = false } = {}) {
           const timeB = b.issueDate ? new Date(b.issueDate).getTime() : 0;
           cmp = (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
         } else if (sortBy === "amountDue" || sortBy === "amount") {
-          const valA = parseFloat(a.amountDue) || 0;
-          const valB = parseFloat(b.amountDue) || 0;
-          cmp = valA - valB;
+          try {
+            const toBigDecimal = (val) => {
+              const s = String(val || "0");
+              const [int, frac = ""] = s.split(".");
+              return { int, frac };
+            };
+            const decA = toBigDecimal(a.amountDue);
+            const decB = toBigDecimal(b.amountDue);
+            const maxFrac = Math.max(decA.frac.length, decB.frac.length);
+            const scaledA = BigInt(decA.int + decA.frac.padEnd(maxFrac, "0"));
+            const scaledB = BigInt(decB.int + decB.frac.padEnd(maxFrac, "0"));
+            cmp = scaledA < scaledB ? -1 : scaledA > scaledB ? 1 : 0;
+          } catch {
+            cmp = String(a.amountDue || "").localeCompare(String(b.amountDue || ""));
+          }
         } else if (sortBy === "fname" || sortBy === "client") {
           const nameA = isSent
             ? `${a.client?.fname || ""} ${a.client?.lname || ""}`.trim() || a.client?.address || ""
