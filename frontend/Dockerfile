@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1
 
-# Node 20 LTS. frontend/README.md asks for Node 18 or newer; pinning one
-# version keeps installs, builds and lint results identical for everyone.
-FROM node:20-alpine AS deps
+# Node 24 LTS, pinned to an exact patch rather than a floating tag so installs,
+# builds and lint results are identical for everyone and do not shift under us
+# when the tag moves. frontend/README.md asks for Node 18 or newer; 20 reached
+# end of life in April 2026, so this tracks the current LTS line instead.
+FROM node:24.21.0-alpine AS deps
 WORKDIR /app
 
 # package-lock.json is gitignored in this repository, so a fresh clone has no

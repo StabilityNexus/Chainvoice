@@ -15,6 +15,9 @@ still work exactly as before.
 - **Docker Engine 20.10+** with **Docker Compose v2.24 or newer**
   (`docker compose version`). 2.24 is where the optional `env_file` syntax used
   below landed.
+- **Docker Buildx** (`docker buildx version`), used once to build the relay
+  image. Docker Desktop bundles it; on Linux it is a separate package
+  (`docker-buildx-plugin`), so check for it rather than assuming.
 - No Node.js and no Go toolchain — both run inside containers.
 
 ## First run
@@ -45,12 +48,18 @@ docker buildx build -t chainvoice/thrubox-relay:main "https://github.com/AOSSIE-
 This uses ThruBox's own `Dockerfile` straight from its repository — nothing is
 vendored into Chainvoice, so there is no copy here to drift out of sync.
 
-> **Why this is a separate command.** Compose cannot build from a remote git
-> context: it resolves `build.context` against the project directory before the
-> builder ever sees it, so the URL is treated as a local path and the build
-> fails. `buildx` has no such limitation. ThruBox does not publish an image yet
-> either — the `dockers` block in its `.goreleaser.yaml` is commented out — so
-> once it does, this step becomes a plain registry pull.
+> **Why this is a separate command.** The Compose specification does list a git
+> URL as a valid `build.context`, but current Compose does not honour it: it
+> resolves the value against the project directory before the builder sees it,
+> so `https://github.com/...` becomes a local path and the build fails before it
+> starts. Verified on Docker 29.6.1 / Compose v5.1.4 with the `https://`,
+> `git://` and scheme-less forms, all of which fail the same way; `docker buildx
+> build` accepts the identical URL. Should a later Compose release fix this, the
+> `relay` service can take a `build.context` and this step can go away.
+>
+> ThruBox does not publish an image yet either — the `dockers` block in its
+> `.goreleaser.yaml` is commented out — so once it does, this step becomes a
+> plain registry pull instead.
 
 **3. Start the stack:**
 
@@ -124,8 +133,13 @@ The `prod` profile builds the real bundle and serves it through nginx, which
 also proxies `/relay`:
 
 ```bash
-docker compose --profile prod up --build
+docker compose --env-file frontend/.env --profile prod up frontend-prod --build
 ```
+
+Naming `frontend-prod` matters: the `frontend` dev service belongs to no
+profile, so it starts alongside the production container otherwise, and both
+would compete for your CPU. The relay still comes up on its own through
+`depends_on`.
 
 That publishes <http://localhost:8080>. It is the same-origin deployment that
 `frontend/.env.example` recommends as the CORS-free option — `VITE_RELAY_URL`
@@ -134,14 +148,19 @@ browser never makes a cross-origin request. Use it to check a production build
 locally, or as a starting point for self-hosting.
 
 Because Vite inlines `VITE_`-prefixed values at build time, the production
-image takes them as **build arguments**, not runtime environment. To build with
-your own values, pass your env file to Compose:
+image takes them as **build arguments**, not runtime environment. That is why
+`--env-file frontend/.env` is on the command above: without it Compose
+interpolates from a project-level `.env` at the repository root, which does not
+exist here, and every build argument falls back to its default — so your
+WalletConnect ID and contract addresses would silently not reach the bundle.
+
+Changing any of those values means rebuilding **and** recreating the container;
+restarting is not enough, because the values are already baked into the image:
 
 ```bash
-docker compose --env-file frontend/.env --profile prod up --build
+docker compose --env-file frontend/.env --profile prod build frontend-prod
+docker compose --env-file frontend/.env --profile prod up frontend-prod
 ```
-
-Changing any of them means rebuilding: `docker compose --profile prod build`.
 
 ## Troubleshooting
 
@@ -165,10 +184,14 @@ events reliably on Windows and macOS hosts. If polling is pinning a CPU core
 and you are on Linux, drop that variable from `docker-compose.yml` — native
 events work there.
 
-**Dependency changes are not picked up.** `node_modules` lives in a volume
-inside the container, not in your working copy, so editing `package.json`
-needs a rebuild: `docker compose build frontend` (or
-`docker compose up --build`).
+**Dependency changes are not picked up.** `node_modules` lives in an anonymous
+volume inside the container, not in your working copy. Compose reuses that
+volume when it recreates the service, so a plain rebuild leaves the old
+dependency tree mounted over the new one. Renew it with `-V`:
+
+```bash
+docker compose up --build -V
+```
 
 **nginx serves an empty response on the prod profile.** A stale build layer.
 Rebuild it without cache: `docker compose --profile prod build --no-cache frontend-prod`.
