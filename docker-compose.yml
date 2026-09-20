@@ -23,14 +23,14 @@ services:
   #
   #   docker buildx build -t chainvoice/thrubox-relay:main "https://github.com/AOSSIE-Org/ThruBox-Server.git#main"
   #
-  # It is a separate command because current Compose does not honour a git URL
-  # as build.context, though the spec allows one: it resolves the value against
-  # the project directory first, so the URL becomes a local path and the build
-  # fails before the builder sees it (checked on Docker 29.6.1 / Compose v5.1.4,
-  # with the https://, git:// and scheme-less forms). buildx accepts the same
-  # URL. ThruBox publishes no image of its own yet either — the docker block in
-  # its .goreleaser.yaml is commented out — so once it does, this becomes a
-  # plain registry pull. See docs/docker.md.
+  # It is a separate command because a git URL as build.context, which the spec
+  # allows, fails at build time on Windows: Compose evaluates it as a local path
+  # ("failed to evaluate path ... CreateFile D:\...\https:"), on Docker 29.6.1
+  # / Compose v5.1.4. buildx accepts the same URL, and one instruction that
+  # works on every platform beats two that diverge. ThruBox publishes no image
+  # of its own yet either — the docker block in its .goreleaser.yaml is
+  # commented out — so once it does, this becomes a plain registry pull. See
+  # docs/docker.md.
   relay:
     image: ${RELAY_IMAGE:-chainvoice/thrubox-relay:main}
     ports:

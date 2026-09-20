@@ -49,13 +49,21 @@ This uses ThruBox's own `Dockerfile` straight from its repository — nothing is
 vendored into Chainvoice, so there is no copy here to drift out of sync.
 
 > **Why this is a separate command.** The Compose specification does list a git
-> URL as a valid `build.context`, but current Compose does not honour it: it
-> resolves the value against the project directory before the builder sees it,
-> so `https://github.com/...` becomes a local path and the build fails before it
-> starts. Verified on Docker 29.6.1 / Compose v5.1.4 with the `https://`,
-> `git://` and scheme-less forms, all of which fail the same way; `docker buildx
-> build` accepts the identical URL. Should a later Compose release fix this, the
-> `relay` service can take a `build.context` and this step can go away.
+> URL as a valid `build.context`, and `docker compose config` echoes one back
+> unchanged — but the build then evaluates it as a local path. On Windows, with
+> Docker 29.6.1 and Compose v5.1.4:
+>
+> ```text
+> failed to evaluate path "https://github.com/AOSSIE-Org/ThruBox-Server.git#main":
+> CreateFile D:\AOSSIE\Chainvoice\https:: The filename, directory name, or
+> volume label syntax is incorrect.
+> ```
+>
+> `docker buildx build` accepts the identical URL. That `CreateFile` is Windows
+> path handling, so Compose may well manage the git context on Linux or macOS —
+> but the separate command costs nothing there and keeps one set of instructions
+> working everywhere. If it turns out to be portable, `relay` can take a
+> `build.context` and this step goes away.
 >
 > ThruBox does not publish an image yet either — the `dockers` block in its
 > `.goreleaser.yaml` is commented out — so once it does, this step becomes a
