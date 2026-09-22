@@ -56,7 +56,11 @@ export function filterAndSortInvoices(
       const tokenLower = token.toLowerCase();
       const addr = inv.paymentToken?.address?.toLowerCase();
       const sym = inv.paymentToken?.symbol?.toLowerCase();
-      if (addr !== tokenLower && sym !== tokenLower) {
+      if (tokenLower.startsWith("0x")) {
+        if (addr !== tokenLower) {
+          return false;
+        }
+      } else if (addr !== tokenLower && sym !== tokenLower) {
         return false;
       }
     }

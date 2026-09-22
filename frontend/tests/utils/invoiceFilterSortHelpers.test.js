@@ -96,4 +96,83 @@ describe("filterAndSortInvoices helper", () => {
     const rangeRes = filterAndSortInvoices(sampleInvoices, { minAmount: "100", maxAmount: "600" });
     expect(rangeRes.map((i) => i.id)).toEqual(["2", "1"]); // 500.00 and 100.50 sorted by date desc
   });
+
+  it("filters token by normalized contract address", () => {
+    const res = filterAndSortInvoices(sampleInvoices, { token: "0x111" });
+    expect(res.map((i) => i.id)).toEqual(["3", "1"]);
+    const resUpper = filterAndSortInvoices(sampleInvoices, { token: "0X111" });
+    expect(resUpper.map((i) => i.id)).toEqual(["3", "1"]);
+  });
+
+  it("filters token by legacy symbol for backward compatibility", () => {
+    const resLower = filterAndSortInvoices(sampleInvoices, { token: "usdc" });
+    expect(resLower.map((i) => i.id)).toEqual(["3", "1"]);
+    const resUpper = filterAndSortInvoices(sampleInvoices, { token: "USDC" });
+    expect(resUpper.map((i) => i.id)).toEqual(["3", "1"]);
+  });
+
+  it("does not incorrectly group two different tokens that share the same symbol when filtering by contract address", () => {
+    const sameSymbolInvoices = [
+      { id: "101", paymentToken: { address: "0x111", symbol: "USDC" } },
+      { id: "102", paymentToken: { address: "0x999", symbol: "USDC" } },
+    ];
+
+    const res111 = filterAndSortInvoices(sameSymbolInvoices, { token: "0x111" });
+    expect(res111.map((i) => i.id)).toEqual(["101"]);
+
+    const res999 = filterAndSortInvoices(sameSymbolInvoices, { token: "0x999" });
+    expect(res999.map((i) => i.id)).toEqual(["102"]);
+
+    const resSymbol = filterAndSortInvoices(sameSymbolInvoices, { token: "USDC" });
+    expect(resSymbol.map((i) => i.id).sort()).toEqual(["101", "102"]);
+  });
+
+  it("ensures fromDate and toDate filters are inclusive of boundary dates", () => {
+    const dateInvoices = [
+      { id: "1", issueDate: "2026-02-01" },
+      { id: "2", issueDate: "2026-02-15" },
+      { id: "3", issueDate: "2026-02-28" },
+    ];
+
+    const resFrom = filterAndSortInvoices(dateInvoices, { fromDate: "2026-02-01" });
+    expect(resFrom.map((i) => i.id)).toEqual(["3", "2", "1"]);
+
+    const resFromStrict = filterAndSortInvoices(dateInvoices, { fromDate: "2026-02-02" });
+    expect(resFromStrict.map((i) => i.id)).toEqual(["3", "2"]);
+
+    const resTo = filterAndSortInvoices(dateInvoices, { toDate: "2026-02-28" });
+    expect(resTo.map((i) => i.id)).toEqual(["3", "2", "1"]);
+
+    const resToStrict = filterAndSortInvoices(dateInvoices, { toDate: "2026-02-15" });
+    expect(resToStrict.map((i) => i.id)).toEqual(["2", "1"]);
+  });
+
+  it("sorts by client correctly for both sent and received invoice branches", () => {
+    const clientInvoices = [
+      {
+        id: "1",
+        client: { fname: "Bob", lname: "Smith", address: "0xbbb" },
+        user: { fname: "Zoe", lname: "Adams", address: "0xzzz" },
+      },
+      {
+        id: "2",
+        client: { fname: "Alice", lname: "Jones", address: "0xaaa" },
+        user: { fname: "Charlie", lname: "Brown", address: "0xccc" },
+      },
+    ];
+
+    const sentAsc = filterAndSortInvoices(clientInvoices, {
+      sortBy: "client",
+      sortDir: "asc",
+      isSent: true,
+    });
+    expect(sentAsc.map((i) => i.id)).toEqual(["2", "1"]);
+
+    const receivedAsc = filterAndSortInvoices(clientInvoices, {
+      sortBy: "client",
+      sortDir: "asc",
+      isSent: false,
+    });
+    expect(receivedAsc.map((i) => i.id)).toEqual(["2", "1"]);
+  });
 });
