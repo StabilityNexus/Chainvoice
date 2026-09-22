@@ -32,11 +32,16 @@ export default function UserProfileSettings() {
       onSubmit={handleSubmit}
       className="bg-white p-4 sm:p-6 rounded-xl border border-gray-100 shadow-sm"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-        <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
-          <User className="text-gray-600 w-5 h-5" />
-          Your Information
-        </h3>
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
+        <div>
+          <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+            <User className="text-gray-600 w-5 h-5" />
+            Your Information
+          </h3>
+          <p className="mt-0.5 text-sm text-gray-500">
+            Applied as the sender on every invoice. Saved on this device only.
+          </p>
+        </div>
         {!loading && isComplete && (
           <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2.5 py-1">
             <CheckCircle2 className="h-3.5 w-3.5" />
