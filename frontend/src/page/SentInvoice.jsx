@@ -85,6 +85,23 @@ function SentInvoice() {
   const [invoiceToCancel, setInvoiceToCancel] = useState(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  useEffect(() => {
+  const handleStorageUpdate = () => {
+    setRefreshTrigger((previous) => previous + 1);
+  };
+
+  window.addEventListener(
+    "chainvoice:invoice-storage-updated",
+    handleStorageUpdate
+  );
+
+  return () => {
+    window.removeEventListener(
+      "chainvoice:invoice-storage-updated",
+      handleStorageUpdate
+    );
+  };
+}, []);
   const [resending, setResending] = useState({});
 
   // Get tokens from the hook

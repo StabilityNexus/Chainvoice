@@ -93,6 +93,24 @@ function ReceivedInvoice() {
   const [paymentLoading, setPaymentLoading] = useState({});
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleStorageUpdate = () => {
+      setRefreshTrigger((previous) => previous + 1);
+    };
+
+    window.addEventListener(
+      "chainvoice:invoice-storage-updated",
+      handleStorageUpdate
+    );
+
+    return () => {
+      window.removeEventListener(
+        "chainvoice:invoice-storage-updated",
+        handleStorageUpdate
+      );
+    };
+  }, []);
   const {
     keys,
     isRegistered,
