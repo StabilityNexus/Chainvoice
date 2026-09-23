@@ -297,19 +297,36 @@ describe("evaluateOnChainInvoice field binding", () => {
     overrides.token ?? "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
     false,
     false,
-    computeInvoiceHash(share.invoiceData),
+    overrides.hash ?? computeInvoiceHash(share.invoiceData),
   ];
 
   it("accepts an invoice whose on-chain fields agree with the payload", () => {
     expect(evaluateOnChainInvoice(tuple(), share.invoiceData).code).toBe(VERIFY_OK);
   });
 
-  it("tolerates checksummed addresses from the contract", () => {
+  it("tolerates the checksummed casing the contract returns", () => {
+    // Needs hex letters to mean anything: an all-digit address is unchanged
+    // by a case conversion, so it would pass even without the normalisation.
+    const lower = "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd";
+    const checksummed = "0xAbCdEfAbCdEfAbCdEfAbCdEfAbCdEfAbCdEfAbCd";
+    const data = {
+      ...share.invoiceData,
+      client: { ...share.invoiceData.client, address: lower },
+    };
     const result = evaluateOnChainInvoice(
-      tuple({ to: "0x2222222222222222222222222222222222222222".toUpperCase().replace("0X", "0x") }),
-      share.invoiceData
+      tuple({ to: checksummed, hash: computeInvoiceHash(data) }),
+      data
     );
     expect(result.code).toBe(VERIFY_OK);
+  });
+
+  it("rejects an invoice created by someone other than the payload's sender", () => {
+    const result = evaluateOnChainInvoice(
+      tuple({ from: "0x5555555555555555555555555555555555555555" }),
+      share.invoiceData
+    );
+    expect(result.code).toBe(VERIFY_FIELD_MISMATCH);
+    expect(result.mismatch).toBe("sender");
   });
 
   it("rejects an invoice billed to someone other than the payload's client", () => {
@@ -396,8 +413,19 @@ describe("decodeInvoiceShare size limits", () => {
     ).toBe(true);
   });
 
-  it("keeps the hard ceiling well clear of the soft one", () => {
+  it("leaves room for the largest invoice anyone would plausibly send", () => {
+    // The ceilings only do their job if no real invoice can reach them.
     expect(MAX_TOKEN_CHARS).toBeGreaterThan(SHARE_URL_MAX_CHARS);
-    expect(MAX_DECODED_BYTES).toBeGreaterThan(0);
+
+    const worstCase = {
+      invoiceId: "7",
+      chainId: 11155111,
+      invoiceData: makeInvoiceData(400),
+    };
+    const decodedBytes = new TextEncoder().encode(
+      JSON.stringify(worstCase.invoiceData)
+    ).length;
+    expect(decodedBytes).toBeLessThan(MAX_DECODED_BYTES);
+    expect(encodeInvoiceShare(worstCase).length).toBeLessThan(MAX_TOKEN_CHARS);
   });
 });
