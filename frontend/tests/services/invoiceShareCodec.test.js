@@ -6,6 +6,8 @@ import {
   TOKEN_PREFIX,
   SHARE_URL_MAX_CHARS,
   SHARE_QR_MAX_CHARS,
+  MAX_TOKEN_CHARS,
+  MAX_DECODED_BYTES,
 } from "../../src/services/share/invoiceShareCodec.js";
 import {
   buildInvoiceShareUrl,
@@ -17,6 +19,7 @@ import {
   evaluateOnChainInvoice,
   VERIFY_OK,
   VERIFY_HASH_MISMATCH,
+  VERIFY_FIELD_MISMATCH,
 } from "../../src/services/share/invoiceShareMatch.js";
 import { deflateSync } from "fflate";
 import { bytesToBase64Url } from "../../src/services/relay/invoiceCrypto.js";
@@ -242,25 +245,25 @@ describe("describeShareSize", () => {
 
 describe("evaluateOnChainInvoice", () => {
   /** An `InvoiceDetails` tuple shaped as ethers returns it from getInvoice. */
-  const tuple = (hash) => [
+  // Mirrors what the contract holds for the invoice `share` describes:
+  // amountDue 1234.567891 at 6 decimals, and the payload's own addresses.
+  const tuple = (hash, overrides = {}) => [
     42n,
-    "0x1111111111111111111111111111111111111111",
-    "0x2222222222222222222222222222222222222222",
-    10000000n,
-    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    overrides.from ?? "0x1111111111111111111111111111111111111111",
+    overrides.to ?? "0x2222222222222222222222222222222222222222",
+    overrides.amountDue ?? 1234567891n,
+    overrides.token ?? "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
     false,
     false,
     hash,
   ];
+  const goodHash = () => computeInvoiceHash(share.invoiceData);
 
   it("accepts a payload that survived the share round trip", () => {
     // The branch the browser cannot reach without a funded on-chain invoice:
     // the token decodes, and its hash matches what the sender committed.
     const decoded = decodeInvoiceShare(encodeInvoiceShare(share));
-    const result = evaluateOnChainInvoice(
-      tuple(computeInvoiceHash(share.invoiceData)),
-      decoded.invoiceData
-    );
+    const result = evaluateOnChainInvoice(tuple(goodHash()), decoded.invoiceData);
     expect(result.code).toBe(VERIFY_OK);
     expect(result.onChain.to).toBe("0x2222222222222222222222222222222222222222");
     expect(result.onChain.invoiceId).toBe("42");
@@ -271,15 +274,130 @@ describe("evaluateOnChainInvoice", () => {
       ...share.invoiceData,
       amountDue: "999999.00",
     };
-    const result = evaluateOnChainInvoice(
-      tuple(computeInvoiceHash(share.invoiceData)),
-      tampered
-    );
+    const result = evaluateOnChainInvoice(tuple(goodHash()), tampered);
     expect(result.code).toBe(VERIFY_HASH_MISMATCH);
   });
 
   it("rejects an invoice with no commitment recorded", () => {
     const result = evaluateOnChainInvoice(tuple(""), share.invoiceData);
     expect(result.code).toBe(VERIFY_HASH_MISMATCH);
+  });
+});
+
+describe("evaluateOnChainInvoice field binding", () => {
+  // createInvoice takes `to`, `amountDue`, `tokenAddress` and the hash as four
+  // independent arguments, so a sender can commit a hash of a payload that
+  // disagrees with the invoice they actually created. The hash still verifies;
+  // these are the lies it cannot catch on its own.
+  const tuple = (overrides = {}) => [
+    42n,
+    overrides.from ?? "0x1111111111111111111111111111111111111111",
+    overrides.to ?? "0x2222222222222222222222222222222222222222",
+    overrides.amountDue ?? 1234567891n,
+    overrides.token ?? "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    false,
+    false,
+    computeInvoiceHash(share.invoiceData),
+  ];
+
+  it("accepts an invoice whose on-chain fields agree with the payload", () => {
+    expect(evaluateOnChainInvoice(tuple(), share.invoiceData).code).toBe(VERIFY_OK);
+  });
+
+  it("tolerates checksummed addresses from the contract", () => {
+    const result = evaluateOnChainInvoice(
+      tuple({ to: "0x2222222222222222222222222222222222222222".toUpperCase().replace("0X", "0x") }),
+      share.invoiceData
+    );
+    expect(result.code).toBe(VERIFY_OK);
+  });
+
+  it("rejects an invoice billed to someone other than the payload's client", () => {
+    const result = evaluateOnChainInvoice(
+      tuple({ to: "0x3333333333333333333333333333333333333333" }),
+      share.invoiceData
+    );
+    expect(result.code).toBe(VERIFY_FIELD_MISMATCH);
+    expect(result.mismatch).toBe("recipient");
+  });
+
+  it("rejects an invoice whose on-chain amount differs from the payload", () => {
+    // The payload says 1234.567891; the chain would charge 9999.
+    const result = evaluateOnChainInvoice(
+      tuple({ amountDue: 9999000000n }),
+      share.invoiceData
+    );
+    expect(result.code).toBe(VERIFY_FIELD_MISMATCH);
+    expect(result.mismatch).toBe("amount");
+  });
+
+  it("rejects a payload whose decimals would rescale the total", () => {
+    const rescaled = {
+      ...share.invoiceData,
+      paymentToken: { ...share.invoiceData.paymentToken, decimals: 18 },
+    };
+    const result = evaluateOnChainInvoice(
+      [...tuple().slice(0, 7), computeInvoiceHash(rescaled)],
+      rescaled
+    );
+    expect(result.code).toBe(VERIFY_FIELD_MISMATCH);
+    expect(result.mismatch).toBe("amount");
+  });
+
+  it("rejects a payload paid in a different token", () => {
+    const result = evaluateOnChainInvoice(
+      tuple({ token: "0x4444444444444444444444444444444444444444" }),
+      share.invoiceData
+    );
+    expect(result.code).toBe(VERIFY_FIELD_MISMATCH);
+    expect(result.mismatch).toBe("payment token");
+  });
+});
+
+describe("decodeInvoiceShare size limits", () => {
+  it("refuses a token longer than the hard ceiling before decoding it", () => {
+    const oversized = TOKEN_PREFIX + "A".repeat(MAX_TOKEN_CHARS);
+    try {
+      decodeInvoiceShare(oversized);
+      throw new Error("expected a throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(InvoiceShareError);
+      expect(err.code).toBe("TOO_LARGE");
+    }
+  });
+
+  it("refuses a compression bomb instead of allocating it", () => {
+    // ~5 KB of token expanding to 5 MB: comfortably under the token ceiling,
+    // so only the bounded inflate stops it.
+    const bomb = deflateSync(new TextEncoder().encode("A".repeat(5_000_000)), {
+      level: 9,
+    });
+    const token = TOKEN_PREFIX + bytesToBase64Url(bomb);
+    expect(token.length).toBeLessThan(MAX_TOKEN_CHARS);
+    try {
+      decodeInvoiceShare(token);
+      throw new Error("expected a throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(InvoiceShareError);
+      expect(err.code).toBe("TOO_LARGE");
+    }
+  });
+
+  it("still decodes a large but legitimate invoice", () => {
+    const big = {
+      invoiceId: "7",
+      chainId: 11155111,
+      invoiceData: makeInvoiceData(400),
+    };
+    const decoded = decodeInvoiceShare(encodeInvoiceShare(big));
+    expect(decoded.invoiceData.items).toHaveLength(400);
+    expect(
+      verifyInvoiceHash(decoded.invoiceData, computeInvoiceHash(big.invoiceData))
+    ).toBe(true);
+  });
+
+  it("keeps the hard ceiling well clear of the soft one", () => {
+    expect(MAX_TOKEN_CHARS).toBeGreaterThan(SHARE_URL_MAX_CHARS);
+    expect(MAX_DECODED_BYTES).toBeGreaterThan(0);
   });
 });

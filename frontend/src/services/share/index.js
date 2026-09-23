@@ -7,6 +7,8 @@ export {
   ENVELOPE_VERSION,
   SHARE_URL_MAX_CHARS,
   SHARE_QR_MAX_CHARS,
+  MAX_TOKEN_CHARS,
+  MAX_DECODED_BYTES,
 } from './invoiceShareCodec.js';
 export {
   buildInvoiceShareUrl,
@@ -32,5 +34,6 @@ export {
   VERIFY_UNSUPPORTED_CHAIN,
   VERIFY_NOT_FOUND,
   VERIFY_HASH_MISMATCH,
+  VERIFY_FIELD_MISMATCH,
   VERIFY_UNREACHABLE,
 } from './invoiceShareMatch.js';

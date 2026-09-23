@@ -24,6 +24,7 @@ import {
   SHARE_TOKEN_PARAM,
   verifyShareAgainstChain,
   VERIFY_OK,
+  VERIFY_FIELD_MISMATCH,
   VERIFY_HASH_MISMATCH,
   VERIFY_NOT_FOUND,
   VERIFY_UNREACHABLE,
@@ -65,6 +66,13 @@ function describeFailure(result) {
         detail:
           "The details in this link are not the ones the sender recorded on-chain. The link may have been edited or corrupted. Ask the sender to share it again.",
       };
+    case VERIFY_FIELD_MISMATCH:
+      return {
+        title: "This invoice contradicts the blockchain",
+        detail: `The ${
+          result.mismatch || "details"
+        } in this link does not match the invoice recorded on-chain. Do not act on it — ask the sender to share it again.`,
+      };
     case VERIFY_NOT_FOUND:
       return {
         title: "No such invoice on this network",
@@ -95,6 +103,8 @@ const ImportInvoice = () => {
   const [searchParams] = useSearchParams();
   const { address, isConnected, chainId: walletChainId } = useAccount();
   const fileInputRef = useRef(null);
+  // Monotonic ticket for processInput; see the comment there.
+  const requestRef = useRef(0);
 
   const [manualInput, setManualInput] = useState("");
   const [status, setStatus] = useState("idle");
@@ -112,6 +122,15 @@ const ImportInvoice = () => {
    * as an invoice.
    */
   const processInput = useCallback(async (input) => {
+    // Each run claims a ticket. Two runs can overlap — a token in the URL and
+    // a pasted link, or an impatient second paste — and each awaits a chain
+    // read, so they can finish out of order. Without this the slower run
+    // could pair its verification with the faster run's payload, and
+    // handleSave would store one invoice's details under another's on-chain
+    // identity, which is exactly what the verification exists to prevent.
+    const ticket = ++requestRef.current;
+    const superseded = () => requestRef.current !== ticket;
+
     setStatus("working");
     setProblem(null);
     setDecoded(null);
@@ -122,6 +141,7 @@ const ImportInvoice = () => {
     try {
       share = decodeInvoiceShareInput(input);
     } catch (err) {
+      if (superseded()) return;
       setStatus("failed");
       setProblem({
         title: "This link could not be read",
@@ -130,9 +150,11 @@ const ImportInvoice = () => {
       return;
     }
 
+    if (superseded()) return;
     setDecoded(share);
 
     const result = await verifyShareAgainstChain(share);
+    if (superseded()) return;
     if (result.code !== VERIFY_OK) {
       setStatus("failed");
       setProblem(describeFailure(result));
@@ -147,6 +169,7 @@ const ImportInvoice = () => {
     try {
       const existing = await getInvoiceById(share.chainId, share.invoiceId);
       if (
+        !superseded() &&
         existing?.data &&
         verifyInvoiceHash(existing.data, result.onChain.invoiceDataHash)
       ) {

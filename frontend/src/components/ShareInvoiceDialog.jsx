@@ -366,8 +366,8 @@ const ShareInvoiceDialog = ({ open, onClose, invoiceId, chainId }) => {
                 <FileDown className="h-4 w-4" /> Download as file (.cvinv)
               </Button>
               <p className="mt-2 text-[11px] text-gray-500">
-                For email or any channel that mangles long links. No size
-                limit.
+                For email or any channel that mangles long links. No link
+                length limit.
               </p>
             </div>
           </div>

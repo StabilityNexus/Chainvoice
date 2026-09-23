@@ -52,6 +52,23 @@ const ENVELOPE_VERSION = 1;
 const SHARE_URL_MAX_CHARS = 2000;
 const SHARE_QR_MAX_CHARS = 1500;
 
+/**
+ * Hard safety ceilings on what the decoder will accept, as distinct from the
+ * soft ceilings above.
+ *
+ * Those two describe what travels well; these two stop a hostile token. A
+ * token arrives from a link or a file that anyone can author, and DEFLATE
+ * compresses repetitive input roughly 1000:1 — a 5 KB token expands to 5 MB,
+ * and a 50 KB one to 50 MB, allocated in a single synchronous call before any
+ * of it has been checked. That freezes or kills the tab long before the
+ * blockchain verification that would have rejected it.
+ *
+ * Both are far above anything a real invoice reaches: a 40-item invoice
+ * encodes to about 1,600 characters and 4 KB of JSON.
+ */
+const MAX_TOKEN_CHARS = 16_384;
+const MAX_DECODED_BYTES = 512 * 1024;
+
 /** Thrown for every malformed or unsupported token, with a `code` to switch on. */
 export class InvoiceShareError extends Error {
   constructor(code, message) {
@@ -153,10 +170,26 @@ export function decodeInvoiceShare(token) {
     );
   }
 
-  let json;
+  // Refuse before allocating anything. Checked on the encoded form because
+  // that is the only size known before decompression.
+  if (trimmed.length > MAX_TOKEN_CHARS) {
+    throw new InvoiceShareError(
+      'TOO_LARGE',
+      'This share code is too large to be a Chainvoice invoice.'
+    );
+  }
+
+  let inflated;
   try {
     const bytes = base64UrlToBytes(trimmed.slice(TOKEN_PREFIX.length));
-    json = new TextDecoder().decode(inflateSync(bytes));
+    // A fixed output buffer caps what a compression bomb can allocate.
+    // fflate fills the buffer and stops rather than throwing, so asking for
+    // one byte more than the limit makes "hit the ceiling" observable: a
+    // payload within the limit reports its true length, and only one that
+    // ran past it can come back longer than the limit itself.
+    inflated = inflateSync(bytes, {
+      out: new Uint8Array(MAX_DECODED_BYTES + 1),
+    });
   } catch {
     throw new InvoiceShareError(
       'CORRUPT',
@@ -164,6 +197,16 @@ export function decodeInvoiceShare(token) {
         'long links — ask the sender to share the invoice file instead.'
     );
   }
+
+  if (inflated.length > MAX_DECODED_BYTES) {
+    throw new InvoiceShareError(
+      'TOO_LARGE',
+      'This share code expands to far more data than an invoice contains, ' +
+        'so it has been rejected.'
+    );
+  }
+
+  const json = new TextDecoder().decode(inflated);
 
   let envelope;
   try {
@@ -224,4 +267,6 @@ export {
   ENVELOPE_VERSION,
   SHARE_URL_MAX_CHARS,
   SHARE_QR_MAX_CHARS,
+  MAX_TOKEN_CHARS,
+  MAX_DECODED_BYTES,
 };
