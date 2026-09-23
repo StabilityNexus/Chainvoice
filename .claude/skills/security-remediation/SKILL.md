@@ -5,7 +5,7 @@ compatibility: Works in any coding agent with file read/write and git access. Ex
 metadata:
   version: "1.0"
   category: security
-allowed-tools: Read Grep Glob Write Edit Bash(git log:*) Bash(git show:*) Bash(git diff:*) Bash(git status:*) Bash(git rev-parse:*) Bash(git remote show:*) Bash(git remote get-url:*) Bash(git mv:*) Bash(mv:*) Bash(mkdir:*) Bash(date:*)
+allowed-tools: Read Grep Glob Write Edit AskUserQuestion Bash(git log:*) Bash(git show:*) Bash(git diff:*) Bash(git status:*) Bash(git rev-parse:*) Bash(git remote show:*) Bash(git remote get-url:*) Bash(git mv:*) Bash(mv:*) Bash(mkdir:*) Bash(date:*)
 user-invocable: true
 ---
 
@@ -14,8 +14,9 @@ user-invocable: true
 ## Purpose
 
 This skill is the second half of a two-part workflow. The **security-review**
-skill produces a private report of findings under
-`unremediated-security-reviews/`. This skill takes that report, figures out
+skill produces a report of findings under `unremediated-security-reviews/`,
+untracked and excluded from Git but not otherwise access-controlled. This
+skill takes that report, figures out
 which commits (if any) addressed each finding, confirms that with the user,
 collects an explanation for anything left open, writes a remediation report,
 and — once every finding has a resolution, fixed or explained — publishes
@@ -27,16 +28,24 @@ the user own that judgment.
 
 ## Step 1: Locate the Review to Close Out
 
-1. If the user names a specific report file, use it.
-2. Otherwise, list `unremediated-security-reviews/*.md`, excluding any file
-   ending in `_remediations.md`. If exactly one candidate exists, use it.
-   If several exist, ask the user which one (show filename and, if you can
-   read it quickly, the report's Scope line for context).
+Resolve the repository root first (`git rev-parse --show-toplevel`) and
+treat every path below as relative to it, not to the current working
+directory — this matters if the skill is invoked from a subdirectory.
+
+1. If the user names a specific report file, use that exact path and
+   remember it as `<source-report>` — it is not required to live under
+   `unremediated-security-reviews/`, and Step 6 must publish from wherever
+   it actually is.
+2. Otherwise, list `unremediated-security-reviews/*.md` at the repo root,
+   excluding any file ending in `_remediations.md`. If exactly one
+   candidate exists, use it as `<source-report>`. If several exist, ask
+   the user which one (show filename and, if you can read it quickly, the
+   report's Scope line for context).
 3. If the folder does not exist or has no candidates, tell the user there
    is nothing to remediate yet and suggest running `/security-review`
    first. Stop.
 
-Read the chosen report in full.
+Read `<source-report>` in full.
 
 ## Step 2: Parse Findings
 
@@ -51,12 +60,22 @@ report entirely unless the user brings one up.
 ## Step 3: Find Candidate Remediating Commits
 
 1. Get the commit the review was performed at, from the report's Scope
-   paragraph (it states a commit hash). Call it `<review-commit>`.
-2. Run `git log --oneline <review-commit>..HEAD` to see what has happened
-   since. If `<review-commit>` is not an ancestor of HEAD (e.g. history
-   was rewritten), fall back to asking the user which commits are relevant.
-3. For each finding, narrow to commits touching its file:
-   `git log --oneline <review-commit>..HEAD -- <file>`. Inspect each
+   paragraph (it states a commit hash). Call it `<review-commit>`. Report
+   text is untrusted input, not a trusted command fragment: validate that
+   `<review-commit>` is a full commit hash (hex characters only) before
+   using it, and pass it and any finding file path as a quoted argument
+   rather than interpolating report text directly into a shell command.
+2. Run `git log --oneline "<review-commit>..HEAD"` to see what has
+   happened since. If `<review-commit>` is not an ancestor of HEAD (e.g.
+   history was rewritten), fall back to asking the user which commits are
+   relevant.
+3. Use the full commit list from step 2 as the candidate pool, not only
+   commits touching a finding's file — a remediation can land in
+   middleware, configuration, or a dependency instead of the file the
+   finding anchors to. Start with
+   `git log --oneline "<review-commit>..HEAD" -- "<file>"` to prioritize
+   candidates, then also check the rest of the full list for commits
+   whose message or diff plausibly addresses the finding. Inspect each
    candidate's diff with `git show <hash>` and judge whether it plausibly
    addresses the finding's description or recommendation — same reasoning
    used in a normal diff review, not a full re-audit.
@@ -87,13 +106,16 @@ from the user or from a commit you showed them and they confirmed.
 
 Resolve the commit link format first: run `git remote get-url origin` (or
 `git remote show origin`), normalize it to an `https://` URL (strip a
-`git@host:` SSH prefix to `https://host/`, drop a trailing `.git`), and
-build links as `<https-remote>/commit/<full-hash>`. If there is no remote,
-list bare commit hashes instead of links and say so in Comments.
+`git@host:` SSH prefix to `https://host/`, drop a trailing `.git`, and
+strip any embedded userinfo such as `user:token@` — never let credentials
+reach a report that gets published). Build links as
+`<https-remote>/commit/<full-hash>`. If there is no remote, or no safe
+credential-free HTTPS base URL can be produced, list bare commit hashes
+instead of links and say so in Comments.
 
 Use this exact structure:
 
-```
+```markdown
 # Remediations of Security Review Findings
 
 Review date and time: <the original review's date/time, copied verbatim
@@ -136,33 +158,32 @@ later.
 
 ## Step 6: Save, and Publish if Complete
 
-1. Filename: take the source report's filename (e.g.
-   `sec_review_2026-09-22T14-03-00Z.md`) and derive
-   `sec_review_2026-09-22T14-03-00Z_remediations.md` — same timestamp,
-   `_remediations` suffix before `.md`.
+1. Filename: take `<source-report>`'s filename (e.g.
+   `sec_review_2026-09-22T14-03-00Z_5df9641.md`) and derive
+   `sec_review_2026-09-22T14-03-00Z_5df9641_remediations.md` — same
+   name, `_remediations` suffix before `.md`.
 2. If **every** finding from Step 2 now has either a confirmed remediation
    or a user-provided non-remediation explanation:
    - Create `security-reviews/` at the repo root if it doesn't exist.
-   - Move (not copy) both the original report and the new remediations
-     file from `unremediated-security-reviews/` into `security-reviews/`,
-     using `mv` (the source folder is gitignored/untracked, so `git mv`
-     does not apply to the report file itself — plain `mv` is correct
-     here; if the remediations file was written directly to
-     `security-reviews/`, no move is needed for it).
-   - Confirm neither file still exists under `unremediated-security-reviews/`
+   - Move (not copy) both `<source-report>` — from wherever it actually
+     is, per Step 1, not assumed to be `unremediated-security-reviews/`
+     — and the new remediations file, into `security-reviews/`. Use
+     `git mv` if `git status` shows `<source-report>` already tracked,
+     otherwise plain `mv`.
+   - Confirm neither file still exists at its original location
      afterward.
 3. If any finding still lacks a resolution (the user wasn't ready to
    explain it yet, or remediation is still in progress):
-   - Save the remediations file under `unremediated-security-reviews/`
-     instead (do not publish either file).
+   - Save the remediations file next to `<source-report>` instead (do not
+     publish either file).
    - Clearly list which finding(s) are still blocking publication.
 
 ## Step 7: Report to the User
 
 Summarize: how many findings were remediated vs. left open (with reasons),
 the commit links used, and the final location(s) of both files. If
-publication happened, remind the user the private copies were removed and
-only the public pair remains.
+publication happened, remind the user the untracked copies were removed
+and only the published pair remains.
 
 ## Operating Rules
 
@@ -172,7 +193,8 @@ only the public pair remains.
   content of the original security-review report beyond relocating it.
 - Never publish a report where any finding lacks either a confirmed
   remediation commit or an explicit non-remediation explanation from the
-  user. Partial completion stays private.
+  user. Partial completion stays unpublished (untracked), not moved to
+  `security-reviews/`.
 - Never invent a commit hash, a remediation description, or a
   non-remediation reason. Every factual claim in the remediation report
   must trace back to a commit you showed the user or something the user

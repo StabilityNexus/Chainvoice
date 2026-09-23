@@ -66,8 +66,15 @@ If none of these signals appear, apply only the general checklist.
 
 Before you judge any single line, understand the codebase.
 
-1. Run `git status`, `git diff --name-only`, and `git log` if the scope is a
-   diff or PR. Read the full diff with `git diff`.
+1. Run `git status` first. For diff or PR scope, identify the base ref (the
+   branch or commit the change is against) and read the actual scoped diff
+   with `git diff <base>...HEAD` (three-dot: everything on this branch
+   since it diverged from base) — plain `git diff` alone only shows
+   uncommitted working-tree changes and misses committed PR commits
+   entirely. Inspect staged and unstaged local changes separately with
+   `git diff --cached` and `git diff` when those are also in scope. Use
+   `git diff --name-only` and `git log` to list the affected files and
+   commits.
 2. Search the codebase for existing security patterns: input validation
    helpers, authentication middleware, sanitization functions.
 3. Identify the project's trust boundaries. Example: in a web app, the
@@ -519,7 +526,7 @@ The report has four top-level sections, in this order: **Scope**,
 **Findings**, **Notes**, **Limitations**. Use this outline (heading levels
 matter — the security-remediation skill parses on them):
 
-```
+```markdown
 # Security Review Report
 
 <metadata block>
@@ -555,7 +562,7 @@ code is not in a git repository, state that no commit hash is available.
 
 Output one entry per finding. Use this format:
 
-```
+```markdown
 ### Finding <number>: <short title> — `<file>:<line>`
 
 - Severity: <Critical | High | Medium | Low>
@@ -568,7 +575,7 @@ Output one entry per finding. Use this format:
 
 Example:
 
-```
+```markdown
 ## Findings
 
 ### Finding 1: Reentrancy in withdraw() — `Vault.sol:88`
@@ -594,7 +601,7 @@ clearly. Do not invent a finding to fill the report.
 Output one entry per note (see Step 5, "Separating Notes from Findings").
 Use this format:
 
-```
+```markdown
 ### Note <number>: <short title> — `<file>:<line>`
 
 - Category: <e.g. design-tradeoff, accepted-risk>
@@ -653,24 +660,34 @@ Save the report as a file in the project — do not just print it in the
 conversation. This lets the security-remediation skill find it later, and
 keeps unfixed findings out of the public repository in the meantime.
 
-1. Take the **Review date and time** from the metadata block (e.g.
+1. Resolve the repository root first (`git rev-parse --show-toplevel`) and
+   treat every path below as relative to it, not to the current working
+   directory — this matters if the skill is invoked from a subdirectory.
+2. Take the **Review date and time** from the metadata block (e.g.
    `2026-09-22T14:03:00Z`) and sanitize it for use in a filename by
    replacing every `:` with `-` (colons are illegal in Windows filenames):
    `2026-09-22T14-03-00Z`. Keep the original, colon-containing form in the
    report's metadata text — only the filename is sanitized.
-2. The filename is `sec_review_<sanitized-timestamp>.md`.
-3. The report is saved to `unremediated-security-reviews/<filename>` at
+3. The filename is `sec_review_<sanitized-timestamp>_<short-commit>.md`,
+   where `<short-commit>` is the first 7 characters of the commit hash
+   from the Scope section (or `nogit` if none is available) — this keeps
+   two reviews started in the same second from overwriting each other.
+4. The report is saved to `unremediated-security-reviews/<filename>` at
    the repository root. Create the directory if it does not exist.
-4. Before writing the report, check whether the project has a `.gitignore`
+5. Before writing the report, check whether the project has a `.gitignore`
    file and whether it already ignores `unremediated-security-reviews/`
    (an exact entry, or a broader pattern that would already cover it).
    If not covered, add a `unremediated-security-reviews/` line to
    `.gitignore` (creating the file at the repo root if none exists). This
    folder holds unremediated findings and must never be committed to a
    public repository — do not skip this check.
-5. Write the report to that path.
-6. Tell the user the saved path, and that the folder is gitignored
-   (private) until the findings are remediated. Mention that running the
+6. Write the report to that path.
+7. Tell the user the saved path, and that the folder is untracked and
+   excluded from Git — not private. Git exclusion keeps the report out of
+   commits and pushes; it does nothing to stop local users, backups, or
+   other tools on the machine from reading the file. If real
+   confidentiality is required, that needs filesystem-level access
+   controls, which this skill does not set up. Mention that running the
    security-remediation skill afterward will match remediating commits,
    ask about any findings left open, and publish both the review and a
    remediation report to `security-reviews/` (a tracked, public folder).
