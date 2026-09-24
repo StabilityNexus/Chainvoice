@@ -635,5 +635,58 @@ contract ChainvoiceTest is Test {
         assertFalse(chainvoice.getInvoice(1).isPaid);
         assertEq(chainvoice.accumulatedFees(), 0);
     }
+
+    function testPayInvoicesBatch_ERC20_RevertInsufficientAllowance() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 300 * 10**18);
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("b1"));
+        chainvoice.createInvoice(bob, 200 * 10**18, address(token), keccak256("b2"));
+        vm.stopPrank();
+
+        uint256 fee = chainvoice.fee();
+        uint256 totalFee = fee * 2;
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        vm.startPrank(bob);
+        // No allowance given
+        vm.expectRevert(Chainvoice.InsufficientAllowance.selector);
+        chainvoice.payInvoicesBatch{value: totalFee}(ids);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
+
+    function testPayInvoicesBatch_ERC20_RevertIncorrectNativeValue() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 300 * 10**18);
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("b1"));
+        chainvoice.createInvoice(bob, 200 * 10**18, address(token), keccak256("b2"));
+        vm.stopPrank();
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 300 * 10**18);
+        // Send incorrect native fee (0 instead of totalFee)
+        vm.expectRevert(Chainvoice.IncorrectNativeValue.selector);
+        chainvoice.payInvoicesBatch{value: 0}(ids);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
 }
+
 
