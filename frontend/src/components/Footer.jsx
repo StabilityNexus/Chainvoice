@@ -41,6 +41,7 @@ function Footer() {
           <div className="flex items-center gap-9">
             <a
               href="https://github.com/StabilityNexus"
+              aria-label="Stability Nexus on GitHub"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-green-400 transition"
@@ -59,6 +60,7 @@ function Footer() {
             </a>
             <a
               href="https://x.com/StabilityNexus"
+              aria-label="Stability Nexus on X"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-green-400 transition"
@@ -73,6 +75,7 @@ function Footer() {
             </a>
             <a
               href="https://discord.com/invite/YzDKeEfWtS"
+              aria-label="Stability Nexus on Discord"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-green-400 transition"
@@ -87,6 +90,7 @@ function Footer() {
             </a>
             <a
               href="https://www.linkedin.com/company/stability-nexus/"
+              aria-label="Stability Nexus on LinkedIn"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-green-400 transition"
@@ -101,6 +105,7 @@ function Footer() {
             </a>
             <a
               href="https://t.me/StabilityNexus"
+              aria-label="Stability Nexus on Telegram"
               target="_blank"
               rel="noopener noreferrer"
               className="text-gray-400 hover:text-green-400 transition"
