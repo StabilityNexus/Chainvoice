@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Redirecting...</title>
+    <script type="text/javascript">
+        // Auto-detect path segments to keep.
+        // If we are on github.io and have a path like /RepoName/, keep 1 segment.
+        // Otherwise (custom domain or root), keep 0.
+        var pathSegmentsToKeep = 0;
+        if (window.location.hostname.includes('github.io') && window.location.pathname.split('/').length > 2) {
+            // Rudimentary check: assumes the first segment is the repo name if on github.io
+            // You can hardcode this to 1 if you strictly use Project Pages.
+            pathSegmentsToKeep = 1;
+        }
+
+        var l = window.location;
+        l.replace(
+            l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+            l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+            l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+            (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+            l.hash
+        );
+    </script>
+</head>
+
+<body>
+</body>
+
+</html>
