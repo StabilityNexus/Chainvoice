@@ -24,10 +24,15 @@ const throwingStorage = {
 };
 
 describe("utcDayKey", () => {
+  // Tests run in Asia/Kolkata (UTC+5:30, see tests/setupTimezone.cjs). The
+  // local date is checked first, so the case proves the two days really differ
+  // and a local-date implementation would fail it.
   test("uses the UTC date, not the local one", () => {
-    // 23:30 on the 24th in UTC is already the 25th in India (UTC+5:30).
-    expect(utcDayKey(new Date("2026-09-24T23:30:00Z"))).toBe("2026-09-24");
-    expect(utcDayKey(new Date("2026-09-24T23:30:00-05:30"))).toBe("2026-09-25");
+    // 20:00 UTC on the 24th is 01:30 on the 25th in India.
+    const date = new Date("2026-09-24T20:00:00Z");
+
+    expect(date.getDate()).toBe(25);
+    expect(utcDayKey(date)).toBe("2026-09-24");
   });
 });
 

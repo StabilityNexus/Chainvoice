@@ -2,6 +2,7 @@ module.exports = {
   rootDir: ".",
   testEnvironment: "node",
   testMatch: ["<rootDir>/tests/**/*.test.[jt]s?(x)"],
+  globalSetup: "<rootDir>/tests/setupTimezone.cjs",
   collectCoverageFrom: [
     "src/utils/invoiceCalculations.js",
     "src/utils/invoiceValidation.js",
