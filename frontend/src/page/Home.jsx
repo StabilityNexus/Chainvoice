@@ -18,6 +18,7 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { FileStackIcon, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import { useUserProfile } from "@/hooks/useUserProfile";
+import { useTermsOfUse } from "@/hooks/useTermsOfUse";
 import { SHELL } from "@/utils/layout";
 
 const MENU_ITEMS = [
@@ -165,16 +166,19 @@ export default function Home() {
     onboardingDismissed,
     dismissOnboarding,
   } = useUserProfile();
+  const { accepted: termsAccepted } = useTermsOfUse();
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(readRailCollapsed);
 
   // First visit only: prompt for the sender details every invoice needs, once
   // storage has actually been read and once the user has not already skipped.
+  // It waits for the Terms of Use, since two modals at once would leave the
+  // one underneath unclickable.
   useEffect(() => {
-    if (profileLoading) return;
+    if (profileLoading || !termsAccepted) return;
     setShowOnboarding(!hasProfile && !onboardingDismissed);
-  }, [profileLoading, hasProfile, onboardingDismissed]);
+  }, [profileLoading, termsAccepted, hasProfile, onboardingDismissed]);
 
   // Widening past lg hides the drawer and its hamburger by CSS, but the modal
   // would stay open and keep the body scroll locked with nothing left to close
