@@ -118,6 +118,37 @@ contract Chainvoice {
         return success;
     }
 
+    /// @dev Supports ERC-20 tokens with optional return values and bubbles token reverts.
+    function _safeTransferFrom(address token, address sender, address recipient, uint256 amount) internal {
+        bytes4 selector = IERC20.transferFrom.selector;
+        bool success;
+        uint256 returnSize;
+        uint256 returnValue;
+
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, selector)
+            mstore(add(ptr, 0x04), and(sender, 0xffffffffffffffffffffffffffffffffffffffff))
+            mstore(add(ptr, 0x24), and(recipient, 0xffffffffffffffffffffffffffffffffffffffff))
+            mstore(add(ptr, 0x44), amount)
+
+            success := call(gas(), token, 0, ptr, 0x64, ptr, 0x20)
+            returnSize := returndatasize()
+            returnValue := mload(ptr)
+
+            if iszero(success) {
+                returndatacopy(ptr, 0, returnSize)
+                revert(ptr, returnSize)
+            }
+        }
+
+        if (returnSize == 0) {
+            if (token.code.length == 0) revert TokenTransferFailed();
+            return;
+        }
+        if (returnSize < 32 || returnValue != 1) revert TokenTransferFailed();
+    }
+
     // ========== Messaging Key Management ==========
     /// @notice Register or update the caller's ECIES public key.
     /// @dev Used by clients to encrypt invoice payloads for this address. The
@@ -279,12 +310,7 @@ contract Chainvoice {
             }
             accumulatedFees += fee;
 
-            bool transferSuccess = IERC20(invoice.tokenAddress).transferFrom(
-                msg.sender,
-                invoice.from,
-                invoice.amountDue
-            );
-            if (!transferSuccess) revert TokenTransferFailed();
+            _safeTransferFrom(invoice.tokenAddress, msg.sender, invoice.from, invoice.amountDue);
         }
 
         emit InvoicePaid(
@@ -352,8 +378,7 @@ contract Chainvoice {
 
             for (uint256 i = 0; i < n; i++) {
                 InvoiceDetails storage inv = invoices[invoiceIds[i]];
-                bool ok = erc20.transferFrom(msg.sender, inv.from, inv.amountDue);
-                if (!ok) revert TokenTransferFailed();
+                _safeTransferFrom(token, msg.sender, inv.from, inv.amountDue);
                 emit InvoicePaid(inv.id, inv.from, inv.to, inv.amountDue, token);
             }
         }
