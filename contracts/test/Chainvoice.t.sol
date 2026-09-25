@@ -196,6 +196,23 @@ contract ChainvoiceTest is Test {
         assertEq(alice.balance, aliceStart + totalPrincipal);
     }
 
+    function testPayInvoicesBatch_RevertOnDuplicateId() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("dup1"));
+
+        uint256 fee = chainvoice.fee();
+        uint256 totalFee = fee * 2;
+        uint256 totalPrincipal = 2 ether;
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 0;
+
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.AlreadySettled.selector);
+        chainvoice.payInvoicesBatch{value: totalPrincipal + totalFee}(ids);
+    }
+
     /* ------------------------------------------------------------ */
     /*                       FUZZ TESTING                           */
     /* ------------------------------------------------------------ */
