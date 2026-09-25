@@ -118,6 +118,21 @@ contract Chainvoice {
         return success;
     }
 
+    function _validateToken(address tokenAddress) private view {
+        if (tokenAddress.code.length == 0) revert NotContract();
+
+        (bool balOk, bytes memory balData) = tokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
+        );
+        (bool allowanceOk, bytes memory allowanceData) = tokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.allowance.selector, address(this), address(this))
+        );
+
+        if (!balOk || balData.length < 32 || !allowanceOk || allowanceData.length < 32) {
+            revert InvalidToken();
+        }
+    }
+
     // ========== Messaging Key Management ==========
     /// @notice Register or update the caller's ECIES public key.
     /// @dev Used by clients to encrypt invoice payloads for this address. The
@@ -150,16 +165,7 @@ contract Chainvoice {
         if (amountDue == 0) revert InvalidAmount();
 
         if (tokenAddress != address(0)) {
-            if (tokenAddress.code.length == 0) revert NotContract();
-            (bool balOk, bytes memory balData) = tokenAddress.staticcall(
-                abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
-            );
-            (bool allowanceOk, bytes memory allowanceData) = tokenAddress.staticcall(
-                abi.encodeWithSelector(IERC20.allowance.selector, address(this), address(this))
-            );
-            if (!balOk || balData.length < 32 || !allowanceOk || allowanceData.length < 32) {
-                revert InvalidToken();
-            }
+            _validateToken(tokenAddress);
         }
 
         uint256 invoiceId = invoices.length;
@@ -197,11 +203,7 @@ contract Chainvoice {
         ) revert ArrayLengthMismatch();
 
         if (tokenAddress != address(0)) {
-             if (tokenAddress.code.length == 0) revert NotContract();
-            (bool ok, ) = tokenAddress.staticcall(
-                abi.encodeWithSignature("balanceOf(address)", address(this))
-            );
-            if (!ok) revert InvalidToken();
+            _validateToken(tokenAddress);
         }
 
         uint256[] memory ids = new uint256[](n);

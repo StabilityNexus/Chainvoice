@@ -5,6 +5,44 @@ import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import "../src/Chainvoice.sol";
 
+contract ValidCreationToken {
+    function balanceOf(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    function allowance(address, address) external pure returns (uint256) {
+        return 0;
+    }
+}
+
+contract EmptyReturnToken {
+    fallback() external {}
+}
+
+contract RevertingBalanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        revert();
+    }
+}
+
+contract EmptyAllowanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    fallback() external {}
+}
+
+contract RevertingAllowanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    function allowance(address, address) external pure returns (uint256) {
+        revert();
+    }
+}
+
 contract ChainvoiceTest is Test {
     Chainvoice chainvoice;
 
@@ -163,6 +201,61 @@ contract ChainvoiceTest is Test {
             assertEq(sent[i].invoiceDataHash, payloads[i]);
             assertEq(received[i].invoiceDataHash, payloads[i]);
         }
+    }
+
+    function testCreateInvoicesBatch_ValidToken() public {
+        address token = address(new ValidCreationToken());
+        address[] memory tos = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+        bytes32[] memory hashes = new bytes32[](1);
+        tos[0] = bob;
+        amounts[0] = 1 ether;
+        hashes[0] = keccak256("batch-token");
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, token, keccak256("single-token"));
+        vm.prank(alice);
+        chainvoice.createInvoicesBatch(tos, amounts, token, hashes);
+
+        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(alice);
+        assertEq(sent.length, 2);
+        assertEq(sent[0].tokenAddress, token);
+        assertEq(sent[1].tokenAddress, token);
+    }
+
+    function testCreateInvoicesBatch_RejectsEmptyReturnToken() public {
+        _assertInvalidTokenForSingleAndBatch(address(new EmptyReturnToken()));
+    }
+
+    function testCreateInvoicesBatch_RejectsRevertingBalanceOf() public {
+        _assertInvalidTokenForSingleAndBatch(address(new RevertingBalanceToken()));
+    }
+
+    function testCreateInvoicesBatch_RejectsEmptyAllowance() public {
+        _assertInvalidTokenForSingleAndBatch(address(new EmptyAllowanceToken()));
+    }
+
+    function testCreateInvoicesBatch_RejectsRevertingAllowance() public {
+        _assertInvalidTokenForSingleAndBatch(address(new RevertingAllowanceToken()));
+    }
+
+    function _assertInvalidTokenForSingleAndBatch(address token) private {
+        address[] memory tos = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+        bytes32[] memory hashes = new bytes32[](1);
+        tos[0] = bob;
+        amounts[0] = 1 ether;
+        hashes[0] = keccak256("invalid-token");
+
+        vm.expectRevert(Chainvoice.InvalidToken.selector);
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, token, hashes[0]);
+
+        vm.expectRevert(Chainvoice.InvalidToken.selector);
+        vm.prank(alice);
+        chainvoice.createInvoicesBatch(tos, amounts, token, hashes);
+
+        assertEq(chainvoice.getSentInvoices(alice).length, 0);
     }
 
     function testPayInvoicesBatch() public {
