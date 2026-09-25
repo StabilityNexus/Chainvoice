@@ -56,16 +56,21 @@ import WarningIcon from "@mui/icons-material/Warning";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
+
+import TableSortLabel from "@mui/material/TableSortLabel";
+import { useInvoiceFilterSort } from "@/hooks/useInvoiceFilterSort";
+import InvoiceFilterBar from "@/components/InvoiceFilterBar";
 import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
 
+
 const columns = [
-  { id: "fname", label: "Client", minWidth: 120 },
-  { id: "to", label: "Receiver", minWidth: 150 },
-  { id: "amountDue", label: "Amount", minWidth: 100, align: "right" },
-  { id: "status", label: "Status", minWidth: 120 },
-  { id: "date", label: "Date", minWidth: 100 },
-  { id: "actions", label: "Actions", minWidth: 150 },
+  { id: "fname", label: "Client", minWidth: 120, sortable: true },
+  { id: "to", label: "Receiver", minWidth: 150, sortable: false },
+  { id: "amountDue", label: "Amount", minWidth: 100, align: "right", sortable: true },
+  { id: "status", label: "Status", minWidth: 120, sortable: true },
+  { id: "date", label: "Date", minWidth: 100, sortable: true },
+  { id: "actions", label: "Actions", minWidth: 150, sortable: false },
 ];
 
 
@@ -88,6 +93,20 @@ function SentInvoice() {
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [resending, setResending] = useState({});
+
+  const {
+    filteredAndSortedInvoices,
+    availableTokens,
+    filters,
+    setFilter,
+    handleSort,
+    clearFilters,
+    hasActiveFilters,
+  } = useInvoiceFilterSort(sentInvoices, { isSent: true });
+
+  useEffect(() => {
+    setPage(0);
+  }, [filters.status, filters.fromDate, filters.toDate, filters.token, filters.minAmount, filters.maxAmount, filters.sortBy, filters.sortDir]);
 
   // Get tokens from the hook
   const { tokens } = useTokenList(chainId || 1);
@@ -610,6 +629,16 @@ function SentInvoice() {
             </div>
           </div>
 
+          <InvoiceFilterBar
+            filters={filters}
+            setFilter={setFilter}
+            availableTokens={availableTokens}
+            clearFilters={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            totalCount={filteredAndSortedInvoices.length}
+            rawCount={sentInvoices.length}
+          />
+
           <Paper
             sx={{
               width: "100%",
@@ -655,6 +684,29 @@ function SentInvoice() {
                   </p>
                 </div>
               </div>
+            ) : filteredAndSortedInvoices.length === 0 ? (
+              <div className="p-6 text-center">
+                <div className="bg-gray-50 p-8 rounded-lg">
+                  <DescriptionIcon
+                    className="text-gray-400"
+                    style={{ fontSize: 48 }}
+                  />
+                  <h3 className="text-lg font-medium text-gray-800 mt-2">
+                    No Matching Invoices
+                  </h3>
+                  <p className="text-gray-600 mt-1 mb-4">
+                    No invoices match your selected filter criteria.
+                  </p>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={clearFilters}
+                    sx={{ borderRadius: "8px" }}
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
+              </div>
             ) : (
               <>
                 <TableContainer>
@@ -665,6 +717,9 @@ function SentInvoice() {
                           <TableCell
                             key={column.id}
                             align={column.align}
+                            sortDirection={
+                              filters.sortBy === column.id ? filters.sortDir : false
+                            }
                             sx={{
                               minWidth: column.minWidth,
                               fontWeight: 600,
@@ -672,13 +727,34 @@ function SentInvoice() {
                               borderBottom: "1px solid #f1f5f9",
                             }}
                           >
-                            {column.label}
+                            {column.sortable ? (
+                              <TableSortLabel
+                                active={filters.sortBy === column.id}
+                                direction={
+                                  filters.sortBy === column.id
+                                    ? filters.sortDir
+                                    : "asc"
+                                }
+                                onClick={() => handleSort(column.id)}
+                                sx={{
+                                  color: "#64748b !important",
+                                  "&.Mui-active": { color: "#0369a1 !important" },
+                                  "& .MuiTableSortLabel-icon": {
+                                    color: "#0369a1 !important",
+                                  },
+                                }}
+                              >
+                                {column.label}
+                              </TableSortLabel>
+                            ) : (
+                              column.label
+                            )}
                           </TableCell>
                         ))}
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {sentInvoices
+                      {filteredAndSortedInvoices
                         .slice(
                           page * rowsPerPage,
                           page * rowsPerPage + rowsPerPage
@@ -914,7 +990,7 @@ function SentInvoice() {
                 <TablePagination
                   rowsPerPageOptions={[10, 25, 100]}
                   component="div"
-                  count={sentInvoices.length}
+                  count={filteredAndSortedInvoices.length}
                   rowsPerPage={rowsPerPage}
                   page={page}
                   onPageChange={handleChangePage}

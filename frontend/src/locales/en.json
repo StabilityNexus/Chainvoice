@@ -1,0 +1,18 @@
+{
+  "filterBar": {
+    "status": "Status",
+    "allStatuses": "All Statuses",
+    "paid": "Paid",
+    "pending": "Pending",
+    "overdue": "Overdue",
+    "cancelled": "Cancelled",
+    "fromDate": "From Date",
+    "toDate": "To Date",
+    "token": "Token",
+    "allTokens": "All Tokens",
+    "minAmount": "Min Amount",
+    "maxAmount": "Max Amount",
+    "clearFilters": "Clear Filters",
+    "showingResults": "Showing {{totalCount}} of {{rawCount}} invoices"
+  }
+}
