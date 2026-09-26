@@ -10,7 +10,11 @@ import { ERC20_ABI } from "../contractsABI/ERC20_ABI";
 import { getReceivedInvoices as getLocalReceivedInvoices } from "../services/invoiceStorage/invoiceDB.js";
 import { verifyInvoiceHash } from "../services/relay/invoiceHashUtils.js";
 import toast from "react-hot-toast";
-import { resolveInvoiceDecimals, formatInvoiceDate } from "../utils/invoiceAmounts.js";
+import {
+  resolveInvoiceDecimals,
+  formatInvoiceDate,
+  sumInvoiceAmounts,
+} from "../utils/invoiceAmounts.js";
 import {
   CheckCircle2,
   Loader2,
@@ -159,15 +163,14 @@ function BatchPayment() {
 
   // Balance check function
   const checkPaymentCapability = async (group, signer) => {
-    const { tokenAddress, symbol, invoices, totalAmount } = group;
+    const { tokenAddress, symbol, invoices, totalAmount, decimals } = group;
     const userAddress = await signer.getAddress();
 
     if (tokenAddress === ethers.ZeroAddress) {
       // Check ETH balance
       const balance = await signer.provider.getBalance(userAddress);
       const totalFee = BigInt(fee) * BigInt(invoices.length);
-      const totalRequired =
-        ethers.parseUnits(totalAmount.toString(), 18) + totalFee;
+      const totalRequired = totalAmount + totalFee;
 
       if (balance < totalRequired) {
         throw new Error(
@@ -180,16 +183,22 @@ function BatchPayment() {
       // Check ERC20 balance
       const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
       const balance = await tokenContract.balanceOf(userAddress);
-      const decimals = await tokenContract.decimals();
-      const requiredAmount = ethers.parseUnits(
-        totalAmount.toString(),
-        decimals
-      );
 
-      if (balance < requiredAmount) {
+      // totalAmount is scaled by the invoice metadata but balanceOf is in the
+      // token's own base units, so a disagreement would compare two different
+      // scales and pass or fail for the wrong reason.
+      const onChainDecimals = Number(await tokenContract.decimals());
+      if (onChainDecimals !== decimals) {
+        throw new Error(
+          `${symbol} decimals mismatch: invoice says ${decimals}, contract says ${onChainDecimals}.`
+        );
+      }
+
+      if (balance < totalAmount) {
+        const requiredFormatted = ethers.formatUnits(totalAmount, decimals);
         const availableFormatted = ethers.formatUnits(balance, decimals);
         throw new Error(
-          `Insufficient ${symbol} balance. Required: ${totalAmount} ${symbol}, Available: ${availableFormatted} ${symbol}`
+          `Insufficient ${symbol} balance. Required: ${requiredFormatted} ${symbol}, Available: ${availableFormatted} ${symbol}`
         );
       }
 
@@ -267,11 +276,22 @@ function BatchPayment() {
   // Group selected invoices by token
   const getGroupedInvoices = () => {
     const grouped = new Map();
+    const unresolved = [];
 
     receivedInvoices.forEach((invoice) => {
       if (!selectedInvoices.has(invoice.id)) return;
 
       const tokenAddress = invoice.paymentToken?.address || ethers.ZeroAddress;
+      // `decimals || 18` treated a legitimate 0-decimals token as 18. Resolving
+      // it properly also tells us when the metadata cannot be trusted at all.
+      const decimals = resolveInvoiceDecimals(invoice.paymentToken);
+      if (decimals === null) {
+        // Reported rather than dropped: paying the rest of the batch and
+        // reporting success would hide an invoice the user asked to pay.
+        unresolved.push(invoice);
+        return;
+      }
+
       const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"}`;
 
       if (!grouped.has(tokenKey)) {
@@ -279,18 +299,22 @@ function BatchPayment() {
           tokenAddress,
           symbol: invoice.paymentToken?.symbol || "ETH",
           logo: invoice.paymentToken?.logo,
-          decimals: invoice.paymentToken?.decimals || 18,
+          decimals,
           invoices: [],
-          totalAmount: 0,
+          totalAmount: 0n,
         });
       }
 
-      const group = grouped.get(tokenKey);
-      group.invoices.push(invoice);
-      group.totalAmount += parseFloat(invoice.amountDue);
+      grouped.get(tokenKey).invoices.push(invoice);
     });
 
-    return grouped;
+    // Totals are kept in base units so the balance check and the payment agree
+    // exactly; see sumInvoiceAmounts for why they are not summed as floats.
+    grouped.forEach((group) => {
+      group.totalAmount = sumInvoiceAmounts(group.invoices, group.decimals);
+    });
+
+    return { groups: grouped, unresolved };
   };
 
 
@@ -488,7 +512,19 @@ function BatchPayment() {
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-      const grouped = getGroupedInvoices();
+      const { groups: grouped, unresolved } = getGroupedInvoices();
+
+      // Stop before any transaction: these invoices cannot be priced, and
+      // paying around them would report a success the user did not get.
+      if (unresolved.length > 0) {
+        const ids = unresolved.map((inv) => inv.id).join(", ");
+        setBalanceErrors([
+          `Cannot determine the token decimals for invoice(s) ${ids}. Deselect them to pay the rest.`,
+        ]);
+        toast.error("Some selected invoices cannot be paid.");
+        setBatchLoading(false);
+        return;
+      }
 
       // PRE-CHECK ALL BALANCES BEFORE ANY TRANSACTIONS
       toast("Checking balances...");
@@ -515,23 +551,13 @@ function BatchPayment() {
 
       // Process payments only after all checks pass
       for (const [, group] of grouped.entries()) {
-        const { tokenAddress, symbol, decimals, invoices } = group;
+        const { tokenAddress, symbol, invoices, totalAmount } = group;
         const invoiceIds = invoices.map((inv) => BigInt(inv.id));
 
         if (invoiceIds.length > 50) {
           throw new Error(
             `Batch size limit exceeded for ${symbol}. Max 50 invoices per batch.`
           );
-        }
-
-        // Calculate total amount for this batch
-        let totalAmount = BigInt(0);
-        for (const invoice of invoices) {
-          const amount = ethers.parseUnits(
-            invoice.amountDue.toString(),
-            decimals
-          );
-          totalAmount += amount;
         }
 
         // Get fee per invoice
@@ -764,7 +790,8 @@ function BatchPayment() {
     (inv) => !inv.isPaid && !inv.isCancelled
   );
   const selectedCount = selectedInvoices.size;
-  const grouped = getGroupedInvoices();
+  const { groups: grouped, unresolved: unresolvedInvoices } =
+    getGroupedInvoices();
 
   return (
     <>
@@ -915,7 +942,11 @@ function BatchPayment() {
                               </span>
                             </div>
                             <span className="font-bold text-green-400">
-                              {group.totalAmount.toFixed(6)} {group.symbol}
+                              {ethers.formatUnits(
+                                group.totalAmount,
+                                group.decimals
+                              )}{" "}
+                              {group.symbol}
                             </span>
                           </div>
                         )
@@ -924,7 +955,7 @@ function BatchPayment() {
                   </div>
                   <button
                     onClick={handleBatchPayment}
-                    disabled={batchLoading}
+                    disabled={batchLoading || unresolvedInvoices.length > 0}
                     className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors"
                   >
                     {batchLoading ? (
