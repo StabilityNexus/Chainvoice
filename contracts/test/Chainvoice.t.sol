@@ -34,12 +34,11 @@ contract ChainvoiceTest is Test {
             keccak256("encryptedData")
         );
 
-        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(
-            alice
-        );
+        (Chainvoice.InvoiceDetails[] memory sent, ) = chainvoice
+            .getSentInvoices(alice, 0, 10);
 
-        Chainvoice.InvoiceDetails[] memory received = chainvoice
-            .getReceivedInvoices(bob);
+        (Chainvoice.InvoiceDetails[] memory received, ) = chainvoice
+            .getReceivedInvoices(bob, 0, 10);
 
         assertEq(sent.length, 1);
         assertEq(received.length, 1);
@@ -153,8 +152,8 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoicesBatch(tos, amounts, address(0), payloads);
 
-        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(alice);
-        Chainvoice.InvoiceDetails[] memory received = chainvoice.getReceivedInvoices(bob);
+        (Chainvoice.InvoiceDetails[] memory sent, ) = chainvoice.getSentInvoices(alice, 0, 10);
+        (Chainvoice.InvoiceDetails[] memory received, ) = chainvoice.getReceivedInvoices(bob, 0, 10);
 
         assertEq(sent.length, 3);
         assertEq(received.length, 3);
@@ -209,7 +208,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(recipient, amount, address(0), keccak256("fuzz"));
 
-        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(alice);
+        (Chainvoice.InvoiceDetails[] memory sent, ) = chainvoice.getSentInvoices(alice, 0, 10);
         Chainvoice.InvoiceDetails memory latest = sent[sent.length - 1];
 
         assertEq(latest.to, recipient);
@@ -451,5 +450,225 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         vm.expectRevert(Chainvoice.InvalidInvoiceHash.selector);
         chainvoice.createInvoicesBatch(tos, amounts, address(0), hashes);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                       PAGINATION                             */
+    /* ------------------------------------------------------------ */
+
+    uint256 constant SEEDED = 25;
+
+    /// @dev Alice sends SEEDED invoices to bob, and charlie sends one to alice
+    ///      between each of them, so per-user positions differ from global ids:
+    ///      alice's i-th sent (= bob's i-th received) invoice has id 2i, and
+    ///      alice's i-th received invoice has id 2i + 1.
+    function _seedInvoices() internal {
+        for (uint256 i = 0; i < SEEDED; i++) {
+            vm.prank(alice);
+            chainvoice.createInvoice(bob, i + 1, address(0), keccak256(abi.encodePacked("sent", i)));
+            vm.prank(charlie);
+            chainvoice.createInvoice(alice, i + 1, address(0), keccak256(abi.encodePacked("recv", i)));
+        }
+    }
+
+    /// @dev Checks page holds the invoices at positions [from, from + len) of a
+    ///      list whose i-th invoice has id 2i + idOffset.
+    function _assertPage(
+        Chainvoice.InvoiceDetails[] memory page,
+        uint256 from,
+        uint256 len,
+        uint256 idOffset
+    ) internal pure {
+        assertEq(page.length, len);
+        for (uint256 i = 0; i < len; i++) {
+            assertEq(page[i].id, 2 * (from + i) + idOffset);
+            assertEq(page[i].amountDue, from + i + 1);
+        }
+    }
+
+    function testGetSentInvoices_FirstPage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, 0, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 0, 10, 0);
+    }
+
+    function testGetSentInvoices_MiddlePage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, 10, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 10, 10, 0);
+    }
+
+    function testGetSentInvoices_LastPartialPage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, 20, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 20, 5, 0);
+    }
+
+    function testGetSentInvoices_OffsetEqualsTotal() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, SEEDED, 10);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+    }
+
+    function testGetSentInvoices_OffsetBeyondTotal() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, SEEDED + 1, 10);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+
+        (page, total) = chainvoice.getSentInvoices(alice, type(uint256).max, 50);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+    }
+
+    function testGetSentInvoices_MaxLimit() public {
+        _seedInvoices();
+        uint256 maxLimit = chainvoice.MAX_PAGE_LIMIT();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, 0, maxLimit);
+        assertEq(total, SEEDED);
+        _assertPage(page, 0, SEEDED, 0);
+    }
+
+    function testGetSentInvoices_RevertIfLimitZero() public {
+        _seedInvoices();
+        vm.expectRevert(Chainvoice.InvalidPageLimit.selector);
+        chainvoice.getSentInvoices(alice, 0, 0);
+    }
+
+    function testGetSentInvoices_RevertIfLimitAboveMax() public {
+        _seedInvoices();
+        uint256 maxLimit = chainvoice.MAX_PAGE_LIMIT();
+        vm.expectRevert(Chainvoice.InvalidPageLimit.selector);
+        chainvoice.getSentInvoices(alice, 0, maxLimit + 1);
+    }
+
+    function testGetSentInvoices_NoInvoices() public view {
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(bob, 0, 10);
+        assertEq(total, 0);
+        assertEq(page.length, 0);
+    }
+
+    function testGetSentInvoices_PagingReturnsEachInvoiceOnceInOrder() public {
+        _seedInvoices();
+        uint256 limit = 7;
+        uint256 seen = 0;
+        for (uint256 offset = 0; offset < SEEDED; offset += limit) {
+            (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, offset, limit);
+            assertEq(total, SEEDED);
+            uint256 expectedLen = SEEDED - offset < limit ? SEEDED - offset : limit;
+            _assertPage(page, offset, expectedLen, 0);
+            seen += page.length;
+        }
+        assertEq(seen, SEEDED);
+    }
+
+    function testGetReceivedInvoices_FirstPage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, 0, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 0, 10, 1);
+    }
+
+    function testGetReceivedInvoices_MiddlePage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, 10, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 10, 10, 1);
+    }
+
+    function testGetReceivedInvoices_LastPartialPage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, 20, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 20, 5, 1);
+    }
+
+    function testGetReceivedInvoices_OffsetEqualsTotal() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, SEEDED, 10);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+    }
+
+    function testGetReceivedInvoices_OffsetBeyondTotal() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, SEEDED + 1, 10);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+
+        (page, total) = chainvoice.getReceivedInvoices(alice, type(uint256).max, 50);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+    }
+
+    function testGetReceivedInvoices_MaxLimit() public {
+        _seedInvoices();
+        uint256 maxLimit = chainvoice.MAX_PAGE_LIMIT();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, 0, maxLimit);
+        assertEq(total, SEEDED);
+        _assertPage(page, 0, SEEDED, 1);
+    }
+
+    function testGetReceivedInvoices_RevertIfLimitZero() public {
+        _seedInvoices();
+        vm.expectRevert(Chainvoice.InvalidPageLimit.selector);
+        chainvoice.getReceivedInvoices(alice, 0, 0);
+    }
+
+    function testGetReceivedInvoices_RevertIfLimitAboveMax() public {
+        _seedInvoices();
+        uint256 maxLimit = chainvoice.MAX_PAGE_LIMIT();
+        vm.expectRevert(Chainvoice.InvalidPageLimit.selector);
+        chainvoice.getReceivedInvoices(alice, 0, maxLimit + 1);
+    }
+
+    function testGetReceivedInvoices_NoInvoices() public view {
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(charlie, 0, 10);
+        assertEq(total, 0);
+        assertEq(page.length, 0);
+    }
+
+    function testGetReceivedInvoices_PagingReturnsEachInvoiceOnceInOrder() public {
+        _seedInvoices();
+        uint256 limit = 7;
+        uint256 seen = 0;
+        for (uint256 offset = 0; offset < SEEDED; offset += limit) {
+            (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, offset, limit);
+            assertEq(total, SEEDED);
+            uint256 expectedLen = SEEDED - offset < limit ? SEEDED - offset : limit;
+            _assertPage(page, offset, expectedLen, 1);
+            seen += page.length;
+        }
+        assertEq(seen, SEEDED);
+    }
+
+    function testInvoiceCounts() public {
+        assertEq(chainvoice.getSentInvoicesCount(alice), 0);
+        assertEq(chainvoice.getReceivedInvoicesCount(alice), 0);
+
+        _seedInvoices();
+
+        assertEq(chainvoice.getSentInvoicesCount(alice), SEEDED);
+        assertEq(chainvoice.getReceivedInvoicesCount(alice), SEEDED);
+        assertEq(chainvoice.getReceivedInvoicesCount(bob), SEEDED);
+        assertEq(chainvoice.getSentInvoicesCount(charlie), SEEDED);
+        assertEq(chainvoice.getSentInvoicesCount(bob), 0);
+        assertEq(chainvoice.getReceivedInvoicesCount(charlie), 0);
+    }
+
+    function testFuzz_GetSentInvoicesPage(uint256 offset, uint256 limit) public {
+        _seedInvoices();
+        offset = bound(offset, 0, SEEDED + 5);
+        limit = bound(limit, 1, chainvoice.MAX_PAGE_LIMIT());
+
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, offset, limit);
+        assertEq(total, SEEDED);
+
+        uint256 expectedLen = offset >= SEEDED ? 0 : (SEEDED - offset < limit ? SEEDED - offset : limit);
+        _assertPage(page, offset, expectedLen, 0);
     }
 }

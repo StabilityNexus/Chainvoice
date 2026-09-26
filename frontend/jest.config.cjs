@@ -6,6 +6,7 @@ module.exports = {
   collectCoverageFrom: [
     "src/utils/invoiceCalculations.js",
     "src/utils/invoiceValidation.js",
+    "src/utils/invoicePagination.js",
     "src/services/relay/invoiceCrypto.js",
     "src/services/relay/invoiceHashUtils.js",
     "src/services/relay/relayInvoiceMessaging.js",

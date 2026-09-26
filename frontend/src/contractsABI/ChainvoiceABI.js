@@ -19,6 +19,19 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
+    "name": "MAX_PAGE_LIMIT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "acceptOwnership",
     "inputs": [],
     "outputs": [],
@@ -248,11 +261,21 @@ export const ChainvoiceABI = [
         "name": "user",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "offset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "page",
         "type": "tuple[]",
         "internalType": "struct Chainvoice.InvoiceDetails[]",
         "components": [
@@ -297,6 +320,30 @@ export const ChainvoiceABI = [
             "internalType": "bytes32"
           }
         ]
+      },
+      {
+        "name": "total",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getReceivedInvoicesCount",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -309,11 +356,21 @@ export const ChainvoiceABI = [
         "name": "user",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "offset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "page",
         "type": "tuple[]",
         "internalType": "struct Chainvoice.InvoiceDetails[]",
         "components": [
@@ -358,6 +415,30 @@ export const ChainvoiceABI = [
             "internalType": "bytes32"
           }
         ]
+      },
+      {
+        "name": "total",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getSentInvoicesCount",
+    "inputs": [
+      {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -922,6 +1003,11 @@ export const ChainvoiceABI = [
   {
     "type": "error",
     "name": "InvalidNewOwner",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidPageLimit",
     "inputs": []
   },
   {

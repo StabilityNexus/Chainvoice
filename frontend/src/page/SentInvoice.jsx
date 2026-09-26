@@ -24,6 +24,13 @@ import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import toast from "react-hot-toast";
 import { resolveInvoiceDecimals, formatInvoiceDate } from "@/utils/invoiceAmounts";
 import {
+  INVOICE_PAGE_SIZES,
+  DEFAULT_INVOICE_PAGE_SIZE,
+  getTotalPages,
+  formatPageLabel,
+  fetchInvoicePage,
+} from "@/utils/invoicePagination";
+import {
   Skeleton,
   Chip,
   Avatar,
@@ -72,7 +79,7 @@ const columns = [
 
 function SentInvoice() {
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_INVOICE_PAGE_SIZE);
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId } = useAccount();
 
@@ -80,7 +87,9 @@ function SentInvoice() {
   const openExportMenu = Boolean(anchorEl);
 
   const [loading, setLoading] = useState(true);
+  // Only the current page is held; totalInvoices is the on-chain count.
   const [sentInvoices, setSentInvoices] = useState([]);
+  const [totalInvoices, setTotalInvoices] = useState(0);
   const [fee, setFee] = useState(0);
   const [error, setError] = useState(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -136,9 +145,17 @@ function SentInvoice() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
-     
+  // Another wallet or network has its own list; start it from the first page.
+  useEffect(() => {
+    setPage(0);
+  }, [address, chainId]);
+
   useEffect(() => {
     if (!walletClient || !address) return;
+
+    // A newer page, wallet or network may be requested before this one
+    // resolves; its results must not overwrite the newer ones.
+    let cancelled = false;
 
     const fetchSentInvoices = async () => {
       try {
@@ -157,13 +174,27 @@ function SentInvoice() {
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-        const res = await contract.getSentInvoices(address);
+        const { invoices: res, total } = await fetchInvoicePage(
+          contract.getSentInvoices,
+          address,
+          page,
+          rowsPerPage
+        );
+        if (cancelled) return;
         console.log("Raw invoices data:", res);
+        setTotalInvoices(total);
 
-        if (!res || !Array.isArray(res) || res.length === 0) {
+        // Past the last page (e.g. a stale page number): jump to the last one,
+        // which re-runs this effect.
+        const lastPage = getTotalPages(total, rowsPerPage) - 1;
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
+
+        if (res.length === 0) {
           console.warn("No invoices found.");
           setSentInvoices([]);
-          setLoading(false);
           return;
         }
 
@@ -307,24 +338,33 @@ function SentInvoice() {
           }
         }
 
+        if (cancelled) return;
         setSentInvoices(decryptedInvoices);
         const fee = await contract.fee();
+        if (cancelled) return;
         setFee(fee);
       } catch (error) {
+        if (cancelled) return;
         console.error("Decryption error:", error);
         setError(
           "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
         );
 
       } finally {
-        console.log(sentInvoices);
-        setLoading(false);
+        if (!cancelled) {
+          console.log(sentInvoices);
+          setLoading(false);
+        }
       }
     };
 
     fetchSentInvoices();
+
+    return () => {
+      cancelled = true;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletClient, address, tokens, chainId, refreshTrigger]); // Added tokens and chainId to dependency array
+  }, [walletClient, address, tokens, chainId, refreshTrigger, page, rowsPerPage]); // Added tokens and chainId to dependency array
 
   /**
    * Re-deliver an invoice's encrypted payload to its recipient.
@@ -640,7 +680,7 @@ function SentInvoice() {
                   <p className="text-red-600 font-medium">{error}</p>
                 </div>
               </div>
-            ) : sentInvoices.length === 0 ? (
+            ) : totalInvoices === 0 ? (
               <div className="p-6 text-center">
                 <div className="bg-blue-50 p-8 rounded-lg">
                   <DescriptionIcon
@@ -678,11 +718,18 @@ function SentInvoice() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
+                      {sentInvoices.length === 0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={columns.length}
+                            align="center"
+                            sx={{ color: "#64748b", py: 4 }}
+                          >
+                            No invoices to show on this page.
+                          </TableCell>
+                        </TableRow>
+                      )}
                       {sentInvoices
-                        .slice(
-                          page * rowsPerPage,
-                          page * rowsPerPage + rowsPerPage
-                        )
                         .map((invoice) => (
                           <TableRow
                             key={invoice.id}
@@ -912,13 +959,18 @@ function SentInvoice() {
                   </Table>
                 </TableContainer>
                 <TablePagination
-                  rowsPerPageOptions={[10, 25, 100]}
+                  rowsPerPageOptions={INVOICE_PAGE_SIZES}
                   component="div"
-                  count={sentInvoices.length}
+                  count={totalInvoices}
                   rowsPerPage={rowsPerPage}
                   page={page}
                   onPageChange={handleChangePage}
                   onRowsPerPageChange={handleChangeRowsPerPage}
+                  labelDisplayedRows={(info) =>
+                    formatPageLabel(info, rowsPerPage)
+                  }
+                  showFirstButton
+                  showLastButton
                   sx={{
                     borderTop: "1px solid #f1f5f9",
                     "& .MuiTablePagination-actions svg": {

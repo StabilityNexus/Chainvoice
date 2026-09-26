@@ -40,6 +40,7 @@ contract Chainvoice {
     error WithdrawFailed();
     error InvalidPublicKey();
     error InvalidInvoiceHash();
+    error InvalidPageLimit();
 
     // ========== Storage ==========
     error InvalidNewOwner();
@@ -107,6 +108,7 @@ contract Chainvoice {
 
     // Constants
     uint256 public constant MAX_BATCH = 50;
+    uint256 public constant MAX_PAGE_LIMIT = 50;
 
     // ========== Internal Utils ==========
     function _isERC20(address token) internal view returns (bool) {
@@ -399,20 +401,67 @@ contract Chainvoice {
         }
     }
 
-    function getSentInvoices(address user) external view returns (InvoiceDetails[] memory) {
-        return _getInvoices(sentInvoices[user]);
+    /// @notice Get one page of the invoices a user has sent, oldest first.
+    /// @param user The sender to look up.
+    /// @param offset Index of the first invoice to return.
+    /// @param limit Maximum number of invoices to return (1 to MAX_PAGE_LIMIT).
+    /// @return page The invoices in [offset, min(offset + limit, total)); empty if offset >= total.
+    /// @return total The number of invoices the user has sent.
+    function getSentInvoices(
+        address user,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (InvoiceDetails[] memory page, uint256 total) {
+        return _getInvoicesPage(sentInvoices[user], offset, limit);
     }
 
-    function getReceivedInvoices(address user) external view returns (InvoiceDetails[] memory) {
-        return _getInvoices(receivedInvoices[user]);
+    /// @notice Get one page of the invoices a user has received, oldest first.
+    /// @param user The recipient to look up.
+    /// @param offset Index of the first invoice to return.
+    /// @param limit Maximum number of invoices to return (1 to MAX_PAGE_LIMIT).
+    /// @return page The invoices in [offset, min(offset + limit, total)); empty if offset >= total.
+    /// @return total The number of invoices the user has received.
+    function getReceivedInvoices(
+        address user,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (InvoiceDetails[] memory page, uint256 total) {
+        return _getInvoicesPage(receivedInvoices[user], offset, limit);
     }
 
-    function _getInvoices(uint256[] storage ids) internal view returns (InvoiceDetails[] memory) {
-        InvoiceDetails[] memory result = new InvoiceDetails[](ids.length);
-        for (uint256 i = 0; i < ids.length; i++) {
-            result[i] = invoices[ids[i]];
+    /// @notice Number of invoices a user has sent.
+    /// @param user The sender to look up.
+    function getSentInvoicesCount(address user) external view returns (uint256) {
+        return sentInvoices[user].length;
+    }
+
+    /// @notice Number of invoices a user has received.
+    /// @param user The recipient to look up.
+    function getReceivedInvoicesCount(address user) external view returns (uint256) {
+        return receivedInvoices[user].length;
+    }
+
+    /// @dev Copies ids[offset, end) into memory, where end = min(offset + limit, ids.length).
+    ///      The bounded limit keeps the loop, and so the call's gas, independent of how
+    ///      many invoices a user has.
+    function _getInvoicesPage(
+        uint256[] storage ids,
+        uint256 offset,
+        uint256 limit
+    ) internal view returns (InvoiceDetails[] memory page, uint256 total) {
+        if (limit == 0 || limit > MAX_PAGE_LIMIT) revert InvalidPageLimit();
+
+        total = ids.length;
+        if (offset >= total) return (new InvoiceDetails[](0), total);
+
+        // offset < total here, so total - offset cannot underflow, and
+        // offset + limit is only computed when it is below total, so a huge
+        // offset cannot overflow it.
+        uint256 end = total - offset > limit ? offset + limit : total;
+        page = new InvoiceDetails[](end - offset);
+        for (uint256 i = offset; i < end; i++) {
+            page[i - offset] = invoices[ids[i]];
         }
-        return result;
     }
 
     function getInvoice(uint256 invoiceId) external view returns (InvoiceDetails memory) {
