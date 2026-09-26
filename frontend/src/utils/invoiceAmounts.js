@@ -45,3 +45,24 @@ export function formatInvoiceDate(value) {
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleString();
 }
+
+/**
+ * Sum invoice amounts into base units.
+ *
+ * Adding the decimal strings as JavaScript numbers and converting the total
+ * afterwards loses precision: `100.1 + 200.2` becomes `300.29999999999995`,
+ * which `parseUnits` rejects outright for a 6-decimal token, and small amounts
+ * collapse to exponential notation (`2e-7`) that it cannot read at all. Each
+ * amount is therefore converted on its own and the totals summed as BigInt.
+ *
+ * @param {Array<{amountDue: string|number}>} invoices
+ * @param {number} decimals - token decimals to scale by
+ * @returns {bigint} total in base units
+ */
+export function sumInvoiceAmounts(invoices, decimals) {
+  return invoices.reduce(
+    (total, invoice) =>
+      total + ethers.parseUnits(String(invoice.amountDue), decimals),
+    0n
+  );
+}
