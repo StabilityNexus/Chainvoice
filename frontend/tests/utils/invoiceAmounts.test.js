@@ -35,6 +35,24 @@ describe("invoiceAmounts.sumInvoiceAmounts", () => {
     expect(sumInvoiceAmounts(invoices(1.5, "2.5"), 6)).toBe(4000000n);
   });
 
+  test("expands numeric amounts that stringify to exponential notation", () => {
+    // String(0.0000001) is "1e-7", which parseUnits cannot read.
+    expect(sumInvoiceAmounts(invoices(0.0000001), 18)).toBe(100000000000n);
+    expect(sumInvoiceAmounts(invoices(1e-9), 18)).toBe(1000000000n);
+    expect(sumInvoiceAmounts(invoices(0.0000001, "0.0000001"), 18)).toBe(
+      200000000000n
+    );
+  });
+
+  test("rejects non-finite numeric amounts", () => {
+    expect(() => sumInvoiceAmounts(invoices(Number.NaN), 18)).toThrow(
+      /Invalid invoice amount/
+    );
+    expect(() => sumInvoiceAmounts(invoices(Infinity), 18)).toThrow(
+      /Invalid invoice amount/
+    );
+  });
+
   test("throws when an amount has more decimals than the token allows", () => {
     expect(() => sumInvoiceAmounts(invoices("1.1234567"), 6)).toThrow();
   });

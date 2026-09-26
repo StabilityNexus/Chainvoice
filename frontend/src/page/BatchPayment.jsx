@@ -184,6 +184,16 @@ function BatchPayment() {
       const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
       const balance = await tokenContract.balanceOf(userAddress);
 
+      // totalAmount is scaled by the invoice metadata but balanceOf is in the
+      // token's own base units, so a disagreement would compare two different
+      // scales and pass or fail for the wrong reason.
+      const onChainDecimals = Number(await tokenContract.decimals());
+      if (onChainDecimals !== decimals) {
+        throw new Error(
+          `${symbol} decimals mismatch: invoice says ${decimals}, contract says ${onChainDecimals}.`
+        );
+      }
+
       if (balance < totalAmount) {
         const requiredFormatted = ethers.formatUnits(totalAmount, decimals);
         const availableFormatted = ethers.formatUnits(balance, decimals);
@@ -266,6 +276,7 @@ function BatchPayment() {
   // Group selected invoices by token
   const getGroupedInvoices = () => {
     const grouped = new Map();
+    const unresolved = [];
 
     receivedInvoices.forEach((invoice) => {
       if (!selectedInvoices.has(invoice.id)) return;
@@ -275,9 +286,9 @@ function BatchPayment() {
       // it properly also tells us when the metadata cannot be trusted at all.
       const decimals = resolveInvoiceDecimals(invoice.paymentToken);
       if (decimals === null) {
-        console.warn(
-          `Invoice ${invoice.id}: cannot resolve token decimals, skipping`
-        );
+        // Reported rather than dropped: paying the rest of the batch and
+        // reporting success would hide an invoice the user asked to pay.
+        unresolved.push(invoice);
         return;
       }
 
@@ -303,7 +314,7 @@ function BatchPayment() {
       group.totalAmount = sumInvoiceAmounts(group.invoices, group.decimals);
     });
 
-    return grouped;
+    return { groups: grouped, unresolved };
   };
 
 
@@ -501,7 +512,19 @@ function BatchPayment() {
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-      const grouped = getGroupedInvoices();
+      const { groups: grouped, unresolved } = getGroupedInvoices();
+
+      // Stop before any transaction: these invoices cannot be priced, and
+      // paying around them would report a success the user did not get.
+      if (unresolved.length > 0) {
+        const ids = unresolved.map((inv) => inv.id).join(", ");
+        setBalanceErrors([
+          `Cannot determine the token decimals for invoice(s) ${ids}. Deselect them to pay the rest.`,
+        ]);
+        toast.error("Some selected invoices cannot be paid.");
+        setBatchLoading(false);
+        return;
+      }
 
       // PRE-CHECK ALL BALANCES BEFORE ANY TRANSACTIONS
       toast("Checking balances...");
@@ -767,7 +790,8 @@ function BatchPayment() {
     (inv) => !inv.isPaid && !inv.isCancelled
   );
   const selectedCount = selectedInvoices.size;
-  const grouped = getGroupedInvoices();
+  const { groups: grouped, unresolved: unresolvedInvoices } =
+    getGroupedInvoices();
 
   return (
     <>
@@ -931,7 +955,7 @@ function BatchPayment() {
                   </div>
                   <button
                     onClick={handleBatchPayment}
-                    disabled={batchLoading}
+                    disabled={batchLoading || unresolvedInvoices.length > 0}
                     className="w-full bg-green-600 hover:bg-green-700 disabled:bg-green-800 text-white py-3 px-4 rounded-lg font-semibold flex items-center justify-center gap-2 transition-colors"
                   >
                     {batchLoading ? (
