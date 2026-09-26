@@ -4,67 +4,187 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Redirecting...</title>
+    <title>Preview Not Found &mdash; Chainvoice</title>
+    <!--
+      GitHub Pages always serves this root 404.html for every missing path on
+      the site, including deleted PR preview folders.
+
+      Strategy:
+        - The tombstone HTML and CSS live directly in this file (no-JS fallback).
+        - A small inline script handles two jobs:
+            1. /pr-preview/* paths: fix the "Go to app" link to the correct base
+               path (works on both custom domains and github.io project pages),
+               then reveal the tombstone.
+            2. All other paths: run the standard SPA redirect so the React app
+               can handle client-side routing. The tombstone is hidden via CSS
+               until JS confirms we are on a pr-preview path.
+    -->
+    <style>
+        /* ── Tombstone styles ───────────────────────────────────────────────── */
+        :root {
+            --bg: #0f1117;
+            --surface: #1a1d27;
+            --border: #2a2d3a;
+            --primary: #6366f1;
+            --text: #e2e8f0;
+            --muted: #64748b;
+            --warning: #f59e0b;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: Inter, system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 1rem;
+            padding: 2.5rem 2rem;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 0 0 1px rgba(99, 102, 241, .15), 0 20px 60px rgba(0, 0, 0, .5);
+        }
+
+        .icon { font-size: 3.5rem; line-height: 1; margin-bottom: 1.25rem; display: block; }
+
+        h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: .5rem; letter-spacing: -.01em; }
+
+        .subtitle {
+            color: var(--muted);
+            font-size: .9375rem;
+            line-height: 1.6;
+            margin-bottom: 1.75rem;
+        }
+
+        .pill {
+            display: inline-block;
+            background: rgba(245, 158, 11, .12);
+            color: var(--warning);
+            border: 1px solid rgba(245, 158, 11, .3);
+            border-radius: 9999px;
+            padding: .25rem .85rem;
+            font-size: .8125rem;
+            font-weight: 600;
+            margin-bottom: 1.75rem;
+            letter-spacing: .02em;
+        }
+
+        .actions { display: flex; flex-direction: column; gap: .75rem; }
+
+        a.btn {
+            display: block;
+            padding: .7rem 1.25rem;
+            border-radius: .625rem;
+            font-size: .9375rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: opacity .15s, transform .1s;
+        }
+        a.btn:hover { opacity: .88; transform: translateY(-1px); }
+        a.btn:active { transform: translateY(0); }
+
+        .btn-primary { background: var(--primary); color: #fff; }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+
+        .pr-path {
+            margin-top: 1.75rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--border);
+            font-size: .8125rem;
+            color: var(--muted);
+            word-break: break-all;
+        }
+
+        .pr-path code {
+            font-family: "Fira Code", "Cascadia Code", monospace;
+            color: var(--muted);
+        }
+
+        /*
+          Hide the tombstone by default so non-preview 404s do not flash it
+          before the SPA redirect fires. JS un-hides it for pr-preview paths.
+          Without JS the tombstone is always visible (safe fallback for any 404).
+        */
+        .js-hide { display: none; }
+    </style>
+    <script type="text/javascript">
+        // Mark JS as available: the .js-hide class is now meaningful.
+        // We apply it to <body> immediately so the tombstone is hidden during
+        // the script's synchronous execution for non-preview 404s.
+        document.documentElement.className = 'js';
+        document.addEventListener('DOMContentLoaded', function () {
+            document.body.className = 'js-hide';
+        });
+    </script>
+</head>
+
+<body>
+    <!-- Tombstone card — rendered statically for no-JS fallback. -->
+    <div class="card">
+        <span class="icon">&#x1F5D1;&#xFE0F;</span>
+        <span class="pill">Preview Removed</span>
+        <h1>This preview no longer exists</h1>
+        <p class="subtitle">
+            The PR preview you&rsquo;re looking for was deleted when its pull
+            request was merged or closed. It is&nbsp;not the live application.
+        </p>
+        <div class="actions">
+            <!--
+              href defaults to "/" for the no-JS case on a custom domain.
+              JS below overwrites it with the correct base path, which handles
+              github.io project-page deployments such as /Chainvoice/.
+            -->
+            <a id="app-link" class="btn btn-primary" href="/">Go to Chainvoice App</a>
+            <a class="btn btn-secondary"
+               href="https://github.com/StabilityNexus/Chainvoice/pulls"
+               target="_blank" rel="noopener noreferrer">View Open Pull Requests</a>
+        </div>
+        <p class="pr-path">Requested path: <code id="req-path"></code></p>
+    </div>
+
     <script type="text/javascript">
         // GitHub Pages always serves this root 404.html for every missing path
-        // on the site, including deleted PR preview folders. This single script
-        // either shows the "Preview Removed" tombstone (for /pr-preview/* paths)
-        // or runs the normal SPA redirect (for everything else).
-        //
-        // The two branches share the same script block so the redirect is only
-        // reached when the path is NOT a pr-preview path.
+        // on the site, including deleted PR preview folders. This script either
+        // shows the tombstone (for /pr-preview/* paths) or performs the normal
+        // SPA redirect (for all other paths).
 
-        var path = window.location.pathname;
+        var pathname = window.location.pathname;
 
         // Match /pr-preview/... on both deployment shapes:
-        //   custom domain:          /pr-preview/pr-N/   (pathSegmentsToKeep = 0)
-        //   github.io project page: /Repo/pr-preview/pr-N/ (pathSegmentsToKeep = 1)
-        var isPrPreview = /^\/(?:[^\/]+\/)?pr-preview\//.test(path);
+        //   custom domain:          /pr-preview/pr-N/       (pathSegmentsToKeep = 0)
+        //   github.io project page: /Repo/pr-preview/pr-N/  (pathSegmentsToKeep = 1)
+        var isPrPreview = /^\/(?:[^\/]+\/)?pr-preview\//.test(pathname);
 
         if (isPrPreview) {
             // ── Tombstone branch ──────────────────────────────────────────────
-            // Stop here. Do NOT redirect. Render a clear "Preview Removed" page
-            // so the deleted preview cannot be mistaken for the live production
-            // app.
-            document.documentElement.lang = 'en';
-            document.title = 'Preview Not Found \u2014 Chainvoice';
+            // Show the card and fix the "Go to app" link for subfolder deploys.
 
-            var style = document.createElement('style');
-            style.textContent = [
-                ':root{--bg:#0f1117;--surface:#1a1d27;--border:#2a2d3a;--primary:#6366f1;--text:#e2e8f0;--muted:#64748b;--warning:#f59e0b}',
-                '*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}',
-                'body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:1.5rem}',
-                '.card{background:var(--surface);border:1px solid var(--border);border-radius:1rem;padding:2.5rem 2rem;max-width:480px;width:100%;text-align:center;box-shadow:0 0 0 1px rgba(99,102,241,.15),0 20px 60px rgba(0,0,0,.5)}',
-                '.icon{font-size:3.5rem;line-height:1;margin-bottom:1.25rem;display:block}',
-                'h1{font-size:1.5rem;font-weight:700;margin-bottom:.5rem;letter-spacing:-.01em}',
-                '.subtitle{color:var(--muted);font-size:.9375rem;line-height:1.6;margin-bottom:1.75rem}',
-                '.pill{display:inline-block;background:rgba(245,158,11,.12);color:var(--warning);border:1px solid rgba(245,158,11,.3);border-radius:9999px;padding:.25rem .85rem;font-size:.8125rem;font-weight:600;margin-bottom:1.75rem;letter-spacing:.02em}',
-                '.actions{display:flex;flex-direction:column;gap:.75rem}',
-                'a.btn{display:block;padding:.7rem 1.25rem;border-radius:.625rem;font-size:.9375rem;font-weight:600;text-decoration:none;transition:opacity .15s,transform .1s}',
-                'a.btn:hover{opacity:.88;transform:translateY(-1px)}',
-                'a.btn:active{transform:translateY(0)}',
-                '.btn-primary{background:var(--primary);color:#fff}',
-                '.btn-secondary{background:transparent;color:var(--text);border:1px solid var(--border)}',
-                '.pr-path{margin-top:1.75rem;padding-top:1.5rem;border-top:1px solid var(--border);font-size:.8125rem;color:var(--muted);word-break:break-all}',
-                '.pr-path code{font-family:"Fira Code","Cascadia Code",monospace;color:var(--muted)}'
-            ].join('');
-            document.head.appendChild(style);
+            // Compute the app root: everything in the path up to /pr-preview/.
+            //   /pr-preview/pr-N/            -> prIdx = 0  -> appRoot = '/'
+            //   /Chainvoice/pr-preview/pr-N/ -> prIdx = 10 -> appRoot = '/Chainvoice/'
+            var prIdx = pathname.indexOf('/pr-preview/');
+            var appRoot = prIdx > 0 ? pathname.slice(0, prIdx) + '/' : '/';
 
-            document.addEventListener('DOMContentLoaded', function () {
-                document.body.innerHTML =
-                    '<div class="card">' +
-                    '<span class="icon">&#x1F5D1;&#xFE0F;</span>' +
-                    '<span class="pill">Preview Removed</span>' +
-                    '<h1>This preview no longer exists</h1>' +
-                    '<p class="subtitle">The PR preview you&rsquo;re looking for was deleted when its pull request was merged or closed. It is&nbsp;not the live application.</p>' +
-                    '<div class="actions">' +
-                    '<a class="btn btn-primary" href="/">Go to Chainvoice App</a>' +
-                    '<a class="btn btn-secondary" href="https://github.com/StabilityNexus/Chainvoice/pulls" target="_blank" rel="noopener noreferrer">View Open Pull Requests</a>' +
-                    '</div>' +
-                    '<p class="pr-path">Requested path: <code id="p"></code></p>' +
-                    '</div>';
-                document.getElementById('p').textContent = window.location.pathname;
-            });
+            document.getElementById('app-link').href = appRoot;
+            document.getElementById('req-path').textContent = pathname;
+
+            // Un-hide the tombstone (it was hidden by the inline JS above).
+            document.body.className = '';
 
         } else {
             // ── SPA redirect branch ───────────────────────────────────────────
@@ -91,9 +211,6 @@
             );
         }
     </script>
-</head>
-
-<body>
 </body>
 
 </html>
