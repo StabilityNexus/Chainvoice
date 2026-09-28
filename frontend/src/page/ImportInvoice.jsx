@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  FileText,
   FileUp,
   Loader2,
   ShieldCheck,
@@ -195,7 +196,13 @@ const ImportInvoice = () => {
         await processInput(text);
       } catch (err) {
         console.error("[ImportInvoice] Could not read file:", err);
-        toast.error("Could not read that file.");
+        // A refused oversized file has a message worth showing; anything
+        // else is an unreadable file and gets the generic line.
+        toast.error(
+          err?.name === "InvoiceShareError"
+            ? err.message
+            : "Could not read that file."
+        );
       } finally {
         // Allow re-picking the same file after a failure.
         event.target.value = "";
@@ -256,7 +263,7 @@ const ImportInvoice = () => {
     Number(walletChainId) !== Number(decoded.chainId);
 
   return (
-    <div className={cn(PAGE_CONTAINER, "space-y-4")}>
+    <div className={PAGE_CONTAINER}>
       <div className="mb-3 sm:mb-4">
         <h2 className="mb-2 flex items-center gap-2 text-xl font-bold text-white sm:text-2xl sm:gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/20 sm:h-10 sm:w-10">
@@ -270,169 +277,200 @@ const ImportInvoice = () => {
         </p>
       </div>
 
-      {/* Manual entry. Hidden once a link in the URL has been handled, since
-          there is nothing left to paste. */}
-      {!urlToken && (
-        <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm sm:p-6">
-          <Label className="mb-2 block text-sm font-medium text-gray-700">
-            Paste a share link
-          </Label>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <Input
-              value={manualInput}
-              onChange={(e) => setManualInput(e.target.value)}
-              placeholder="https://…/#/dashboard/import?i=cv1.…"
-              className="flex-1 border-gray-300 bg-gray-50 font-mono text-xs text-gray-700"
-            />
-            <Button
-              onClick={() => processInput(manualInput)}
-              disabled={!manualInput.trim() || status === "working"}
-              className="bg-green-600 text-white hover:bg-green-700"
-            >
-              Open invoice
-            </Button>
-          </div>
-
-          <div className="mt-4 border-t border-gray-100 pt-4">
-            <Label className="mb-2 block text-sm font-medium text-gray-700">
-              Or choose a shared invoice file
-            </Label>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".cvinv,application/json,.json"
-              onChange={handleFile}
-              className="hidden"
-            />
-            <Button
-              variant="outline"
-              className={OUTLINE_ON_LIGHT}
-              onClick={() => fileInputRef.current?.click()}
-              disabled={status === "working"}
-            >
-              <FileUp className="h-4 w-4" /> Choose .cvinv file
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {status === "working" && (
-        <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600 shadow-sm">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Checking this invoice against the blockchain…
-        </div>
-      )}
-
-      {status === "failed" && problem && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-          <div className="flex items-start gap-3">
-            <XCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-600" />
-            <div>
-              <p className="text-sm font-semibold text-red-800">
-                {problem.title}
-              </p>
-              <p className="mt-1 text-sm text-red-700">{problem.detail}</p>
-            </div>
-          </div>
-          {urlToken && (
-            <Button
-              variant="outline"
-              size="sm"
-              className={cn("mt-3 bg-white", OUTLINE_ON_LIGHT)}
-              onClick={() => processInput(urlToken)}
-            >
-              Try again
-            </Button>
-          )}
-        </div>
-      )}
-
-      {status === "verified" && previewInvoice && (
-        <>
-          <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
-            <ShieldCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-600" />
-            <div className="text-sm text-green-800">
-              <p className="font-semibold">Verified against the blockchain</p>
-              <p className="mt-0.5 text-green-700">
-                These details match invoice #{decoded.invoiceId} on{" "}
-                {verification.chainName}, exactly as the sender recorded it.
-              </p>
-            </div>
-          </div>
-
-          {role === "bystander" && (
-            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
-              <p className="text-sm text-amber-800">
-                This invoice is between two other wallets, so there is nothing
-                for you to save or pay. You can still read it.
-              </p>
-            </div>
-          )}
-
-          {wrongNetwork && (
-            <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
-              <p className="text-sm text-amber-800">
-                Your wallet is on a different network. Saving still works, but
-                switch to {verification.chainName} to see and pay this invoice.
-              </p>
-            </div>
-          )}
-
-          <InvoicePreview invoice={previewInvoice} />
-
-          <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            {!isConnected ? (
-              <div className="flex flex-col items-start gap-3">
-                <p className="text-sm text-gray-600">
-                  Connect your wallet to save this invoice and pay it.
-                </p>
-                <ConnectButton />
+      {/* Everything you act on down the left, the invoice itself on the right.
+          Stacked, the preview sat below the controls and a verified invoice
+          could not be read without scrolling past the form that opened it.
+          Below lg there is no room for two columns, so it stacks again — with
+          the preview last, where it has the width to be legible. */}
+      <div className="lg:grid lg:grid-cols-[minmax(320px,400px)_1fr] lg:items-start lg:gap-4">
+        {/* Sticky so the Save button stays put while a long invoice scrolls. */}
+        <div className="space-y-3 lg:sticky lg:top-4">
+          {/* Manual entry. Hidden once a link in the URL has been handled,
+              since there is nothing left to paste. */}
+          {!urlToken && (
+            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <Label className="mb-2 block text-sm font-medium text-gray-700">
+                Paste a share link
+              </Label>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Input
+                  value={manualInput}
+                  onChange={(e) => setManualInput(e.target.value)}
+                  placeholder="https://…/#/dashboard/import?i=cv1.…"
+                  className="flex-1 border-gray-300 bg-gray-50 font-mono text-xs text-gray-700"
+                />
+                <Button
+                  onClick={() => processInput(manualInput)}
+                  disabled={!manualInput.trim() || status === "working"}
+                  className="bg-green-600 text-white hover:bg-green-700"
+                >
+                  Open invoice
+                </Button>
               </div>
-            ) : alreadySaved ? (
-              <div className="flex flex-col items-start gap-3">
-                <p className="flex items-center gap-2 text-sm text-gray-700">
-                  <CheckCircle2 className="h-4 w-4 text-green-600" />
-                  This invoice is already saved on this device.
-                </p>
+
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <Label className="mb-2 block text-sm font-medium text-gray-700">
+                  Or choose a shared invoice file
+                </Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".cvinv,application/json,.json"
+                  onChange={handleFile}
+                  className="hidden"
+                />
                 <Button
                   variant="outline"
                   className={OUTLINE_ON_LIGHT}
-                  onClick={() =>
-                    navigate(
-                      role === "sender"
-                        ? "/dashboard/sent"
-                        : "/dashboard/pending"
-                    )
-                  }
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={status === "working"}
                 >
-                  Go to my invoices
+                  <FileUp className="h-4 w-4" /> Choose .cvinv file
                 </Button>
               </div>
-            ) : role === "bystander" ? null : (
-              <Button
-                onClick={handleSave}
-                disabled={saving}
-                className="w-full bg-green-600 text-white hover:bg-green-700 sm:w-auto"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" /> Saving…
-                  </>
-                ) : (
-                  <>
-                    <Download className="h-4 w-4" />
-                    {role === "sender"
-                      ? "Save to my sent invoices"
-                      : "Save to my invoices"}
-                  </>
+            </div>
+          )}
+
+          {status === "working" && (
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600 shadow-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking this invoice against the blockchain…
+            </div>
+          )}
+
+          {status === "failed" && problem && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+              <div className="flex items-start gap-3">
+                <XCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-600" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800">
+                    {problem.title}
+                  </p>
+                  <p className="mt-1 text-sm text-red-700">{problem.detail}</p>
+                </div>
+              </div>
+              {urlToken && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn("mt-3 bg-white", OUTLINE_ON_LIGHT)}
+                  onClick={() => processInput(urlToken)}
+                >
+                  Try again
+                </Button>
+              )}
+            </div>
+          )}
+
+          {status === "verified" && previewInvoice && (
+            <>
+              <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
+                <ShieldCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-600" />
+                <div className="text-sm text-green-800">
+                  <p className="font-semibold">Verified against the blockchain</p>
+                  <p className="mt-0.5 text-green-700">
+                    These details match invoice #{decoded.invoiceId} on{" "}
+                    {verification.chainName}, exactly as the sender recorded it.
+                  </p>
+                </div>
+              </div>
+
+              {role === "bystander" && (
+                <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
+                  <p className="text-sm text-amber-800">
+                    This invoice is between two other wallets, so there is nothing
+                    for you to save or pay. You can still read it.
+                  </p>
+                </div>
+              )}
+
+              {wrongNetwork && (
+                <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
+                  <p className="text-sm text-amber-800">
+                    Your wallet is on a different network. Saving still works, but
+                    switch to {verification.chainName} to see and pay this invoice.
+                  </p>
+                </div>
+              )}
+
+              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                {!isConnected ? (
+                  <div className="flex flex-col items-start gap-3">
+                    <p className="text-sm text-gray-600">
+                      Connect your wallet to save this invoice and pay it.
+                    </p>
+                    <ConnectButton />
+                  </div>
+                ) : alreadySaved ? (
+                  <div className="flex flex-col items-start gap-3">
+                    <p className="flex items-center gap-2 text-sm text-gray-700">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      This invoice is already saved on this device.
+                    </p>
+                    <Button
+                      variant="outline"
+                      className={OUTLINE_ON_LIGHT}
+                      onClick={() =>
+                        navigate(
+                          role === "sender"
+                            ? "/dashboard/sent"
+                            : "/dashboard/pending"
+                        )
+                      }
+                    >
+                      Go to my invoices
+                    </Button>
+                  </div>
+                ) : role === "bystander" ? null : (
+                  <Button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="w-full bg-green-600 text-white hover:bg-green-700 sm:w-auto"
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        {role === "sender"
+                          ? "Save to my sent invoices"
+                          : "Save to my invoices"}
+                      </>
+                    )}
+                  </Button>
                 )}
-              </Button>
-            )}
-          </div>
-        </>
-      )}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* The invoice. A placeholder rather than dead space before one
+            arrives, so the column reads as somewhere an invoice will go. */}
+        {/* InvoicePreview carries its own vertical margin and a generous
+            desktop padding, both sized for the full-width drawers it was
+            written for. Overridden here rather than in the component, which
+            four other pages render. */}
+        <div className="mt-3 lg:mt-0 [&_#invoice-print]:my-0 lg:[&_#invoice-print]:p-6">
+          {previewInvoice ? (
+            <InvoicePreview invoice={previewInvoice} />
+          ) : (
+            <div className="hidden min-h-[360px] flex-col items-center justify-center rounded-lg border border-dashed border-gray-600 bg-white/5 p-8 text-center lg:flex">
+              <FileText className="mb-3 h-10 w-10 text-gray-500" />
+              <p className="text-sm font-medium text-gray-300">
+                No invoice open yet
+              </p>
+              <p className="mt-1 max-w-xs text-xs text-gray-400">
+                Paste a share link or choose a file, and the invoice will
+                appear here once the blockchain confirms it.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 };
