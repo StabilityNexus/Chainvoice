@@ -44,13 +44,18 @@ const ENVELOPE_VERSION = 1;
  * Practical size ceilings, in characters of the finished URL.
  *
  * Neither is a spec limit. Browsers accept far longer URLs than
- * SHARE_URL_MAX_CHARS, and a version-40 QR code holds 2,953 bytes — but chat
- * clients wrap or truncate long links, and a maximally dense QR is
- * unreliable in front of a phone camera. These are the points past which the
- * UI should offer the file fallback instead.
+ * SHARE_URL_MAX_CHARS — but chat clients wrap or truncate long links, and a
+ * maximally dense QR is unreliable in front of a phone camera. These are the
+ * points past which the UI should offer the file fallback instead.
+ *
+ * SHARE_QR_MAX_CHARS is set by what decodes rather than by what fits. A QR
+ * can hold far more than this, but every extra character grows the grid, and
+ * decoding real links back showed the cliff: 1,000 characters reads fine
+ * enlarged, 1,200 failed at every size tried. Past this the file is the
+ * honest option, not a QR nobody can scan.
  */
 const SHARE_URL_MAX_CHARS = 2000;
-const SHARE_QR_MAX_CHARS = 1500;
+const SHARE_QR_MAX_CHARS = 1000;
 
 /**
  * Hard safety ceilings on what the decoder will accept, as distinct from the

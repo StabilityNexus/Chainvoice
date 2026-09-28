@@ -24,6 +24,11 @@ export {
   FILE_EXTENSION,
 } from './invoiceShareFile.js';
 export {
+  renderShareQr,
+  renderShareQrCard,
+  dataUrlToFile,
+} from './invoiceShareQr.js';
+export {
   verifyShareAgainstChain,
   getPublicProvider,
   getContractAddress,
