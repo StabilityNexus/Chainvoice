@@ -14,7 +14,15 @@ import {
   parseInvoiceShareInput,
   decodeInvoiceShareInput,
 } from "../../src/services/share/invoiceShareLink.js";
-import { buildInvoiceShareFile } from "../../src/services/share/invoiceShareFile.js";
+import {
+  buildInvoiceShareFile,
+  readInvoiceShareFile,
+  MAX_FILE_BYTES,
+} from "../../src/services/share/invoiceShareFile.js";
+import {
+  ERROR_CORRECTION,
+  LOGO_RATIO,
+} from "../../src/services/share/invoiceShareQr.js";
 import {
   evaluateOnChainInvoice,
   VERIFY_OK,
@@ -427,5 +435,46 @@ describe("decodeInvoiceShare size limits", () => {
     ).length;
     expect(decodedBytes).toBeLessThan(MAX_DECODED_BYTES);
     expect(encodeInvoiceShare(worstCase).length).toBeLessThan(MAX_TOKEN_CHARS);
+  });
+});
+
+describe("share file limits", () => {
+  it("refuses a file too large to be an invoice before reading it", () => {
+    // `text()` would pull the whole thing into memory, so the size check has
+    // to come first — a stub that throws if read proves it does.
+    const huge = {
+      size: MAX_FILE_BYTES + 1,
+      text: () => {
+        throw new Error("must not read an oversized file");
+      },
+    };
+    expect(() => readInvoiceShareFile(huge)).toThrow(InvoiceShareError);
+  });
+
+  it("reads a file within the limit", async () => {
+    const contents = JSON.stringify(buildInvoiceShareFile(share));
+    const file = { size: contents.length, text: async () => contents };
+    await expect(readInvoiceShareFile(file)).resolves.toBe(contents);
+  });
+});
+
+describe("QR configuration", () => {
+  it("keeps the logo inside the error-correction budget", () => {
+    // The logo spans a fraction of the WIDTH, so the modules it destroys go
+    // as the square of that. Reasoning about width instead of area is what
+    // made an earlier version reach for level H, which — because the grid
+    // grows faster than the redundancy helps — decoded worse, not better.
+    const areaLost = LOGO_RATIO ** 2;
+    const budget = { L: 0.07, M: 0.15, Q: 0.25, H: 0.3 }[ERROR_CORRECTION];
+
+    expect(budget).toBeDefined();
+    // Well under half the budget, leaving the rest for glare and creases.
+    expect(areaLost).toBeLessThan(budget / 2);
+  });
+
+  it("keeps the QR ceiling below the link ceiling", () => {
+    // A link that cannot be scanned can still be pasted, so the QR limit is
+    // the stricter of the two.
+    expect(SHARE_QR_MAX_CHARS).toBeLessThan(SHARE_URL_MAX_CHARS);
   });
 });

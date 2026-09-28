@@ -1,4 +1,8 @@
-import { encodeInvoiceShare } from './invoiceShareCodec.js';
+import {
+  encodeInvoiceShare,
+  InvoiceShareError,
+  MAX_TOKEN_CHARS,
+} from './invoiceShareCodec.js';
 import { buildInvoiceShareUrl } from './invoiceShareLink.js';
 
 /**
@@ -68,6 +72,18 @@ export function downloadInvoiceShareFile(params) {
 }
 
 /**
+ * Largest file worth reading, in bytes.
+ *
+ * A real export is the token plus a small JSON wrapper, so a generous
+ * multiple of the token ceiling covers every legitimate invoice. The check
+ * matters because the file is chosen by whoever is importing and read whole
+ * into a string: without it, picking a multi-gigabyte file would exhaust the
+ * tab before a single byte had been validated. The codec refuses an
+ * oversized token; this refuses an oversized file.
+ */
+const MAX_FILE_BYTES = MAX_TOKEN_CHARS * 8;
+
+/**
  * Read a shared invoice file back to text.
  *
  * Returns the raw text rather than a parsed token so the caller can hand it
@@ -78,7 +94,13 @@ export function downloadInvoiceShareFile(params) {
  * @returns {Promise<string>}
  */
 export function readInvoiceShareFile(file) {
+  if (file.size > MAX_FILE_BYTES) {
+    throw new InvoiceShareError(
+      'TOO_LARGE',
+      'That file is far too large to be a shared invoice.'
+    );
+  }
   return file.text();
 }
 
-export { FILE_FORMAT, FILE_VERSION, FILE_EXTENSION };
+export { FILE_FORMAT, FILE_VERSION, FILE_EXTENSION, MAX_FILE_BYTES };
