@@ -26,6 +26,9 @@ export const SHARE_IMPORT_PATH = '/dashboard/import';
  */
 export const SHARE_TOKEN_PARAM = 'i';
 
+/** How many times a file may wrap another wrapper before we give up. */
+const MAX_UNWRAP_DEPTH = 2;
+
 /**
  * Resolve the app's own base URL.
  *
@@ -79,9 +82,19 @@ export function buildInvoiceShareUrl(params, { origin } = {}) {
  * @param {string} input - a URL, a bare token, or exported file contents
  * @returns {string} the token
  */
-export function parseInvoiceShareInput(input) {
+export function parseInvoiceShareInput(input, depth = 0) {
   if (typeof input !== 'string' || !input.trim()) {
     throw new InvoiceShareError('EMPTY', 'Paste a share link or choose a file');
+  }
+
+  // A file's `token` field is itself parsed, so a file whose token is another
+  // wrapper recurses. One hop is the legitimate case; anything deeper is a
+  // hand-made file nesting wrappers to blow the stack.
+  if (depth > MAX_UNWRAP_DEPTH) {
+    throw new InvoiceShareError(
+      'UNKNOWN_FORMAT',
+      'This file does not contain a readable invoice share code.'
+    );
   }
 
   // Chat clients and email wrap long links. A base64url token contains no
@@ -96,7 +109,9 @@ export function parseInvoiceShareInput(input) {
     try {
       const parsed = JSON.parse(cleaned);
       const fromFile = parsed?.token ?? parsed?.link;
-      if (typeof fromFile === 'string') return parseInvoiceShareInput(fromFile);
+      if (typeof fromFile === 'string') {
+        return parseInvoiceShareInput(fromFile, depth + 1);
+      }
     } catch {
       // Not JSON after all; fall through to the URL branch.
     }

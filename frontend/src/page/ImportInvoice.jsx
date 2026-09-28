@@ -395,6 +395,10 @@ const ImportInvoice = () => {
                 </div>
               )}
 
+              {/* A connected bystander has nothing to do here — the banner
+                  above already explains why — and an empty card is worse
+                  than no card. */}
+              {!(isConnected && role === "bystander") && (
               <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
                 {!isConnected ? (
                   <div className="flex flex-col items-start gap-3">
@@ -423,7 +427,7 @@ const ImportInvoice = () => {
                       Go to my invoices
                     </Button>
                   </div>
-                ) : role === "bystander" ? null : (
+                ) : (
                   <Button
                     onClick={handleSave}
                     disabled={saving}
@@ -444,6 +448,7 @@ const ImportInvoice = () => {
                   </Button>
                 )}
               </div>
+              )}
             </>
           )}
         </div>

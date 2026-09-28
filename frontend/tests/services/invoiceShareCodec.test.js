@@ -222,6 +222,22 @@ describe("buildInvoiceShareUrl / parseInvoiceShareInput", () => {
     expect(decodeInvoiceShareInput(contents).invoiceId).toBe("42");
   });
 
+  it("refuses a file that nests wrappers to exhaust the stack", () => {
+    // Each `token` field is parsed again, so unbounded nesting would recurse
+    // until the stack gave out.
+    // Kept shallow on purpose: each wrap escapes the last, so the string
+    // grows exponentially. Six is already well past the limit.
+    let nested = encodeInvoiceShare(share);
+    for (let i = 0; i < 6; i++) nested = JSON.stringify({ token: nested });
+    expect(() => parseInvoiceShareInput(nested)).toThrow(InvoiceShareError);
+  });
+
+  it("still accepts a file that wraps a link", () => {
+    const url = buildInvoiceShareUrl(share, { origin: ORIGIN });
+    const wrapped = JSON.stringify({ token: url });
+    expect(decodeInvoiceShareInput(wrapped).invoiceId).toBe("42");
+  });
+
   it("rejects a link with no token in it", () => {
     expect(() => parseInvoiceShareInput(`${ORIGIN}/#/dashboard/import`)).toThrow(
       InvoiceShareError
