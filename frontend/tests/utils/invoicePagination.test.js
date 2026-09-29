@@ -4,6 +4,7 @@ import {
   getTotalPages,
   formatPageLabel,
   fetchInvoicePage,
+  filterSelectionToPage,
 } from "../../src/utils/invoicePagination.js";
 
 // Mirrors Chainvoice.MAX_PAGE_LIMIT; a larger page size makes the view revert.
@@ -63,5 +64,41 @@ describe("invoicePagination.fetchInvoicePage", () => {
       invoices: [],
       total: 5,
     });
+  });
+});
+
+describe("invoicePagination.filterSelectionToPage", () => {
+  test("drops ids that are not on the loaded page", () => {
+    const kept = filterSelectionToPage(
+      new Set([1n, 2n, 99n]),
+      [{ id: 1n }, { id: 2n }, { id: 3n }]
+    );
+
+    expect(kept).toEqual(new Set([1n, 2n]));
+  });
+
+  test("returns an empty set when the page shares no ids", () => {
+    expect(filterSelectionToPage(new Set([1n, 2n]), [{ id: 11n }])).toEqual(
+      new Set()
+    );
+    expect(filterSelectionToPage(new Set([1n]), [])).toEqual(new Set());
+  });
+
+  test("compares BigInt ids by value, not identity", () => {
+    // The selection stores its own BigInt instances; only value equality can
+    // match them against the freshly fetched page.
+    expect(filterSelectionToPage(new Set([BigInt(7)]), [{ id: BigInt(7) }]))
+      .toEqual(new Set([7n]));
+  });
+
+  test("tolerates a missing selection or page", () => {
+    expect(filterSelectionToPage(undefined, [{ id: 1n }])).toEqual(new Set());
+    expect(filterSelectionToPage(new Set([1n]), undefined)).toEqual(new Set());
+  });
+
+  test("does not mutate the selection it is given", () => {
+    const selected = new Set([1n, 99n]);
+    filterSelectionToPage(selected, [{ id: 1n }]);
+    expect(selected).toEqual(new Set([1n, 99n]));
   });
 });

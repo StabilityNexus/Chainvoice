@@ -24,3 +24,18 @@ export async function fetchInvoicePage(view, user, page, pageSize) {
   const [invoices, total] = await view(user, page * pageSize, pageSize);
   return { invoices: Array.from(invoices), total: Number(total) };
 }
+
+/**
+ * Narrow a selection of invoice ids to those present on the loaded page.
+ * Selection and batch actions can only act on the page that is currently
+ * loaded, so ids left over from another page have to be dropped rather than
+ * silently paid against — or quietly filtered out at payment time.
+ */
+export function filterSelectionToPage(selectedIds, pageInvoices) {
+  const pageIds = new Set((pageInvoices || []).map((invoice) => invoice.id));
+  const kept = new Set();
+  for (const id of selectedIds || []) {
+    if (pageIds.has(id)) kept.add(id);
+  }
+  return kept;
+}

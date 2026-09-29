@@ -8,7 +8,7 @@ import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { BrowserProvider, Contract, ethers } from "ethers";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
@@ -97,6 +97,16 @@ function SentInvoice() {
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [resending, setResending] = useState({});
+
+  // Identifies the list currently on screen. A handler captures this before its
+  // transaction and compares it afterwards: if the user has paged, switched
+  // wallet or switched network meanwhile, the displayed list is no longer the
+  // one the handler started on and must not be written to.
+  const pageContextKey = `${address}-${chainId}-${page}-${rowsPerPage}`;
+  const pageContextRef = useRef(pageContextKey);
+  useEffect(() => {
+    pageContextRef.current = pageContextKey;
+  }, [pageContextKey]);
 
   // Get tokens from the hook
   const { tokens } = useTokenList(chainId || 1);
@@ -597,6 +607,10 @@ function SentInvoice() {
   );
 
   const handleCancelInvoice = async (invoiceId) => {
+    // Captured before the transaction so its result can be matched against the
+    // list that is on screen when it resolves.
+    const contextKey = pageContextRef.current;
+
     try {
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
@@ -612,11 +626,16 @@ function SentInvoice() {
 
       const tx = await contract.cancelInvoice(invoiceId);
       await tx.wait();
-      setSentInvoices((prev) =>
-        prev.map((inv) =>
-          inv.id === invoiceId ? { ...inv, isCancelled: true } : inv
-        )
-      );
+      // The user may have paged away while the transaction was in flight; that
+      // page has its own fetch and this result does not belong to it.
+      if (pageContextRef.current === contextKey) {
+        setSentInvoices((prev) =>
+          prev.map((inv) =>
+            inv.id === invoiceId ? { ...inv, isCancelled: true } : inv
+          )
+        );
+        setRefreshTrigger((p) => p + 1);
+      }
 
       toast.success("Invoice cancelled successfully");
     } catch (error) {

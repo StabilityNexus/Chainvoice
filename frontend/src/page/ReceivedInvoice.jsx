@@ -29,6 +29,7 @@ import {
   getTotalPages,
   formatPageLabel,
   fetchInvoicePage,
+  filterSelectionToPage,
 } from "@/utils/invoicePagination";
 import CancelIcon from "@mui/icons-material/Cancel";
 
@@ -123,6 +124,17 @@ function ReceivedInvoice() {
   const [selectedInvoices, setSelectedInvoices] = useState(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchSuggestions, setBatchSuggestions] = useState([]);
+
+  // Identifies the list currently on screen. A payment handler captures this
+  // when it starts and compares it once the transaction resolves: if the user
+  // has paged, switched wallet or switched network in the meantime, the list
+  // the handler closed over is no longer what is displayed and must not be
+  // written back.
+  const pageContextKey = `${address}-${chainId}-${page}-${rowsPerPage}`;
+  const pageContextRef = useRef(pageContextKey);
+  useEffect(() => {
+    pageContextRef.current = pageContextKey;
+  }, [pageContextKey]);
 
   // Drawer state
   const [drawerState, setDrawerState] = useState({
@@ -308,10 +320,10 @@ function ReceivedInvoice() {
     }
   };
 
-  const getGroupedInvoices = () => {
+  const getGroupedInvoices = (selection = selectedInvoices) => {
     const grouped = new Map();
     receivedInvoices.forEach((invoice) => {
-      if (!selectedInvoices.has(invoice.id)) return;
+      if (!selection.has(invoice.id)) return;
 
       const tokenAddress = invoice.paymentToken?.address || ethers.ZeroAddress;
       const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"}`;
@@ -376,6 +388,8 @@ function ReceivedInvoice() {
   };
 
   const payEntireBatch = async (batchId) => {
+    if (loading || batchLoading) return;
+
     const batchInvoices = receivedInvoices.filter(
       (inv) =>
         inv.batchInfo?.batchId === batchId && !inv.isPaid && !inv.isCancelled
@@ -386,14 +400,16 @@ function ReceivedInvoice() {
       return;
     }
 
-    setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
+    const batchIds = new Set(batchInvoices.map((inv) => inv.id));
+    setSelectedInvoices(batchIds);
     toast(
       `Selected ${batchInvoices.length} invoices from batch #${batchId}`
     );
 
-    setTimeout(() => {
-      handleBatchPayment();
-    }, 1000);
+    // Passed explicitly: a deferred call would re-enter through the closure
+    // captured before setSelectedInvoices landed and pay the previous
+    // selection instead of this batch.
+    await handleBatchPayment(batchIds);
   };
 
   // UNIFORM INDIVIDUAL PAYMENT
@@ -405,6 +421,10 @@ function ReceivedInvoice() {
       setShowPaymentError(true);
       return;
     }
+
+    // Captured before the transaction so the result can be matched against
+    // the list that is on screen when it resolves.
+    const contextKey = pageContextRef.current;
 
     setPaymentLoading((prev) => ({ ...prev, [invoiceId]: true }));
     setPaymentError("");
@@ -501,10 +521,18 @@ function ReceivedInvoice() {
         toast.success("Payment successful! Paid with ETH");
       }
 
-      const updatedInvoices = receivedInvoices.map((inv) =>
-        inv.id === invoiceId ? { ...inv, isPaid: true } : inv
-      );
-      setReceivedInvoice(updatedInvoices);
+      // The user may have paged away while the transaction was in flight;
+      // writing the array this closure captured would put the old page back on
+      // screen. Only mark the row when the displayed page is still the one the
+      // payment started on, and let a refetch supply the authoritative state.
+      if (pageContextRef.current === contextKey) {
+        setReceivedInvoice((prev) =>
+          prev.map((inv) =>
+            inv.id === invoiceId ? { ...inv, isPaid: true } : inv
+          )
+        );
+        setRefreshTrigger((p) => p + 1);
+      }
     } catch (error) {
       console.error("Payment failed:", error);
       const errorMsg = getDetailedErrorMessage(error);
@@ -517,8 +545,39 @@ function ReceivedInvoice() {
   };
 
   // UNIFORM BATCH PAYMENT
-  const handleBatchPayment = async () => {
-    if (!walletClient || selectedInvoices.size === 0) return;
+  const handleBatchPayment = async (invoiceIdsOverride) => {
+    const targetIds = invoiceIdsOverride ?? selectedInvoices;
+
+    if (!walletClient || targetIds.size === 0) return;
+    if (loading) {
+      toast.error("Invoices are still loading. Please try again in a moment.");
+      return;
+    }
+
+    // Group first: only invoices on the loaded page can be grouped, so this is
+    // also the check that the selection still refers to what is on screen. A
+    // selection made before a page change would otherwise group to nothing and
+    // report success without a single payment having been sent.
+    const grouped = getGroupedInvoices(targetIds);
+    const payableCount = Array.from(grouped.values()).reduce(
+      (count, group) => count + group.invoices.length,
+      0
+    );
+
+    if (payableCount === 0 || payableCount !== targetIds.size) {
+      setSelectedInvoices(
+        filterSelectionToPage(targetIds, receivedInvoices)
+      );
+      toast.error(
+        "Selected invoices are no longer on this page. Please reselect."
+      );
+      return;
+    }
+
+    // Captured before the transactions so their results can be matched against
+    // the list that is on screen when they resolve.
+    const contextKey = pageContextRef.current;
+    let paidCount = 0;
 
     setBatchLoading(true);
     setPaymentError("");
@@ -536,8 +595,6 @@ function ReceivedInvoice() {
       }
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
-
-      const grouped = getGroupedInvoices();
 
       // BALANCE CHECK (same as individual)
       toast("Checking balances...");
@@ -629,16 +686,13 @@ function ReceivedInvoice() {
           );
         }
 
-        const updatedInvoices = receivedInvoices.map((inv) =>
-          invoiceIds.some((id) => id === BigInt(inv.id))
-            ? { ...inv, isPaid: true }
-            : inv
-        );
-        setReceivedInvoice(updatedInvoices);
+        paidCount += invoices.length;
       }
 
       setSelectedInvoices(new Set());
-      toast.success("All batch payments completed successfully!");
+      if (paidCount > 0) {
+        toast.success("All batch payments completed successfully!");
+      }
     } catch (error) {
       console.error("Batch payment error:", error);
       const errorMsg = getDetailedErrorMessage(error);
@@ -649,6 +703,12 @@ function ReceivedInvoice() {
       );
     } finally {
       setBatchLoading(false);
+      // Some groups may have gone through before a later one failed, so refetch
+      // whenever anything was paid. If the displayed page has moved on, its own
+      // fetch is already authoritative and this must not disturb it.
+      if (paidCount > 0 && pageContextRef.current === contextKey) {
+        setRefreshTrigger((p) => p + 1);
+      }
     }
   };
 
@@ -662,10 +722,14 @@ function ReceivedInvoice() {
     setPage(0);
   }, [address, chainId]);
 
-  // Selection and batch actions only see the loaded page, so a selection
-  // must not outlive it.
+  // Selection and batch actions only see the loaded page, so neither a
+  // selection nor a suggestion built from the previous page may outlive it:
+  // a suggestion left on screen while the next page loads would otherwise put
+  // ids that are no longer here back into the selection.
   useEffect(() => {
     setSelectedInvoices(new Set());
+    setBatchSuggestions([]);
+    setBatchExportAnchorEl(null);
   }, [page, rowsPerPage, address, chainId]);
 
   // Fetch invoices
@@ -715,6 +779,7 @@ function ReceivedInvoice() {
         if (res.length === 0) {
           setReceivedInvoice([]);
           setBatchSuggestions([]);
+          setSelectedInvoices(new Set());
           return;
         }
 
@@ -857,6 +922,11 @@ function ReceivedInvoice() {
 
         if (cancelled) return;
         setReceivedInvoice(decryptedInvoices);
+        // A refetch of the same page may no longer carry every invoice that was
+        // selected, and suggestions are built only from what this page loaded.
+        setSelectedInvoices((prev) =>
+          filterSelectionToPage(prev, decryptedInvoices)
+        );
         const suggestions = findBatchSuggestions(decryptedInvoices);
         setBatchSuggestions(suggestions);
         const fee = await contract.fee();
@@ -1083,6 +1153,10 @@ function ReceivedInvoice() {
   );
   const selectedCount = selectedInvoices.size;
   const grouped = getGroupedInvoices();
+  // While a page is loading, `receivedInvoices` still holds the previous one:
+  // anything that turns it into a selection would capture ids that are about to
+  // leave the screen, so every control that does is locked until it settles.
+  const batchControlsDisabled = loading || batchLoading;
 
   return (
     <>
@@ -1268,6 +1342,7 @@ function ReceivedInvoice() {
                       onClick={() => selectBatchSuggestion(suggestion)}
                       variant="contained"
                       size="small"
+                      disabled={batchControlsDisabled}
                       sx={{ minWidth: "auto" }}
                     >
                       Select & Pay
@@ -1316,7 +1391,7 @@ function ReceivedInvoice() {
                     onClick={handleSelectAll}
                     variant="outlined"
                     size="small"
-                    disabled={unpaidInvoices.length === 0}
+                    disabled={batchControlsDisabled || unpaidInvoices.length === 0}
                     sx={{ minWidth: { xs: 0, sm: 120 }, flex: { xs: 1, sm: "unset" }, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                   >
                     {unpaidInvoices.length > 0 ? `Select All (${unpaidInvoices.length})` : "Select All"}
@@ -1442,11 +1517,11 @@ function ReceivedInvoice() {
                     ))}
                   </Box>
                   <Button
-                    onClick={handleBatchPayment}
+                    onClick={() => handleBatchPayment()}
                     variant="contained"
                     color="success"
                     size="large"
-                    disabled={batchLoading}
+                    disabled={batchControlsDisabled}
                     startIcon={
                       batchLoading ? (
                         <CircularProgress size={20} color="inherit" />
@@ -1553,6 +1628,7 @@ function ReceivedInvoice() {
                                       selectedCount === unpaidInvoices.length &&
                                       unpaidInvoices.length > 0
                                     }
+                                    disabled={batchControlsDisabled}
                                     onChange={(e) => {
                                       if (e.target.checked) {
                                         handleSelectAll();
@@ -1600,7 +1676,11 @@ function ReceivedInvoice() {
                               <Checkbox
                                 checked={selectedInvoices.has(invoice.id)}
                                 onChange={() => handleSelectInvoice(invoice.id)}
-                                disabled={invoice.isPaid || invoice.isCancelled}
+                                disabled={
+                                  batchControlsDisabled ||
+                                  invoice.isPaid ||
+                                  invoice.isCancelled
+                                }
                                 color="success"
                               />
                             </TableCell>
