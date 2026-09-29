@@ -29,6 +29,7 @@ import {
   getTotalPages,
   formatPageLabel,
   fetchInvoicePage,
+  resolvePostTxUpdate,
 } from "@/utils/invoicePagination";
 import {
   Skeleton,
@@ -626,16 +627,27 @@ function SentInvoice() {
 
       const tx = await contract.cancelInvoice(invoiceId);
       await tx.wait();
-      // The user may have paged away while the transaction was in flight; that
-      // page has its own fetch and this result does not belong to it.
-      if (pageContextRef.current === contextKey) {
+
+      // The cancellation is confirmed at this point. The optimistic row patch
+      // is scoped to the page it started on, but the refetch is not: if the
+      // user paged while this was pending, that page may have loaded before the
+      // receipt and still show this invoice as active.
+      const { applyOptimisticUpdate, refresh } = resolvePostTxUpdate({
+        startedContextKey: contextKey,
+        currentContextKey: pageContextRef.current,
+        confirmed: true,
+      });
+
+      if (applyOptimisticUpdate) {
         setSentInvoices((prev) =>
           prev.map((inv) =>
             inv.id === invoiceId ? { ...inv, isCancelled: true } : inv
           )
         );
-        setRefreshTrigger((p) => p + 1);
       }
+      // Always refetches the page that is current when the effect re-runs, not
+      // the one captured in this closure.
+      if (refresh) setRefreshTrigger((p) => p + 1);
 
       toast.success("Invoice cancelled successfully");
     } catch (error) {

@@ -5,6 +5,7 @@ import {
   formatPageLabel,
   fetchInvoicePage,
   filterSelectionToPage,
+  resolvePostTxUpdate,
 } from "../../src/utils/invoicePagination.js";
 
 // Mirrors Chainvoice.MAX_PAGE_LIMIT; a larger page size makes the view revert.
@@ -100,5 +101,71 @@ describe("invoicePagination.filterSelectionToPage", () => {
     const selected = new Set([1n, 99n]);
     filterSelectionToPage(selected, [{ id: 1n }]);
     expect(selected).toEqual(new Set([1n, 99n]));
+  });
+});
+
+describe("invoicePagination.resolvePostTxUpdate", () => {
+  test("patches the row and refreshes when the page has not changed", () => {
+    expect(
+      resolvePostTxUpdate({
+        startedContextKey: "0xa-1-0-10",
+        currentContextKey: "0xa-1-0-10",
+        confirmed: true,
+      })
+    ).toEqual({ applyOptimisticUpdate: true, refresh: true });
+  });
+
+  test("still refreshes after a page change, but skips the row patch", () => {
+    // The regression this guards: the page now on screen may have been fetched
+    // while the transaction was pending, so it can still show the old status.
+    expect(
+      resolvePostTxUpdate({
+        startedContextKey: "0xa-1-0-10",
+        currentContextKey: "0xa-1-1-10",
+        confirmed: true,
+      })
+    ).toEqual({ applyOptimisticUpdate: false, refresh: true });
+  });
+
+  test("refreshes after a page-size change too", () => {
+    expect(
+      resolvePostTxUpdate({
+        startedContextKey: "0xa-1-0-10",
+        currentContextKey: "0xa-1-0-50",
+        confirmed: true,
+      }).refresh
+    ).toBe(true);
+  });
+
+  test("refreshes after a wallet or network switch, without patching", () => {
+    expect(
+      resolvePostTxUpdate({
+        startedContextKey: "0xa-1-0-10",
+        currentContextKey: "0xb-1-0-10",
+        confirmed: true,
+      })
+    ).toEqual({ applyOptimisticUpdate: false, refresh: true });
+    expect(
+      resolvePostTxUpdate({
+        startedContextKey: "0xa-1-0-10",
+        currentContextKey: "0xa-11-0-10",
+        confirmed: true,
+      })
+    ).toEqual({ applyOptimisticUpdate: false, refresh: true });
+  });
+
+  test("does nothing until the transaction is confirmed", () => {
+    const pending = {
+      startedContextKey: "0xa-1-0-10",
+      currentContextKey: "0xa-1-0-10",
+    };
+    expect(resolvePostTxUpdate(pending)).toEqual({
+      applyOptimisticUpdate: false,
+      refresh: false,
+    });
+    expect(resolvePostTxUpdate({ ...pending, confirmed: false })).toEqual({
+      applyOptimisticUpdate: false,
+      refresh: false,
+    });
   });
 });

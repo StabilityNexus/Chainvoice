@@ -30,6 +30,7 @@ import {
   formatPageLabel,
   fetchInvoicePage,
   filterSelectionToPage,
+  resolvePostTxUpdate,
 } from "@/utils/invoicePagination";
 import CancelIcon from "@mui/icons-material/Cancel";
 
@@ -521,18 +522,26 @@ function ReceivedInvoice() {
         toast.success("Payment successful! Paid with ETH");
       }
 
-      // The user may have paged away while the transaction was in flight;
-      // writing the array this closure captured would put the old page back on
-      // screen. Only mark the row when the displayed page is still the one the
-      // payment started on, and let a refetch supply the authoritative state.
-      if (pageContextRef.current === contextKey) {
+      // The payment is confirmed at this point. The optimistic row patch is
+      // scoped to the page it started on, but the refetch is not: if the user
+      // paged while this was pending, that page may have loaded before the
+      // receipt and still show this invoice as unpaid.
+      const { applyOptimisticUpdate, refresh } = resolvePostTxUpdate({
+        startedContextKey: contextKey,
+        currentContextKey: pageContextRef.current,
+        confirmed: true,
+      });
+
+      if (applyOptimisticUpdate) {
         setReceivedInvoice((prev) =>
           prev.map((inv) =>
             inv.id === invoiceId ? { ...inv, isPaid: true } : inv
           )
         );
-        setRefreshTrigger((p) => p + 1);
       }
+      // Always refetches the page that is current when the effect re-runs, not
+      // the one captured in this closure.
+      if (refresh) setRefreshTrigger((p) => p + 1);
     } catch (error) {
       console.error("Payment failed:", error);
       const errorMsg = getDetailedErrorMessage(error);
@@ -574,9 +583,6 @@ function ReceivedInvoice() {
       return;
     }
 
-    // Captured before the transactions so their results can be matched against
-    // the list that is on screen when they resolve.
-    const contextKey = pageContextRef.current;
     let paidCount = 0;
 
     setBatchLoading(true);
@@ -704,9 +710,11 @@ function ReceivedInvoice() {
     } finally {
       setBatchLoading(false);
       // Some groups may have gone through before a later one failed, so refetch
-      // whenever anything was paid. If the displayed page has moved on, its own
-      // fetch is already authoritative and this must not disturb it.
-      if (paidCount > 0 && pageContextRef.current === contextKey) {
+      // whenever anything was actually paid. This is deliberately not gated on
+      // the page context: a page loaded while these transactions were pending
+      // would otherwise keep showing the paid invoices as unpaid. The effect
+      // reads the current page, so this always refreshes what is on screen.
+      if (paidCount > 0) {
         setRefreshTrigger((p) => p + 1);
       }
     }

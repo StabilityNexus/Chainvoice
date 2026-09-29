@@ -39,3 +39,31 @@ export function filterSelectionToPage(selectedIds, pageInvoices) {
   }
   return kept;
 }
+
+/**
+ * Decides what a *confirmed* transaction is allowed to do to the displayed list.
+ *
+ * The two halves have different scopes on purpose:
+ *
+ * - An optimistic row patch belongs only to the page the transaction started
+ *   on. Applying it after the user has paged would patch a row against a list
+ *   that never loaded it, putting stale content back on screen.
+ * - The refetch must run regardless. The page now on screen may have been
+ *   fetched while this transaction was still pending, so it can legitimately
+ *   contain the same invoice with its pre-transaction status; skipping the
+ *   refetch would leave that outdated row displayed for good.
+ *
+ * Neither happens until the transaction is confirmed, so a merely submitted or
+ * a failed transaction changes nothing.
+ */
+export function resolvePostTxUpdate({
+  startedContextKey,
+  currentContextKey,
+  confirmed = false,
+}) {
+  if (!confirmed) return { applyOptimisticUpdate: false, refresh: false };
+  return {
+    applyOptimisticUpdate: startedContextKey === currentContextKey,
+    refresh: true,
+  };
+}
