@@ -23,6 +23,7 @@ export {
   readInvoiceShareFile,
   FILE_EXTENSION,
 } from './invoiceShareFile.js';
+export { scanQrImageFile } from './invoiceShareScan.js';
 export {
   renderShareQr,
   renderShareQrCard,

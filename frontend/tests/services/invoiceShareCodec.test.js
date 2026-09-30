@@ -24,6 +24,10 @@ import {
   LOGO_RATIO,
 } from "../../src/services/share/invoiceShareQr.js";
 import {
+  scanQrImageFile,
+  MAX_IMAGE_BYTES,
+} from "../../src/services/share/invoiceShareScan.js";
+import {
   evaluateOnChainInvoice,
   VERIFY_OK,
   VERIFY_HASH_MISMATCH,
@@ -492,5 +496,35 @@ describe("QR configuration", () => {
     // A link that cannot be scanned can still be pasted, so the QR limit is
     // the stricter of the two.
     expect(SHARE_QR_MAX_CHARS).toBeLessThan(SHARE_URL_MAX_CHARS);
+  });
+});
+
+describe("scanQrImageFile guards", () => {
+  // Decoding itself needs a canvas, so it is exercised in the browser. What
+  // is testable here is that nothing reaches the decoder it should not: both
+  // checks run before the image is ever loaded.
+  const expectReject = async (file, code) => {
+    await expect(scanQrImageFile(file)).rejects.toMatchObject({
+      name: "InvoiceShareError",
+      code,
+    });
+  };
+
+  it("refuses a file that is not an image", async () => {
+    await expectReject(
+      { type: "text/plain", size: 10 },
+      "UNREADABLE_IMAGE"
+    );
+  });
+
+  it("refuses a file with no type at all", async () => {
+    await expectReject({ size: 10 }, "UNREADABLE_IMAGE");
+  });
+
+  it("refuses an image too large to decode on the main thread", async () => {
+    await expectReject(
+      { type: "image/png", size: MAX_IMAGE_BYTES + 1 },
+      "TOO_LARGE"
+    );
   });
 });

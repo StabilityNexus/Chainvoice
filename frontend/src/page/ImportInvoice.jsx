@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import toast from "react-hot-toast";
@@ -7,8 +8,8 @@ import {
   AlertTriangle,
   CheckCircle2,
   Download,
-  FileText,
   FileUp,
+  ImageUp,
   Loader2,
   ShieldCheck,
   XCircle,
@@ -22,6 +23,7 @@ import { PAGE_CONTAINER } from "@/utils/layout";
 import {
   decodeInvoiceShareInput,
   readInvoiceShareFile,
+  scanQrImageFile,
   SHARE_TOKEN_PARAM,
   verifyShareAgainstChain,
   VERIFY_OK,
@@ -104,6 +106,7 @@ const ImportInvoice = () => {
   const [searchParams] = useSearchParams();
   const { address, isConnected, chainId: walletChainId } = useAccount();
   const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
   // Monotonic ticket for processInput; see the comment there.
   const requestRef = useRef(0);
 
@@ -116,6 +119,18 @@ const ImportInvoice = () => {
   const [saving, setSaving] = useState(false);
 
   /**
+   * Claim the current attempt, and report whether it is still the latest.
+   *
+   * Reading a file or decoding an image is slow enough to overlap with a
+   * second pick, so a failure that arrives late must not overwrite a newer
+   * attempt that has already succeeded.
+   */
+  const claimAttempt = useCallback(() => {
+    const ticket = ++requestRef.current;
+    return () => requestRef.current === ticket;
+  }, []);
+
+  /**
    * Decode then verify.
    *
    * Wrapped in one call because the two are useless apart: a decoded payload
@@ -123,14 +138,14 @@ const ImportInvoice = () => {
    * as an invoice.
    */
   const processInput = useCallback(async (input) => {
-    // Each run claims a ticket. Two runs can overlap — a token in the URL and
-    // a pasted link, or an impatient second paste — and each awaits a chain
-    // read, so they can finish out of order. Without this the slower run
-    // could pair its verification with the faster run's payload, and
-    // handleSave would store one invoice's details under another's on-chain
-    // identity, which is exactly what the verification exists to prevent.
-    const ticket = ++requestRef.current;
-    const superseded = () => requestRef.current !== ticket;
+    // Two runs can overlap — a token in the URL and a pasted link, or an
+    // impatient second paste — and each awaits a chain read, so they can
+    // finish out of order. Without this the slower run could pair its
+    // verification with the faster run's payload, and handleSave would store
+    // one invoice's details under another's on-chain identity, which is
+    // exactly what the verification exists to prevent.
+    const isCurrent = claimAttempt();
+    const superseded = () => !isCurrent();
 
     setStatus("working");
     setProblem(null);
@@ -179,7 +194,7 @@ const ImportInvoice = () => {
     } catch {
       // A failed lookup only costs us the "already saved" hint.
     }
-  }, []);
+  }, [claimAttempt]);
 
   // A tapped link or a scanned QR lands here with the token in the URL.
   const urlToken = searchParams.get(SHARE_TOKEN_PARAM);
@@ -187,15 +202,50 @@ const ImportInvoice = () => {
     if (urlToken) processInput(urlToken);
   }, [urlToken, processInput]);
 
+  /**
+   * Import from a picture of a QR code.
+   *
+   * Often all someone has: a screenshot of a chat, a photo of a printed
+   * invoice, or the card this app produced. Decoding happens in the page, so
+   * the image — which carries the whole invoice — never leaves the device.
+   */
+  const handleImage = useCallback(
+    async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const isCurrent = claimAttempt();
+      setStatus("working");
+      try {
+        await processInput(await scanQrImageFile(file));
+      } catch (err) {
+        console.error("[ImportInvoice] Could not read QR image:", err);
+        if (!isCurrent()) return;
+        setStatus("failed");
+        setProblem({
+          title: "Could not read that image",
+          detail:
+            err?.name === "InvoiceShareError"
+              ? err.message
+              : "That image could not be opened.",
+        });
+      } finally {
+        event.target.value = "";
+      }
+    },
+    [processInput, claimAttempt]
+  );
+
   const handleFile = useCallback(
     async (event) => {
       const file = event.target.files?.[0];
       if (!file) return;
+      const isCurrent = claimAttempt();
       try {
         const text = await readInvoiceShareFile(file);
         await processInput(text);
       } catch (err) {
         console.error("[ImportInvoice] Could not read file:", err);
+        if (!isCurrent()) return;
         // A refused oversized file has a message worth showing; anything
         // else is an unreadable file and gets the generic line.
         toast.error(
@@ -208,7 +258,7 @@ const ImportInvoice = () => {
         event.target.value = "";
       }
     },
-    [processInput]
+    [processInput, claimAttempt]
   );
 
   /** Who this invoice concerns, and whether the connected wallet is one of them. */
@@ -257,6 +307,10 @@ const ImportInvoice = () => {
     };
   }, [decoded, verification]);
 
+  // The page only splits once there is an invoice worth showing beside the
+  // form; before that the form is the whole page.
+  const hasInvoice = Boolean(previewInvoice);
+
   const wrongNetwork =
     isConnected &&
     decoded &&
@@ -277,12 +331,22 @@ const ImportInvoice = () => {
         </p>
       </div>
 
-      {/* Everything you act on down the left, the invoice itself on the right.
-          Stacked, the preview sat below the controls and a verified invoice
-          could not be read without scrolling past the form that opened it.
-          Below lg there is no room for two columns, so it stacks again — with
-          the preview last, where it has the width to be legible. */}
-      <div className="lg:grid lg:grid-cols-[minmax(320px,400px)_1fr] lg:items-start lg:gap-4">
+      {/* The page has two shapes. With nothing open there is only one thing
+          to do, so the form gets the full width and sits centred. Once an
+          invoice is verified it moves aside and the invoice takes the room —
+          side by side, so a verified invoice is not below the fold and the
+          Save button does not scroll away from it.
+
+          Splitting only once there is something to show also means the
+          second column never appears empty. */}
+      <div
+        className={cn(
+          "transition-all duration-500 ease-out",
+          hasInvoice
+            ? "lg:grid lg:grid-cols-[minmax(320px,400px)_1fr] lg:items-start lg:gap-4"
+            : "mx-auto max-w-2xl"
+        )}
+      >
         {/* Sticky so the Save button stays put while a long invoice scrolls. */}
         <div className="space-y-3 lg:sticky lg:top-4">
           {/* Manual entry. Hidden once a link in the URL has been handled,
@@ -310,23 +374,43 @@ const ImportInvoice = () => {
 
               <div className="mt-4 border-t border-gray-100 pt-4">
                 <Label className="mb-2 block text-sm font-medium text-gray-700">
-                  Or choose a shared invoice file
+                  Or open one you were sent
                 </Label>
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept=".cvinv,application/json,.json"
                   onChange={handleFile}
+                  aria-label="Choose a shared invoice file"
                   className="hidden"
                 />
-                <Button
-                  variant="outline"
-                  className={OUTLINE_ON_LIGHT}
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={status === "working"}
-                >
-                  <FileUp className="h-4 w-4" /> Choose .cvinv file
-                </Button>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImage}
+                  aria-label="Choose an image of a QR code"
+                  className="hidden"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    className={OUTLINE_ON_LIGHT}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={status === "working"}
+                  >
+                    <FileUp className="h-4 w-4" /> Invoice file
+                  </Button>
+                  {/* A screenshot or photo of the code, decoded in the page. */}
+                  <Button
+                    variant="outline"
+                    className={OUTLINE_ON_LIGHT}
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={status === "working"}
+                  >
+                    <ImageUp className="h-4 w-4" /> QR image
+                  </Button>
+                </div>
               </div>
             </div>
           )}
@@ -459,22 +543,19 @@ const ImportInvoice = () => {
             desktop padding, both sized for the full-width drawers it was
             written for. Overridden here rather than in the component, which
             four other pages render. */}
-        <div className="mt-3 lg:mt-0 [&_#invoice-print]:my-0 lg:[&_#invoice-print]:p-6">
-          {previewInvoice ? (
-            <InvoicePreview invoice={previewInvoice} />
-          ) : (
-            <div className="hidden min-h-[360px] flex-col items-center justify-center rounded-lg border border-dashed border-gray-600 bg-white/5 p-8 text-center lg:flex">
-              <FileText className="mb-3 h-10 w-10 text-gray-500" />
-              <p className="text-sm font-medium text-gray-300">
-                No invoice open yet
-              </p>
-              <p className="mt-1 max-w-xs text-xs text-gray-400">
-                Paste a share link or choose a file, and the invoice will
-                appear here once the blockchain confirms it.
-              </p>
-            </div>
+        <AnimatePresence>
+          {previewInvoice && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              className="mt-3 lg:mt-0 [&_#invoice-print]:my-0 lg:[&_#invoice-print]:p-6"
+            >
+              <InvoicePreview invoice={previewInvoice} />
+            </motion.div>
           )}
-        </div>
+        </AnimatePresence>
       </div>
     </div>
   );
