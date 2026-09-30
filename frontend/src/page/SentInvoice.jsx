@@ -6,6 +6,7 @@ import TableContainer from "@mui/material/TableContainer";
 import TableHead from "@mui/material/TableHead";
 import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
+import Checkbox from "@mui/material/Checkbox";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { BrowserProvider, Contract, ethers } from "ethers";
 import { useEffect, useState } from "react";
@@ -62,6 +63,7 @@ import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
 
 const columns = [
+  { id: "select", label: "", minWidth: 50 },
   { id: "fname", label: "Client", minWidth: 120 },
   { id: "to", label: "Receiver", minWidth: 150 },
   { id: "amountDue", label: "Amount", minWidth: 100, align: "right" },
@@ -90,6 +92,10 @@ function SentInvoice() {
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [resending, setResending] = useState({});
+  const [selectedExportInvoices, setSelectedExportInvoices] = useState(new Set());
+  const [bulkExportOpen, setBulkExportOpen] = useState(false);
+  const [bulkExportFormat, setBulkExportFormat] = useState("csv");
+  const [bulkExportMode, setBulkExportMode] = useState("single");
 
   // Get tokens from the hook
   const { tokens } = useTokenList(chainId || 1);
@@ -113,7 +119,7 @@ function SentInvoice() {
       tokenInfo?.image ||
       tokenInfo?.logo ||
       fallbackLogo ||
-      "/tokenImages/generic.png"
+      `${import.meta.env.BASE_URL}tokenImages/generic.png`
     );
   };
 
@@ -138,7 +144,7 @@ function SentInvoice() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
-     
+
   useEffect(() => {
     if (!walletClient || !address) return;
 
@@ -274,7 +280,7 @@ function SentInvoice() {
                     symbol,
                     name,
                     decimals: Number(decimals),
-                    logo: "/tokenImages/generic.png", // Generic fallback
+                    logo: `${import.meta.env.BASE_URL}tokenImages/generic.png`, // Generic fallback
                   };
                 } catch (error) {
                   console.error(
@@ -283,7 +289,7 @@ function SentInvoice() {
                   );
                   // Keep existing data or set defaults
                   parsed.paymentToken.logo =
-                    parsed.paymentToken.logo || "/tokenImages/generic.png";
+                    parsed.paymentToken.logo || `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                 }
               }
             }
@@ -325,7 +331,7 @@ function SentInvoice() {
     };
 
     fetchSentInvoices();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletClient, address, tokens, chainId, refreshTrigger]); // Added tokens and chainId to dependency array
 
   /**
@@ -502,8 +508,8 @@ function SentInvoice() {
     return () => {
       cancelled = true;
     };
-  // Deliberately not depending on refreshTrigger: a successful sweep bumps it,
-  // and re-running on that would loop.
+    // Deliberately not depending on refreshTrigger: a successful sweep bumps it,
+    // and re-running on that would loop.
   }, [isConnected, address, walletClient, chainId, sentInvoices]);
 
   const [drawerState, setDrawerState] = useState({
@@ -558,11 +564,56 @@ function SentInvoice() {
     }
   };
 
-  const { handleExportCSV, handleExportJSON } = useInvoiceExport(
+  const {
+    handleExportCSV,
+    handleExportJSON,
+    handleBulkExport,
+  } = useInvoiceExport(
     drawerState.selectedInvoice,
     fee,
     handleExportClose
   );
+
+  const handleExportSelect = (invoiceId) => {
+    const id = String(invoiceId);
+
+    setSelectedExportInvoices((prev) => {
+      const next = new Set(prev);
+
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+
+      return next;
+    });
+  };
+
+  const handleSelectAllForExport = () => {
+    if (selectedExportInvoices.size === sentInvoices.length) {
+      setSelectedExportInvoices(new Set());
+    } else {
+      setSelectedExportInvoices(
+        new Set(sentInvoices.map((invoice) => String(invoice.id)))
+      );
+    }
+  };
+
+  const selectedExportInvoiceList = sentInvoices.filter((invoice) =>
+    selectedExportInvoices.has(String(invoice.id))
+  );
+
+  const handleBulkExportSubmit = async () => {
+    await handleBulkExport(
+      selectedExportInvoiceList,
+      bulkExportFormat,
+      bulkExportMode
+    );
+
+    setBulkExportOpen(false);
+    setSelectedExportInvoices(new Set());
+  };
 
   const handleCancelInvoice = async (invoiceId) => {
     try {
@@ -616,6 +667,20 @@ function SentInvoice() {
             <div>
               <h2 className="text-2xl font-bold text-white">Sent Invoices</h2>
             </div>
+
+            {selectedExportInvoices.size > 0 && (
+              <Button
+                variant="contained"
+                startIcon={<DownloadIcon />}
+                onClick={() => setBulkExportOpen(true)}
+                sx={{
+                  textTransform: "none",
+                  borderRadius: "8px",
+                }}
+              >
+                Export Selected ({selectedExportInvoices.size})
+              </Button>
+            )}
           </div>
 
           <Paper
@@ -680,7 +745,22 @@ function SentInvoice() {
                               borderBottom: "1px solid #f1f5f9",
                             }}
                           >
-                            {column.label}
+                            {column.id === "select" ? (
+                              <Checkbox
+                                size="small"
+                                checked={
+                                  sentInvoices.length > 0 &&
+                                  selectedExportInvoices.size === sentInvoices.length
+                                }
+                                indeterminate={
+                                  selectedExportInvoices.size > 0 &&
+                                  selectedExportInvoices.size < sentInvoices.length
+                                }
+                                onChange={handleSelectAllForExport}
+                              />
+                            ) : (
+                              column.label
+                            )}
                           </TableCell>
                         ))}
                       </TableRow>
@@ -700,6 +780,14 @@ function SentInvoice() {
                               "&:hover": { backgroundColor: "#f8fafc" },
                             }}
                           >
+                            <TableCell padding="checkbox">
+                              <Checkbox
+                                size="small"
+                                checked={selectedExportInvoices.has(String(invoice.id))}
+                                onChange={() => handleExportSelect(invoice.id)}
+                              />
+                            </TableCell>
+
                             {/* Client Column */}
                             <TableCell>
                               <div className="flex items-center">
@@ -744,7 +832,7 @@ function SentInvoice() {
                                     alt={invoice.paymentToken.symbol}
                                     className="w-5 h-5 mr-2 rounded-full"
                                     onError={(e) => {
-                                      e.target.src = "/tokenImages/generic.png";
+                                      e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                                     }}
                                   />
                                 ) : (
@@ -856,47 +944,47 @@ function SentInvoice() {
                                     their storage, or the relay may have dropped
                                     the message before they polled for it. */}
                                 {!invoice._onChainOnly && (
-                                    <Tooltip
-                                      title={
-                                        invoice.relayDelivered
-                                          ? "Send the details to your client again"
-                                          : "Client has not received the details — resend"
-                                      }
-                                    >
-                                      <span>
-                                        <IconButton
-                                          size="small"
-                                          disabled={Boolean(
-                                            resending[invoice.id.toString()]
-                                          )}
-                                          onClick={() => handleResend(invoice)}
-                                          sx={{
+                                  <Tooltip
+                                    title={
+                                      invoice.relayDelivered
+                                        ? "Send the details to your client again"
+                                        : "Client has not received the details — resend"
+                                    }
+                                  >
+                                    <span>
+                                      <IconButton
+                                        size="small"
+                                        disabled={Boolean(
+                                          resending[invoice.id.toString()]
+                                        )}
+                                        onClick={() => handleResend(invoice)}
+                                        sx={{
+                                          backgroundColor: invoice.relayDelivered
+                                            ? "#f1f5f9"
+                                            : "#fef3c7",
+                                          "&:hover": {
                                             backgroundColor: invoice.relayDelivered
-                                              ? "#f1f5f9"
-                                              : "#fef3c7",
-                                            "&:hover": {
-                                              backgroundColor: invoice.relayDelivered
-                                                ? "#e2e8f0"
-                                                : "#fde68a",
-                                            },
-                                          }}
-                                        >
-                                          {resending[invoice.id.toString()] ? (
-                                            <CircularProgress size={16} />
-                                          ) : (
-                                            <SendIcon
-                                              fontSize="small"
-                                              sx={{
-                                                color: invoice.relayDelivered
-                                                  ? "#475569"
-                                                  : "#b45309",
-                                              }}
-                                            />
-                                          )}
-                                        </IconButton>
-                                      </span>
-                                    </Tooltip>
-                                  )}
+                                              ? "#e2e8f0"
+                                              : "#fde68a",
+                                          },
+                                        }}
+                                      >
+                                        {resending[invoice.id.toString()] ? (
+                                          <CircularProgress size={16} />
+                                        ) : (
+                                          <SendIcon
+                                            fontSize="small"
+                                            sx={{
+                                              color: invoice.relayDelivered
+                                                ? "#475569"
+                                                : "#b45309",
+                                            }}
+                                          />
+                                        )}
+                                      </IconButton>
+                                    </span>
+                                  </Tooltip>
+                                )}
                                 {!invoice._onChainOnly && (
                                   <Tooltip title="Share as link or QR code">
                                     <IconButton
@@ -981,7 +1069,7 @@ function SentInvoice() {
                   <div className="flex items-center space-x-4">
                     <div className="bg-white p-3.5 rounded-xl border-2 border-gray-200 shadow-lg flex-shrink-0">
                       <img
-                        src="/logo.png"
+                        src={`${import.meta.env.BASE_URL}logo.png`}
                         alt="Chainvoice"
                         className="h-16 w-16 object-contain"
                         onError={(e) => {
@@ -1154,7 +1242,7 @@ function SentInvoice() {
                       alt={drawerState.selectedInvoice.paymentToken.symbol}
                       className="w-6 h-6 mr-2"
                       onError={(e) => {
-                        e.target.src = "/tokenImages/generic.png";
+                        e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                       }}
                     />
                   ) : (
@@ -1341,6 +1429,89 @@ function SentInvoice() {
             </div>
           )}
         </SwipeableDrawer>
+
+        <Dialog
+          open={bulkExportOpen}
+          onClose={() => setBulkExportOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>
+            Export {selectedExportInvoices.size} Invoice
+            {selectedExportInvoices.size !== 1 ? "s" : ""}
+          </DialogTitle>
+
+          <DialogContent>
+            <div className="mt-2">
+              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                Format
+              </Typography>
+
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  ["csv", "CSV"],
+                  ["json", "JSON"],
+                  ["pdf", "PDF"],
+                ].map(([value, label]) => (
+                  <Button
+                    key={value}
+                    variant={
+                      bulkExportFormat === value ? "contained" : "outlined"
+                    }
+                    onClick={() => setBulkExportFormat(value)}
+                    sx={{ textTransform: "none" }}
+                  >
+                    {label}
+                  </Button>
+                ))}
+              </div>
+
+              <Typography variant="subtitle2" sx={{ mt: 3, mb: 1 }}>
+                File option
+              </Typography>
+
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant={
+                    bulkExportMode === "single" ? "contained" : "outlined"
+                  }
+                  onClick={() => setBulkExportMode("single")}
+                  sx={{ textTransform: "none" }}
+                >
+                  Single File
+                </Button>
+
+                <Button
+                  variant={
+                    bulkExportMode === "separate" ? "contained" : "outlined"
+                  }
+                  onClick={() => setBulkExportMode("separate")}
+                  sx={{ textTransform: "none" }}
+                >
+                  Separate Files (ZIP)
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+
+          <DialogActions>
+            <Button
+              onClick={() => setBulkExportOpen(false)}
+              sx={{ textTransform: "none" }}
+            >
+              Cancel
+            </Button>
+
+            <Button
+              variant="contained"
+              onClick={handleBulkExportSubmit}
+              disabled={selectedExportInvoices.size === 0}
+              sx={{ textTransform: "none" }}
+            >
+              Export
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         <Dialog
           open={cancelConfirmOpen}

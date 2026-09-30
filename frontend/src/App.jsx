@@ -94,7 +94,7 @@ function App() {
             })}
           >
             <div className="font-Montserrat h-screen">
-              <Router basename={import.meta.env.BASE_URL}>
+              <Router>
                 <Suspense fallback={<div className="flex h-screen items-center justify-center text-white">Loading...</div>}>
                   <Routes>
                     <Route path="/" element={<Applayout />}>

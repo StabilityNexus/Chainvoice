@@ -2,18 +2,18 @@
   "name": "Chainvoice | Stability Nexus",
   "short_name": "Chainvoice",
   "description": "Decentralized Invoicing Platform by Stability Nexus. Create, manage, and pay invoices securely on the blockchain.",
-  "start_url": "/",
+  "start_url": ".",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
   "icons": [
     {
-      "src": "/correct.svg",
+      "src": "correct.svg",
       "sizes": "any",
       "type": "image/svg+xml"
     },
     {
-      "src": "/logo.png",
+      "src": "logo.png",
       "sizes": "512x512",
       "type": "image/png"
     }

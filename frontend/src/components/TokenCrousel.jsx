@@ -59,12 +59,12 @@ const {
                     src={
                       token.image ||
                       token.logo ||
-                      "/tokenImages/generic.png"
+                      `${import.meta.env.BASE_URL}tokenImages/generic.png`
                     }
                     alt={token.symbol}
                     className="w-8 h-8 rounded-full object-contain"
                     onError={(e) => {
-                      e.target.src = "/tokenImages/generic.png";
+                      e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                     }}
                   />
                   {token.address ===

@@ -46,6 +46,7 @@ Chainvoice is a decentralized invoicing platform that enables secure, transparen
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
 - [Frontend Setup](#frontend-setup)
+- [Run with Docker](#run-with-docker)
 - [Smart Contract Testing](#smart-contract-testing)
 - [Deploy to Ethereum Classic](#deploy-to-ethereum-classic)
 - [Environment Variables](#environment-variables)
@@ -95,6 +96,24 @@ npm run dev
 
 4. **Open application**
 Navigate to `http://localhost:5173` in your browser
+
+## Run with Docker
+
+Prefer containers? One command brings up the frontend together with a
+[ThruBox](https://github.com/AOSSIE-Org/ThruBox-Server) relay, which invoice
+sending and receiving depend on — no Node.js install, and no second repository
+to clone:
+
+```bash
+cp frontend/.env.example frontend/.env
+docker buildx build -t chainvoice/thrubox-relay:main "https://github.com/AOSSIE-Org/ThruBox-Server.git#main"
+docker compose up --build
+```
+
+The app is then at `http://localhost:5173` and the relay at
+`http://localhost:3000`. See **[docs/docker.md](docs/docker.md)** for the full
+guide, including the production profile that serves the built bundle behind
+nginx.
 
 ## Smart Contract Testing
 
