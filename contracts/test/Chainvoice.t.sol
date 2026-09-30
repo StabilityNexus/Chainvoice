@@ -25,6 +25,19 @@ contract RevertingBalanceToken {
     }
 }
 
+contract ShortBalanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        assembly {
+            mstore(0, 0)
+            return(0, 31)
+        }
+    }
+
+    function allowance(address, address) external pure returns (uint256) {
+        return 0;
+    }
+}
+
 contract EmptyAllowanceToken {
     function balanceOf(address) external pure returns (uint256) {
         return 0;
@@ -569,22 +582,30 @@ contract ChainvoiceTest is Test {
     }
 
     function testCreateInvoicesBatch_RejectsEmptyReturnToken() public {
-        _assertInvalidTokenForSingleAndBatch(address(new EmptyReturnToken()));
+        _assertTokenRejectedForSingleAndBatch(address(new EmptyReturnToken()), Chainvoice.InvalidToken.selector);
     }
 
     function testCreateInvoicesBatch_RejectsRevertingBalanceOf() public {
-        _assertInvalidTokenForSingleAndBatch(address(new RevertingBalanceToken()));
+        _assertTokenRejectedForSingleAndBatch(address(new RevertingBalanceToken()), Chainvoice.InvalidToken.selector);
     }
 
     function testCreateInvoicesBatch_RejectsEmptyAllowance() public {
-        _assertInvalidTokenForSingleAndBatch(address(new EmptyAllowanceToken()));
+        _assertTokenRejectedForSingleAndBatch(address(new EmptyAllowanceToken()), Chainvoice.InvalidToken.selector);
     }
 
     function testCreateInvoicesBatch_RejectsRevertingAllowance() public {
-        _assertInvalidTokenForSingleAndBatch(address(new RevertingAllowanceToken()));
+        _assertTokenRejectedForSingleAndBatch(address(new RevertingAllowanceToken()), Chainvoice.InvalidToken.selector);
     }
 
-    function _assertInvalidTokenForSingleAndBatch(address token) private {
+    function testCreateInvoicesBatch_RejectsEOA() public {
+        _assertTokenRejectedForSingleAndBatch(address(0xBEEF), Chainvoice.NotContract.selector);
+    }
+
+    function testCreateInvoicesBatch_RejectsShortBalanceReturn() public {
+        _assertTokenRejectedForSingleAndBatch(address(new ShortBalanceToken()), Chainvoice.InvalidToken.selector);
+    }
+
+    function _assertTokenRejectedForSingleAndBatch(address token, bytes4 expectedError) private {
         address[] memory tos = new address[](1);
         uint256[] memory amounts = new uint256[](1);
         bytes32[] memory hashes = new bytes32[](1);
@@ -592,11 +613,11 @@ contract ChainvoiceTest is Test {
         amounts[0] = 1 ether;
         hashes[0] = keccak256("invalid-token");
 
-        vm.expectRevert(Chainvoice.InvalidToken.selector);
+        vm.expectRevert(expectedError);
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, token, hashes[0]);
 
-        vm.expectRevert(Chainvoice.InvalidToken.selector);
+        vm.expectRevert(expectedError);
         vm.prank(alice);
         chainvoice.createInvoicesBatch(tos, amounts, token, hashes);
 
