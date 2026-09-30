@@ -45,3 +45,47 @@ export function formatInvoiceDate(value) {
   if (Number.isNaN(date.getTime())) return "—";
   return date.toLocaleString();
 }
+
+/**
+ * Render an amount as a plain decimal string `parseUnits` can read.
+ *
+ * `String(0.0000001)` is `"1e-7"`, and JavaScript switches to exponential
+ * notation for any number below 1e-6 or above 1e21. `parseUnits` rejects that
+ * notation outright, so numeric amounts are expanded rather than stringified.
+ * Strings are passed through untouched — they are already exact, and rounding
+ * a payment amount to make it parse would be worse than failing.
+ *
+ * @param {string|number} amount
+ * @returns {string} a non-exponential decimal string
+ */
+function toDecimalString(amount) {
+  if (typeof amount !== "number") return String(amount);
+  if (!Number.isFinite(amount)) {
+    throw new Error(`Invalid invoice amount: ${amount}`);
+  }
+  return amount.toLocaleString("fullwide", {
+    useGrouping: false,
+    maximumFractionDigits: 20,
+  });
+}
+
+/**
+ * Sum invoice amounts into base units.
+ *
+ * Adding the amounts as JavaScript numbers and converting the total afterwards
+ * loses precision: `100.1 + 200.2` becomes `300.29999999999995`, which
+ * `parseUnits` rejects outright for a 6-decimal token, and small totals
+ * collapse to exponential notation it cannot read. Each amount is therefore
+ * converted on its own and the results summed as BigInt.
+ *
+ * @param {Array<{amountDue: string|number}>} invoices
+ * @param {number} decimals - token decimals to scale by
+ * @returns {bigint} total in base units
+ */
+export function sumInvoiceAmounts(invoices, decimals) {
+  return invoices.reduce(
+    (total, invoice) =>
+      total + ethers.parseUnits(toDecimalString(invoice.amountDue), decimals),
+    0n
+  );
+}
