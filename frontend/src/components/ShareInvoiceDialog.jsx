@@ -445,7 +445,7 @@ const ShareInvoiceDialog = ({ open, onClose, invoiceId, chainId }) => {
           )}
 
           {loadState === "ready" && !blockedReason && (
-            <div className="space-y-4">
+            <div className="space-y-3">
               {/* The one thing every recipient of this link needs to know. */}
               <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
                 <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
@@ -453,9 +453,7 @@ const ShareInvoiceDialog = ({ open, onClose, invoiceId, chainId }) => {
                   <span className="font-medium">
                     Anyone with this link can view the invoice
                   </span>{" "}
-                  — including your and your client&apos;s names, addresses and
-                  line items. Share it only with the client. It cannot be
-                  revoked.
+                  — names, addresses and line items. It cannot be revoked.
                 </p>
               </div>
 
@@ -512,75 +510,80 @@ const ShareInvoiceDialog = ({ open, onClose, invoiceId, chainId }) => {
               )}
 
               {qrDataUrl ? (
-                <div className="rounded-lg border border-gray-200 p-4">
+                <div className="rounded-lg border border-gray-200 p-3">
                   <div className="mb-3 flex items-center gap-2 text-sm font-medium text-gray-700">
                     <QrCode className="h-4 w-4 text-gray-500" />
                     Scan to import
                   </div>
-                  <div className="flex flex-col items-center gap-3">
-                    {/* Sized by what a camera needs, not by what fits neatly.
-                      The code is 113 modules across at this error-correction
-                      level, and below roughly 3px per module phones stop
-                      resolving it — 224px was about 2. */}
+                  {/* Code beside its details rather than above them. Stacked,
+                      the dialog ran past the viewport and picked up a
+                      scrollbar for what is only three lines of text. */}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                    {/* Small on purpose. A code this dense needs far more room
+                        than a dialog can spare to be scannable, so this is a
+                        preview of what will be sent and "Enlarge" is the thing
+                        a camera points at. */}
                     <img
                       src={qrDataUrl}
                       alt={`QR code for invoice ${id}`}
-                      className="aspect-square w-full max-w-[380px] rounded bg-white"
+                      className="aspect-square w-[150px] flex-shrink-0 self-center rounded bg-white sm:self-start"
                     />
 
-                    {/* The same summary the saved image carries, so what is
-                      being shared is legible before it is sent. */}
-                    {summary.rows.length > 0 && (
-                      <dl className="w-full max-w-xs space-y-1">
-                        {summary.rows.map((row) => (
-                          <div
-                            key={row.label}
-                            className="flex items-baseline justify-between gap-3 text-xs"
-                          >
-                            <dt className="text-gray-500">{row.label}</dt>
-                            <dd className="truncate font-medium text-gray-800">
-                              {row.value}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                    )}
+                    <div className="flex min-w-0 flex-1 flex-col gap-3">
+                      {/* The same summary the saved image carries, so what is
+                          being shared is legible before it is sent. */}
+                      {summary.rows.length > 0 && (
+                        <dl className="space-y-1">
+                          {summary.rows.map((row) => (
+                            <div
+                              key={row.label}
+                              className="flex items-baseline justify-between gap-3 text-xs"
+                            >
+                              <dt className="text-gray-500">{row.label}</dt>
+                              <dd className="truncate font-medium text-gray-800">
+                                {row.value}
+                              </dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
 
-                    <div className="flex flex-wrap justify-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={OUTLINE_ON_LIGHT}
-                        onClick={() => setEnlarged(true)}
-                      >
-                        <Maximize2 className="h-4 w-4" /> Enlarge to scan
-                      </Button>
-                      {canCopyImage && (
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           variant="outline"
                           size="sm"
                           className={OUTLINE_ON_LIGHT}
-                          onClick={handleCopyImage}
+                          onClick={() => setEnlarged(true)}
                         >
-                          {copiedImage ? (
-                            <>
-                              <Check className="h-4 w-4" /> Copied
-                            </>
-                          ) : (
-                            <>
-                              <ImageDown className="h-4 w-4" /> Copy image
-                            </>
-                          )}
+                          <Maximize2 className="h-4 w-4" /> Enlarge
                         </Button>
-                      )}
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className={OUTLINE_ON_LIGHT}
-                        onClick={handleDownloadQr}
-                      >
-                        <Download className="h-4 w-4" /> Save image
-                      </Button>
+                        {canCopyImage && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={OUTLINE_ON_LIGHT}
+                            onClick={handleCopyImage}
+                          >
+                            {copiedImage ? (
+                              <>
+                                <Check className="h-4 w-4" /> Copied
+                              </>
+                            ) : (
+                              <>
+                                <ImageDown className="h-4 w-4" /> Copy image
+                              </>
+                            )}
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className={OUTLINE_ON_LIGHT}
+                          onClick={handleDownloadQr}
+                        >
+                          <Download className="h-4 w-4" /> Save
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -602,9 +605,8 @@ const ShareInvoiceDialog = ({ open, onClose, invoiceId, chainId }) => {
                 >
                   <FileDown className="h-4 w-4" /> Download as file (.cvinv)
                 </Button>
-                <p className="mt-2 text-[11px] text-gray-500">
-                  For email or any channel that mangles long links. No link
-                  length limit.
+                <p className="mt-1.5 text-[11px] text-gray-500">
+                  For email, or any channel that mangles long links.
                 </p>
               </div>
             </div>
