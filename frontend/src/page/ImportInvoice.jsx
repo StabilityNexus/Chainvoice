@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { useAccount } from "wagmi";
 import { ConnectButton } from "@rainbow-me/rainbowkit";
 import toast from "react-hot-toast";
@@ -119,14 +119,23 @@ const ImportInvoice = () => {
   const [saving, setSaving] = useState(false);
 
   /**
-   * Claim the current attempt, and report whether it is still the latest.
+   * Start an import attempt: clear the last one and claim the latest ticket.
    *
-   * Reading a file or decoding an image is slow enough to overlap with a
-   * second pick, so a failure that arrives late must not overwrite a newer
-   * attempt that has already succeeded.
+   * Both halves matter. Clearing means a slow read never runs with the
+   * previous invoice still on screen — that invoice's Save button stayed
+   * live, so a failed read could leave someone saving the invoice they
+   * replaced. The ticket means a failure that arrives late cannot overwrite
+   * a newer attempt that has already succeeded.
+   *
+   * @returns {() => boolean} whether this attempt is still the current one
    */
-  const claimAttempt = useCallback(() => {
+  const beginAttempt = useCallback(() => {
     const ticket = ++requestRef.current;
+    setStatus("working");
+    setProblem(null);
+    setDecoded(null);
+    setVerification(null);
+    setAlreadySaved(false);
     return () => requestRef.current === ticket;
   }, []);
 
@@ -144,14 +153,8 @@ const ImportInvoice = () => {
     // verification with the faster run's payload, and handleSave would store
     // one invoice's details under another's on-chain identity, which is
     // exactly what the verification exists to prevent.
-    const isCurrent = claimAttempt();
+    const isCurrent = beginAttempt();
     const superseded = () => !isCurrent();
-
-    setStatus("working");
-    setProblem(null);
-    setDecoded(null);
-    setVerification(null);
-    setAlreadySaved(false);
 
     let share;
     try {
@@ -194,7 +197,7 @@ const ImportInvoice = () => {
     } catch {
       // A failed lookup only costs us the "already saved" hint.
     }
-  }, [claimAttempt]);
+  }, [beginAttempt]);
 
   // A tapped link or a scanned QR lands here with the token in the URL.
   const urlToken = searchParams.get(SHARE_TOKEN_PARAM);
@@ -213,8 +216,7 @@ const ImportInvoice = () => {
     async (event) => {
       const file = event.target.files?.[0];
       if (!file) return;
-      const isCurrent = claimAttempt();
-      setStatus("working");
+      const isCurrent = beginAttempt();
       try {
         await processInput(await scanQrImageFile(file));
       } catch (err) {
@@ -232,33 +234,37 @@ const ImportInvoice = () => {
         event.target.value = "";
       }
     },
-    [processInput, claimAttempt]
+    [processInput, beginAttempt]
   );
 
   const handleFile = useCallback(
     async (event) => {
       const file = event.target.files?.[0];
       if (!file) return;
-      const isCurrent = claimAttempt();
+      const isCurrent = beginAttempt();
       try {
         const text = await readInvoiceShareFile(file);
         await processInput(text);
       } catch (err) {
         console.error("[ImportInvoice] Could not read file:", err);
         if (!isCurrent()) return;
-        // A refused oversized file has a message worth showing; anything
-        // else is an unreadable file and gets the generic line.
-        toast.error(
-          err?.name === "InvoiceShareError"
-            ? err.message
-            : "Could not read that file."
-        );
+        // Reported in the panel rather than a toast, which a failed read
+        // shares with the image path — and which leaves no doubt that the
+        // invoice on screen is gone rather than still current.
+        setStatus("failed");
+        setProblem({
+          title: "Could not read that file",
+          detail:
+            err?.name === "InvoiceShareError"
+              ? err.message
+              : "That file could not be opened.",
+        });
       } finally {
         // Allow re-picking the same file after a failure.
         event.target.value = "";
       }
     },
-    [processInput, claimAttempt]
+    [processInput, beginAttempt]
   );
 
   /** Who this invoice concerns, and whether the connected wallet is one of them. */
@@ -539,23 +545,26 @@ const ImportInvoice = () => {
 
         {/* The invoice. A placeholder rather than dead space before one
             arrives, so the column reads as somewhere an invoice will go. */}
-        {/* InvoicePreview carries its own vertical margin and a generous
+        {/* Animated in, but not out. An exit animation has to keep the node
+            mounted while it plays, and AnimatePresence left it there for
+            good — an invisible copy of an invoice that had already been
+            replaced, still holding its place in the layout and still read
+            aloud by a screen reader. Nothing is gained by fading it away.
+
+            InvoicePreview carries its own vertical margin and a generous
             desktop padding, both sized for the full-width drawers it was
             written for. Overridden here rather than in the component, which
             four other pages render. */}
-        <AnimatePresence>
-          {previewInvoice && (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.35, ease: "easeOut" }}
-              className="mt-3 lg:mt-0 [&_#invoice-print]:my-0 lg:[&_#invoice-print]:p-6"
-            >
-              <InvoicePreview invoice={previewInvoice} />
-            </motion.div>
-          )}
-        </AnimatePresence>
+        {previewInvoice && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="mt-3 lg:mt-0 [&_#invoice-print]:my-0 lg:[&_#invoice-print]:p-6"
+          >
+            <InvoicePreview invoice={previewInvoice} />
+          </motion.div>
+        )}
       </div>
     </div>
   );
