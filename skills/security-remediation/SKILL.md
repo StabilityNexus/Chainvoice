@@ -107,11 +107,12 @@ from the user or from a commit you showed them and they confirmed.
 Resolve the commit link format first: run `git remote get-url origin` (or
 `git remote show origin`), normalize it to an `https://` URL (strip a
 `git@host:` SSH prefix to `https://host/`, drop a trailing `.git`, and
-strip any embedded userinfo such as `user:token@` — never let credentials
-reach a report that gets published). Build links as
-`<https-remote>/commit/<full-hash>`. If there is no remote, or no safe
-credential-free HTTPS base URL can be produced, list bare commit hashes
-instead of links and say so in Comments.
+strip any embedded userinfo such as `user:token@`). Treat a normalized URL
+that still has a query string or a fragment as unsafe too — either can
+carry a credential or token — and fall back to bare hashes for it. Build
+links as `<https-remote>/commit/<full-hash>`. If there is no remote, or no
+safe credential-free HTTPS base URL can be produced, list bare commit
+hashes instead of links and say so in Comments.
 
 Use this exact structure:
 
@@ -162,21 +163,41 @@ later.
    `sec_review_2026-09-22T14-03-00Z_5df9641.md`) and derive
    `sec_review_2026-09-22T14-03-00Z_5df9641_remediations.md` — same
    name, `_remediations` suffix before `.md`.
-2. If **every** finding from Step 2 now has either a confirmed remediation
-   or a user-provided non-remediation explanation:
-   - Create `security-reviews/` at the repo root if it doesn't exist.
-   - Move (not copy) both `<source-report>` — from wherever it actually
-     is, per Step 1, not assumed to be `unremediated-security-reviews/`
-     — and the new remediations file, into `security-reviews/`. Use
-     `git mv` if `git status` shows `<source-report>` already tracked,
+2. Always write the remediations file to `unremediated-security-reviews/`
+   first, regardless of where `<source-report>` lives. Never write it
+   next to an arbitrary source report instead: that location may be
+   tracked, and an incomplete draft can then enter a commit and expose
+   unresolved-finding details — including why they weren't fixed —
+   before anyone has agreed to publish them.
+3. If **every** finding from Step 2 now has either a confirmed remediation
+   or a user-provided non-remediation explanation, publication is
+   possible — but don't do it silently:
+   - Name both files and list any findings that will be published as
+     "not remediated," with their explanations, and ask the user to
+     explicitly approve publication before moving anything.
+   - If the user does not approve, leave both files under
+     `unremediated-security-reviews/` and say why publication is on
+     hold.
+   - On approval: create `security-reviews/` at the repo root if it
+     doesn't exist. If `<source-report>` is already inside
+     `security-reviews/` (the user named an already-published report),
+     it needs no move — just write the remediations file there directly
+     and skip the rest of this step.
+   - Otherwise, for each of the two files, check whether its destination
+     path inside `security-reviews/` already exists. If either does,
+     stop and ask the user how to resolve the collision — never let
+     `mv` silently overwrite a previously published report.
+   - Move (not copy) `<source-report>` — from wherever it actually is,
+     per Step 1 — and the remediations file into `security-reviews/`.
+     Use `git mv` for a file `git status` shows already tracked,
      otherwise plain `mv`.
    - Confirm neither file still exists at its original location
      afterward.
-3. If any finding still lacks a resolution (the user wasn't ready to
-   explain it yet, or remediation is still in progress):
-   - Save the remediations file next to `<source-report>` instead (do not
-     publish either file).
-   - Clearly list which finding(s) are still blocking publication.
+4. If any finding still lacks a resolution (the user wasn't ready to
+   explain it yet, or remediation is still in progress), or the user
+   didn't approve publication in step 3: leave the remediations file
+   under `unremediated-security-reviews/` and clearly list what's still
+   blocking publication.
 
 ## Step 7: Report to the User
 
