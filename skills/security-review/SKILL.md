@@ -404,7 +404,8 @@ this model.
   an authorization check), when the state is shared across goroutines
   without a mutex or channel.
 - Unbounded goroutine creation driven by unauthenticated input. Report
-  only when the impact is severe; see the exclusions in Step 5.
+  only when it meets the severe-impact bar defined in the General
+  exclusions (Step 5) — not routine resource exhaustion below that bar.
 
 **Error handling**
 - An ignored error return value on a security-relevant operation, such as
@@ -460,8 +461,10 @@ scope — those get no mention in the report at all.
 **General exclusions**
 - Denial of service from resource exhaustion or rate limiting, unless it
   can permanently lock funds, permanently disable a contract, or cause a
-  severe, unauthenticated-triggerable backend outage (see the Go
-  checklist's goroutine-exhaustion note for what counts as severe here).
+  severe backend outage. "Severe" here means: a single unauthenticated
+  request, or a small fixed number of them, crashes the process, exhausts
+  memory, or makes the service unresponsive to other users until it is
+  manually restarted.
 - A secret stored on disk that is already protected by OS file permissions
   or a secrets manager.
 - A missing best practice with no concrete exploit path. Code does not need
