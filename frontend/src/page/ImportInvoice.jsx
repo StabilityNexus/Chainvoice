@@ -136,6 +136,7 @@ const ImportInvoice = () => {
     setDecoded(null);
     setVerification(null);
     setAlreadySaved(false);
+    setSaving(false);
     return () => requestRef.current === ticket;
   }, []);
 
@@ -285,6 +286,11 @@ const ImportInvoice = () => {
   const handleSave = useCallback(async () => {
     if (!decoded || !verification?.onChain) return;
     const { onChain } = verification;
+    // The import controls stay usable while a save runs, so a newer import
+    // can start before this one finishes. Its outcome must not toast, navigate
+    // or release the Save button on the newer invoice's behalf.
+    const saveTicket = requestRef.current;
+    const stale = () => requestRef.current !== saveTicket;
 
     setSaving(true);
     try {
@@ -298,13 +304,15 @@ const ImportInvoice = () => {
         invoiceDataHash: onChain.invoiceDataHash,
         data: decoded.invoiceData,
       });
+      if (stale()) return;
       toast.success("Invoice saved");
       navigate(role === "sender" ? "/dashboard/sent" : "/dashboard/pending");
     } catch (err) {
+      if (stale()) return;
       console.error("[ImportInvoice] Failed to save invoice:", err);
       toast.error("Could not save the invoice locally.");
     } finally {
-      setSaving(false);
+      if (!stale()) setSaving(false);
     }
   }, [decoded, verification, role, navigate]);
 
