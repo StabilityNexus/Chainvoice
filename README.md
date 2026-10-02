@@ -150,11 +150,16 @@ forge build
 source .env
 
 4. **Deploy to Ethereum Classic**  
-forge create contracts/src/Chainvoice.sol:Chainvoice
---rpc-url $ETC_RPC_URL
---private-key $PRIVATE_KEY
---broadcast
+The script deploys the contract and, if `TREASURY_ADDRESS` / `FEE_WEI` are set,
+applies them in the same broadcast. The compiler targets `evm_version = "london"`
+(see `contracts/foundry.toml`) so the same bytecode runs on Sepolia and ETC.
 
+```bash
+forge script script/Chainvoice.s.sol:DeployChainvoice   --rpc-url etc --private-key $PRIVATE_KEY --broadcast   --verify --verifier blockscout --verifier-url https://etc.blockscout.com/api/
+```
+
+For Sepolia, use `--rpc-url sepolia --verify` (Etherscan, needs `ETHERSCAN_API_KEY`).
+After deploying, record the address in [Deployments.md](./Deployments.md).
 
 5. **Configure frontend**  
 cp frontend/.env.example frontend/.env  
