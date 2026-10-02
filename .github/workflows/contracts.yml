@@ -1,0 +1,46 @@
+name: Contracts
+
+# Nothing else builds or tests contracts/, so a contract PR could merge with a
+# broken build and no red check. This gates every change under contracts/.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'contracts/**'
+      - '.gitmodules'
+      - '.github/workflows/contracts.yml'
+  pull_request:
+    paths:
+      - 'contracts/**'
+      - '.gitmodules'
+      - '.github/workflows/contracts.yml'
+
+# Runs untrusted fork code, so it holds a read-only token and no secrets.
+permissions:
+  contents: read
+
+jobs:
+  forge:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./contracts
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: stable
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Test
+        run: forge test -vvv
