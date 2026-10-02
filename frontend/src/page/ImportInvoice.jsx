@@ -218,7 +218,12 @@ const ImportInvoice = () => {
       if (!file) return;
       const isCurrent = beginAttempt();
       try {
-        await processInput(await scanQrImageFile(file));
+        const text = await scanQrImageFile(file);
+        // processInput takes a fresh ticket of its own, so a read that was
+        // overtaken while it ran must stop here or it would replace the newer
+        // import.
+        if (!isCurrent()) return;
+        await processInput(text);
       } catch (err) {
         console.error("[ImportInvoice] Could not read QR image:", err);
         if (!isCurrent()) return;
@@ -244,6 +249,7 @@ const ImportInvoice = () => {
       const isCurrent = beginAttempt();
       try {
         const text = await readInvoiceShareFile(file);
+        if (!isCurrent()) return;
         await processInput(text);
       } catch (err) {
         console.error("[ImportInvoice] Could not read file:", err);
