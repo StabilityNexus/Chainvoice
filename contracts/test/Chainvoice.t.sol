@@ -5,6 +5,57 @@ import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import "../src/Chainvoice.sol";
 
+contract ValidCreationToken {
+    function balanceOf(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    function allowance(address, address) external pure returns (uint256) {
+        return 0;
+    }
+}
+
+contract EmptyReturnToken {
+    fallback() external {}
+}
+
+contract RevertingBalanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        revert();
+    }
+}
+
+contract ShortBalanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        assembly {
+            mstore(0, 0)
+            return(0, 31)
+        }
+    }
+
+    function allowance(address, address) external pure returns (uint256) {
+        return 0;
+    }
+}
+
+contract EmptyAllowanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    fallback() external {}
+}
+
+contract RevertingAllowanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    function allowance(address, address) external pure returns (uint256) {
+        revert();
+    }
+}
+
 contract MockERC20 {
     string public name = "Mock ERC20";
     string public symbol = "MOCK";
@@ -726,6 +777,69 @@ contract ChainvoiceTest is Test {
 
     /*                       ERC20 OPERATIONS                       */
     /* ------------------------------------------------------------ */
+
+    function testCreateInvoicesBatch_ValidToken() public {
+        address token = address(new ValidCreationToken());
+        address[] memory tos = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+        bytes32[] memory hashes = new bytes32[](1);
+        tos[0] = bob;
+        amounts[0] = 1 ether;
+        hashes[0] = keccak256("batch-token");
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, token, keccak256("single-token"));
+        vm.prank(alice);
+        chainvoice.createInvoicesBatch(tos, amounts, token, hashes);
+
+        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(alice);
+        assertEq(sent.length, 2);
+        assertEq(sent[0].tokenAddress, token);
+        assertEq(sent[1].tokenAddress, token);
+    }
+
+    function testCreateInvoicesBatch_RejectsEmptyReturnToken() public {
+        _assertTokenRejectedForSingleAndBatch(address(new EmptyReturnToken()), Chainvoice.InvalidToken.selector);
+    }
+
+    function testCreateInvoicesBatch_RejectsRevertingBalanceOf() public {
+        _assertTokenRejectedForSingleAndBatch(address(new RevertingBalanceToken()), Chainvoice.InvalidToken.selector);
+    }
+
+    function testCreateInvoicesBatch_RejectsEmptyAllowance() public {
+        _assertTokenRejectedForSingleAndBatch(address(new EmptyAllowanceToken()), Chainvoice.InvalidToken.selector);
+    }
+
+    function testCreateInvoicesBatch_RejectsRevertingAllowance() public {
+        _assertTokenRejectedForSingleAndBatch(address(new RevertingAllowanceToken()), Chainvoice.InvalidToken.selector);
+    }
+
+    function testCreateInvoicesBatch_RejectsEOA() public {
+        _assertTokenRejectedForSingleAndBatch(address(0xBEEF), Chainvoice.NotContract.selector);
+    }
+
+    function testCreateInvoicesBatch_RejectsShortBalanceReturn() public {
+        _assertTokenRejectedForSingleAndBatch(address(new ShortBalanceToken()), Chainvoice.InvalidToken.selector);
+    }
+
+    function _assertTokenRejectedForSingleAndBatch(address token, bytes4 expectedError) private {
+        address[] memory tos = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+        bytes32[] memory hashes = new bytes32[](1);
+        tos[0] = bob;
+        amounts[0] = 1 ether;
+        hashes[0] = keccak256("invalid-token");
+
+        vm.expectRevert(expectedError);
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, token, hashes[0]);
+
+        vm.expectRevert(expectedError);
+        vm.prank(alice);
+        chainvoice.createInvoicesBatch(tos, amounts, token, hashes);
+
+        assertEq(chainvoice.getSentInvoices(alice).length, 0);
+    }
 
     function testCreateInvoice_ERC20() public {
         MockERC20 token = new MockERC20();

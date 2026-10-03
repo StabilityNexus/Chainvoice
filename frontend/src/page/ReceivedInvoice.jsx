@@ -75,18 +75,21 @@ import ErrorIcon from "@mui/icons-material/Error";
 import WarningIcon from "@mui/icons-material/Warning";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
+import TableSortLabel from "@mui/material/TableSortLabel";
+import { useInvoiceFilterSort } from "@/hooks/useInvoiceFilterSort";
+import InvoiceFilterBar from "@/components/InvoiceFilterBar";
 import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
 
 const columns = [
-  { id: "select", label: "", minWidth: 50 },
-  { id: "exportSelect", label: "", minWidth: 50 },
-  { id: "fname", label: "Client", minWidth: 120 },
-  { id: "to", label: "Sender", minWidth: 150 },
-  { id: "amountDue", label: "Amount", minWidth: 100, align: "right" },
-  { id: "status", label: "Status", minWidth: 100 },
-  { id: "date", label: "Date", minWidth: 100 },
-  { id: "actions", label: "Actions", minWidth: 150 },
+  { id: "select", label: "", minWidth: 50, sortable: false },
+  { id: "exportSelect", label: "", minWidth: 50, sortable: false },
+  { id: "fname", label: "Client", minWidth: 120, sortable: true },
+  { id: "to", label: "Sender", minWidth: 150, sortable: false },
+  { id: "amountDue", label: "Amount", minWidth: 100, align: "right", sortable: true },
+  { id: "status", label: "Status", minWidth: 100, sortable: true },
+  { id: "date", label: "Date", minWidth: 100, sortable: true },
+  { id: "actions", label: "Actions", minWidth: 150, sortable: false },
 ];
 
 
@@ -155,6 +158,33 @@ function ReceivedInvoice() {
     open: false,
     selectedInvoice: null,
   });
+
+  const {
+    filteredAndSortedInvoices,
+    availableTokens,
+    filters,
+    setFilter,
+    handleSort,
+    clearFilters,
+    hasActiveFilters,
+  } = useInvoiceFilterSort(receivedInvoices, { isSent: false });
+
+  useEffect(() => {
+    setSelectedInvoices((prev) => {
+      const visibleIds = new Set(filteredAndSortedInvoices.map((inv) => inv.id));
+      const pruned = new Set([...prev].filter((id) => visibleIds.has(id)));
+      if (pruned.size === prev.size) return prev;
+      return pruned;
+    });
+  }, [filteredAndSortedInvoices]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filters.status, filters.fromDate, filters.toDate, filters.token, filters.minAmount, filters.maxAmount]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filters.sortBy, filters.sortDir]);
 
   const { tokens } = useTokenList(chainId || 1);
 
@@ -385,7 +415,7 @@ function ReceivedInvoice() {
   };
 
   const handleSelectAll = () => {
-    const unpaidInvoices = receivedInvoices.filter(
+    const unpaidInvoices = filteredAndSortedInvoices.filter(
       (inv) => !inv.isPaid && !inv.isCancelled
     );
     setSelectedInvoices(new Set(unpaidInvoices.map((inv) => inv.id)));
@@ -1222,7 +1252,7 @@ function ReceivedInvoice() {
 
   const formatDate = formatInvoiceDate;
 
-  const unpaidInvoices = receivedInvoices.filter(
+  const unpaidInvoices = filteredAndSortedInvoices.filter(
     (inv) => !inv.isPaid && !inv.isCancelled
   );
   const selectedCount = selectedInvoices.size;
@@ -1633,6 +1663,16 @@ function ReceivedInvoice() {
             </Paper>
           )}
 
+          <InvoiceFilterBar
+            filters={filters}
+            setFilter={setFilter}
+            availableTokens={availableTokens}
+            clearFilters={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            totalCount={filteredAndSortedInvoices.length}
+            rawCount={receivedInvoices.length}
+          />
+
           <Paper
             sx={{
               width: "100%",
@@ -1682,6 +1722,29 @@ function ReceivedInvoice() {
                   </p>
                 </div>
               </div>
+            ) : filteredAndSortedInvoices.length === 0 ? (
+              <div className="p-6 text-center">
+                <div className="bg-gray-50 p-8 rounded-lg">
+                  <DescriptionIcon
+                    className="text-gray-400"
+                    style={{ fontSize: 48 }}
+                  />
+                  <h3 className="text-lg font-medium text-gray-800 mt-2">
+                    No Matching Invoices
+                  </h3>
+                  <p className="text-gray-600 mt-1 mb-4">
+                    No invoices match your selected filter criteria.
+                  </p>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={clearFilters}
+                    sx={{ borderRadius: "8px" }}
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
+              </div>
             ) : (
               <>
                 <TableContainer>
@@ -1692,6 +1755,9 @@ function ReceivedInvoice() {
                           <TableCell
                             key={column.id}
                             align={column.align}
+                            sortDirection={
+                              filters.sortBy === column.id ? filters.sortDir : false
+                            }
                             sx={{
                               minWidth: column.minWidth,
                               fontWeight: 600,
@@ -1723,6 +1789,27 @@ function ReceivedInvoice() {
                                 }
                                 label=""
                               />
+
+                            ) : column.sortable ? (
+                              <TableSortLabel
+                                active={filters.sortBy === column.id}
+                                direction={
+                                  filters.sortBy === column.id
+                                    ? filters.sortDir
+                                    : "asc"
+                                }
+                                onClick={() => handleSort(column.id)}
+                                sx={{
+                                  color: "#64748b !important",
+                                  "&.Mui-active": { color: "#0369a1 !important" },
+                                  "& .MuiTableSortLabel-icon": {
+                                    color: "#0369a1 !important",
+                                  },
+                                }}
+                              >
+                                {column.label}
+                              </TableSortLabel>
+
                             ) : column.id === "exportSelect" ? (
                               <Checkbox
                                 indeterminate={
@@ -1737,6 +1824,7 @@ function ReceivedInvoice() {
                                 color="primary"
                                 inputProps={{ "aria-label": "Select invoices for export" }}
                               />
+
                             ) : (
                               column.label
                             )}
@@ -1745,18 +1833,7 @@ function ReceivedInvoice() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {receivedInvoices.length === 0 && (
-                        <TableRow>
-                          <TableCell
-                            colSpan={columns.length}
-                            align="center"
-                            sx={{ color: "#64748b", py: 4 }}
-                          >
-                            No invoices to show on this page.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                      {receivedInvoices
+                      {filteredAndSortedInvoices
                         .map((invoice) => (
                           <TableRow
                             key={invoice.id}
