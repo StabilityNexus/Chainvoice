@@ -66,22 +66,13 @@ import { cn } from "@/lib/utils";
 
 
 const columns = [
-
+  { id: "select", label: "", minWidth: 50, sortable: false },
   { id: "fname", label: "Client", minWidth: 120, sortable: true },
   { id: "to", label: "Receiver", minWidth: 150, sortable: false },
   { id: "amountDue", label: "Amount", minWidth: 100, align: "right", sortable: true },
   { id: "status", label: "Status", minWidth: 120, sortable: true },
   { id: "date", label: "Date", minWidth: 100, sortable: true },
   { id: "actions", label: "Actions", minWidth: 150, sortable: false },
-
-  { id: "select", label: "", minWidth: 50 },
-  { id: "fname", label: "Client", minWidth: 120 },
-  { id: "to", label: "Receiver", minWidth: 150 },
-  { id: "amountDue", label: "Amount", minWidth: 100, align: "right" },
-  { id: "status", label: "Status", minWidth: 120 },
-  { id: "date", label: "Date", minWidth: 100 },
-  { id: "actions", label: "Actions", minWidth: 150 },
-
 ];
 
 
@@ -802,7 +793,20 @@ function SentInvoice() {
                             }}
                           >
 
-                            {column.sortable ? (
+                            {column.id === "select" ? (
+                              <Checkbox
+                                size="small"
+                                checked={
+                                  sentInvoices.length > 0 &&
+                                  selectedExportInvoices.size === sentInvoices.length
+                                }
+                                indeterminate={
+                                  selectedExportInvoices.size > 0 &&
+                                  selectedExportInvoices.size < sentInvoices.length
+                                }
+                                onChange={handleSelectAllForExport}
+                              />
+                            ) : column.sortable ? (
                               <TableSortLabel
                                 active={filters.sortBy === column.id}
                                 direction={
@@ -821,21 +825,6 @@ function SentInvoice() {
                               >
                                 {column.label}
                               </TableSortLabel>
-
-                            {column.id === "select" ? (
-                              <Checkbox
-                                size="small"
-                                checked={
-                                  sentInvoices.length > 0 &&
-                                  selectedExportInvoices.size === sentInvoices.length
-                                }
-                                indeterminate={
-                                  selectedExportInvoices.size > 0 &&
-                                  selectedExportInvoices.size < sentInvoices.length
-                                }
-                                onChange={handleSelectAllForExport}
-                              />
-
                             ) : (
                               column.label
                             )}
