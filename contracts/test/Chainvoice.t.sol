@@ -940,10 +940,12 @@ contract ChainvoiceTest is Test {
 
     function testPayInvoicesBatch_FeeOnTransferToken_RevertShortfall() public {
         MockFeeOnTransferERC20 token = new MockFeeOnTransferERC20();
-        token.mint(bob, 300 ether);
+        token.mint(bob, 200 ether + 50);
 
         vm.startPrank(alice);
-        chainvoice.createInvoice(bob, 100 ether, address(token), keccak256("f1"));
+        // The first amount is too small to lose anything to the 1% burn, so the
+        // first transfer passes and the shortfall hits the second one.
+        chainvoice.createInvoice(bob, 50, address(token), keccak256("f1"));
         chainvoice.createInvoice(bob, 200 ether, address(token), keccak256("f2"));
         vm.stopPrank();
 
@@ -953,7 +955,7 @@ contract ChainvoiceTest is Test {
 
         uint256 fee = chainvoice.fee();
         vm.startPrank(bob);
-        token.approve(address(chainvoice), 300 ether);
+        token.approve(address(chainvoice), 200 ether + 50);
         vm.expectRevert(Chainvoice.TokenAmountShortfall.selector);
         chainvoice.payInvoicesBatch{value: fee * 2}(ids);
         vm.stopPrank();

@@ -155,7 +155,7 @@ applies them in the same broadcast. The compiler targets `evm_version = "london"
 (see `contracts/foundry.toml`) so the same bytecode runs on Sepolia and ETC.
 
 ```bash
-forge script script/Chainvoice.s.sol:DeployChainvoice   --rpc-url etc --private-key $PRIVATE_KEY --broadcast   --verify --verifier blockscout --verifier-url https://etc.blockscout.com/api/
+forge script script/Chainvoice.s.sol:DeployChainvoice   --rpc-url etc --account deployer --broadcast   --verify --verifier blockscout --verifier-url https://etc.blockscout.com/api/
 ```
 
 For Sepolia, use `--rpc-url sepolia --verify` (Etherscan, needs `ETHERSCAN_API_KEY`).

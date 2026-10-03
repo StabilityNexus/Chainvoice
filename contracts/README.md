@@ -48,7 +48,7 @@ $ anvil
 ### Deploy
 
 ```shell
-$ forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url <sepolia|etc> --private-key <your_private_key> --broadcast
+$ forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url <sepolia|etc> --account deployer --broadcast
 ```
 
 ### Cast
