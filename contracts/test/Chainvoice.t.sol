@@ -80,7 +80,7 @@ contract MockERC20 {
         return true;
     }
     
-    function transferFrom(address from, address to, uint256 amount) public returns (bool) {
+    function transferFrom(address from, address to, uint256 amount) public virtual returns (bool) {
         if (allowance[from][msg.sender] < amount) return false;
         if (balanceOf[from] < amount) return false;
         
@@ -88,6 +88,42 @@ contract MockERC20 {
         balanceOf[from] -= amount;
         balanceOf[to] += amount;
         emit Transfer(from, to, amount);
+        return true;
+    }
+}
+
+/// USDT-style token: transferFrom and approve return nothing.
+contract MockNoReturnERC20 {
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    function mint(address to, uint256 amount) public {
+        balanceOf[to] += amount;
+    }
+
+    function approve(address spender, uint256 amount) public {
+        allowance[msg.sender][spender] = amount;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public {
+        require(allowance[from][msg.sender] >= amount, "allowance");
+        require(balanceOf[from] >= amount, "balance");
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+    }
+}
+
+/// Deflationary token: burns 1% of every transfer.
+contract MockFeeOnTransferERC20 is MockERC20 {
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        if (allowance[from][msg.sender] < amount) return false;
+        if (balanceOf[from] < amount) return false;
+        uint256 burned = amount / 100;
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount - burned;
+        totalSupply -= burned;
         return true;
     }
 }
@@ -675,7 +711,7 @@ contract ChainvoiceTest is Test {
 
         vm.startPrank(bob);
         token.approve(address(chainvoice), 100 * 10**18); // Sufficient allowance
-        vm.expectRevert(Chainvoice.TokenTransferFailed.selector);
+        vm.expectRevert("SafeERC20: ERC20 operation did not succeed");
         chainvoice.payInvoice{value: fee}(0);
         vm.stopPrank();
 
@@ -758,7 +794,7 @@ contract ChainvoiceTest is Test {
 
         vm.startPrank(bob);
         token.approve(address(chainvoice), 300 * 10**18); // Sufficient allowance
-        vm.expectRevert(Chainvoice.TokenTransferFailed.selector);
+        vm.expectRevert("SafeERC20: ERC20 operation did not succeed");
         chainvoice.payInvoicesBatch{value: totalFee}(ids);
         vm.stopPrank();
 
@@ -818,6 +854,151 @@ contract ChainvoiceTest is Test {
         assertFalse(chainvoice.getInvoice(1).isPaid);
         assertEq(chainvoice.accumulatedFees(), 0);
     }
+
+    /* ------------------------------------------------------------ */
+    /*                 NON-STANDARD ERC-20 TOKENS                   */
+    /* ------------------------------------------------------------ */
+
+    function testPayInvoice_NoReturnToken_Succeeds() public {
+        MockNoReturnERC20 token = new MockNoReturnERC20();
+        token.mint(bob, 100e6);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100e6, address(token), keccak256("usdt"));
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100e6);
+        chainvoice.payInvoice{value: fee}(0);
+        vm.stopPrank();
+
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertEq(token.balanceOf(alice), 100e6);
+        assertEq(token.balanceOf(bob), 0);
+    }
+
+    function testPayInvoicesBatch_NoReturnToken_Succeeds() public {
+        MockNoReturnERC20 token = new MockNoReturnERC20();
+        token.mint(bob, 300e6);
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 100e6, address(token), keccak256("u1"));
+        chainvoice.createInvoice(bob, 200e6, address(token), keccak256("u2"));
+        vm.stopPrank();
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 300e6);
+        chainvoice.payInvoicesBatch{value: fee * 2}(ids);
+        vm.stopPrank();
+
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertTrue(chainvoice.getInvoice(1).isPaid);
+        assertEq(token.balanceOf(alice), 300e6);
+    }
+
+    function testPayInvoice_NoReturnToken_RevertingTransferRollsBack() public {
+        MockNoReturnERC20 token = new MockNoReturnERC20();
+        token.mint(bob, 50e6); // short of the 100e6 due
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100e6, address(token), keccak256("usdt"));
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100e6);
+        vm.expectRevert("balance");
+        chainvoice.payInvoice{value: fee}(0);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
+
+    function testPayInvoice_FeeOnTransferToken_RevertShortfall() public {
+        MockFeeOnTransferERC20 token = new MockFeeOnTransferERC20();
+        token.mint(bob, 100 ether);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100 ether, address(token), keccak256("fot"));
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100 ether);
+        vm.expectRevert(Chainvoice.TokenAmountShortfall.selector);
+        chainvoice.payInvoice{value: fee}(0);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertEq(token.balanceOf(alice), 0);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
+
+    function testPayInvoicesBatch_FeeOnTransferToken_RevertShortfall() public {
+        MockFeeOnTransferERC20 token = new MockFeeOnTransferERC20();
+        token.mint(bob, 200 ether + 50);
+
+        vm.startPrank(alice);
+        // The first amount is too small to lose anything to the 1% burn, so the
+        // first transfer passes and the shortfall hits the second one.
+        chainvoice.createInvoice(bob, 50, address(token), keccak256("f1"));
+        chainvoice.createInvoice(bob, 200 ether, address(token), keccak256("f2"));
+        vm.stopPrank();
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 200 ether + 50);
+        vm.expectRevert(Chainvoice.TokenAmountShortfall.selector);
+        chainvoice.payInvoicesBatch{value: fee * 2}(ids);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(token.balanceOf(alice), 0);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                      PAYMENT STATUS                          */
+    /* ------------------------------------------------------------ */
+
+    function testGetPaymentStatus_PaidInvoiceCannotBePaid() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("n"));
+
+        uint256 fee = chainvoice.fee();
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+
+        (bool canPay, , ) = chainvoice.getPaymentStatus(0, bob);
+        assertFalse(canPay);
+    }
+
+    function testGetPaymentStatus_ERC20_RequiresNativeFee() public {
+        MockERC20 token = new MockERC20();
+        address poor = address(0xD00D);
+        token.mint(poor, 100 ether);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(poor, 100 ether, address(token), keccak256("t"));
+
+        vm.prank(poor);
+        token.approve(address(chainvoice), 100 ether);
+
+        // Tokens and allowance cover the invoice, but there is no ETH for the fee.
+        (bool canPay, , ) = chainvoice.getPaymentStatus(0, poor);
+        assertFalse(canPay);
+
+        vm.deal(poor, chainvoice.fee());
+        (canPay, , ) = chainvoice.getPaymentStatus(0, poor);
+        assertTrue(canPay);
+    }
 }
-
-
