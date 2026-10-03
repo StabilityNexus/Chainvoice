@@ -40,6 +40,7 @@ contract Chainvoice {
     error WithdrawFailed();
     error InvalidPublicKey();
     error InvalidInvoiceHash();
+    error InvalidPageLimit();
 
     // ========== Storage ==========
     error InvalidNewOwner();
@@ -107,6 +108,7 @@ contract Chainvoice {
 
     // Constants
     uint256 public constant MAX_BATCH = 50;
+    uint256 public constant MAX_PAGE_LIMIT = 50;
 
     // ========== Internal Utils ==========
     function _isERC20(address token) internal view returns (bool) {
@@ -399,20 +401,57 @@ contract Chainvoice {
         }
     }
 
-    function getSentInvoices(address user) external view returns (InvoiceDetails[] memory) {
-        return _getInvoices(sentInvoices[user]);
+    /// @notice Get one page of the invoices a user has sent, newest first.
+    /// @param user The sender to look up.
+    /// @param offset How many of the newest invoices to skip.
+    /// @param limit Maximum number of invoices to return (1 to MAX_PAGE_LIMIT).
+    /// @return page Up to `limit` invoices starting at the `offset`-th newest; empty if offset >= total.
+    /// @return total The number of invoices the user has sent.
+    function getSentInvoices(
+        address user,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (InvoiceDetails[] memory page, uint256 total) {
+        return _getInvoicesPage(sentInvoices[user], offset, limit);
     }
 
-    function getReceivedInvoices(address user) external view returns (InvoiceDetails[] memory) {
-        return _getInvoices(receivedInvoices[user]);
+    /// @notice Get one page of the invoices a user has received, newest first.
+    /// @param user The recipient to look up.
+    /// @param offset How many of the newest invoices to skip.
+    /// @param limit Maximum number of invoices to return (1 to MAX_PAGE_LIMIT).
+    /// @return page Up to `limit` invoices starting at the `offset`-th newest; empty if offset >= total.
+    /// @return total The number of invoices the user has received.
+    function getReceivedInvoices(
+        address user,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (InvoiceDetails[] memory page, uint256 total) {
+        return _getInvoicesPage(receivedInvoices[user], offset, limit);
     }
 
-    function _getInvoices(uint256[] storage ids) internal view returns (InvoiceDetails[] memory) {
-        InvoiceDetails[] memory result = new InvoiceDetails[](ids.length);
-        for (uint256 i = 0; i < ids.length; i++) {
-            result[i] = invoices[ids[i]];
+    /// @dev Copies one page of ids into memory newest first: element i is
+    ///      ids[total - 1 - offset - i], so offset 0 starts at the most recently
+    ///      added invoice. The bounded limit keeps the loop, and so the call's gas,
+    ///      independent of how many invoices a user has.
+    function _getInvoicesPage(
+        uint256[] storage ids,
+        uint256 offset,
+        uint256 limit
+    ) internal view returns (InvoiceDetails[] memory page, uint256 total) {
+        if (limit == 0 || limit > MAX_PAGE_LIMIT) revert InvalidPageLimit();
+
+        total = ids.length;
+        if (offset >= total) return (new InvoiceDetails[](0), total);
+
+        // offset < total here, so total - offset cannot underflow; any larger
+        // offset returned above. i < len <= total - offset keeps the index
+        // total - 1 - offset - i at or above zero.
+        uint256 remaining = total - offset;
+        uint256 len = remaining > limit ? limit : remaining;
+        page = new InvoiceDetails[](len);
+        for (uint256 i = 0; i < len; i++) {
+            page[i] = invoices[ids[total - 1 - offset - i]];
         }
-        return result;
     }
 
     function getInvoice(uint256 invoiceId) external view returns (InvoiceDetails memory) {
