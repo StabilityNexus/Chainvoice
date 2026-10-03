@@ -1,6 +1,8 @@
 // Paging for the on-chain getSentInvoices / getReceivedInvoices views, which
-// return one page of invoices plus the total. The contract rejects a limit
-// above MAX_PAGE_LIMIT (50), so no page size here may exceed it.
+// return one page of invoices plus the total, newest first.
+
+/** Largest `limit` the views accept; a larger one reverts. */
+export const MAX_PAGE_LIMIT = 50;
 
 export const INVOICE_PAGE_SIZES = [10, 20, 50];
 export const DEFAULT_INVOICE_PAGE_SIZE = 10;
@@ -38,32 +40,4 @@ export function filterSelectionToPage(selectedIds, pageInvoices) {
     if (pageIds.has(id)) kept.add(id);
   }
   return kept;
-}
-
-/**
- * Decides what a *confirmed* transaction is allowed to do to the displayed list.
- *
- * The two halves have different scopes on purpose:
- *
- * - An optimistic row patch belongs only to the page the transaction started
- *   on. Applying it after the user has paged would patch a row against a list
- *   that never loaded it, putting stale content back on screen.
- * - The refetch must run regardless. The page now on screen may have been
- *   fetched while this transaction was still pending, so it can legitimately
- *   contain the same invoice with its pre-transaction status; skipping the
- *   refetch would leave that outdated row displayed for good.
- *
- * Neither happens until the transaction is confirmed, so a merely submitted or
- * a failed transaction changes nothing.
- */
-export function resolvePostTxUpdate({
-  startedContextKey,
-  currentContextKey,
-  confirmed = false,
-}) {
-  if (!confirmed) return { applyOptimisticUpdate: false, refresh: false };
-  return {
-    applyOptimisticUpdate: startedContextKey === currentContextKey,
-    refresh: true,
-  };
 }

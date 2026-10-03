@@ -313,7 +313,8 @@ contract ChainvoiceTest is Test {
         chainvoice.createInvoice(recipient, amount, address(0), keccak256("fuzz"));
 
         (Chainvoice.InvoiceDetails[] memory sent, ) = chainvoice.getSentInvoices(alice, 0, 10);
-        Chainvoice.InvoiceDetails memory latest = sent[sent.length - 1];
+        // Pages come back newest first, so the invoice just created leads.
+        Chainvoice.InvoiceDetails memory latest = sent[0];
 
         assertEq(latest.to, recipient);
         assertEq(latest.amountDue, amount);
@@ -575,8 +576,10 @@ contract ChainvoiceTest is Test {
         }
     }
 
-    /// @dev Checks page holds the invoices at positions [from, from + len) of a
-    ///      list whose i-th invoice has id 2i + idOffset.
+    /// @dev Checks page holds, newest first, the invoices `from` to `from + len`
+    ///      positions back from the end of a list whose i-th invoice has id
+    ///      2i + idOffset. Element i of the page is list position
+    ///      SEEDED - 1 - from - i.
     function _assertPage(
         Chainvoice.InvoiceDetails[] memory page,
         uint256 from,
@@ -585,8 +588,9 @@ contract ChainvoiceTest is Test {
     ) internal pure {
         assertEq(page.length, len);
         for (uint256 i = 0; i < len; i++) {
-            assertEq(page[i].id, 2 * (from + i) + idOffset);
-            assertEq(page[i].amountDue, from + i + 1);
+            uint256 position = SEEDED - 1 - from - i;
+            assertEq(page[i].id, 2 * position + idOffset);
+            assertEq(page[i].amountDue, position + 1);
         }
     }
 
@@ -656,7 +660,7 @@ contract ChainvoiceTest is Test {
         assertEq(page.length, 0);
     }
 
-    function testGetSentInvoices_PagingReturnsEachInvoiceOnceInOrder() public {
+    function testGetSentInvoices_PagingReturnsEachInvoiceOnceNewestFirst() public {
         _seedInvoices();
         uint256 limit = 7;
         uint256 seen = 0;
@@ -736,7 +740,7 @@ contract ChainvoiceTest is Test {
         assertEq(page.length, 0);
     }
 
-    function testGetReceivedInvoices_PagingReturnsEachInvoiceOnceInOrder() public {
+    function testGetReceivedInvoices_PagingReturnsEachInvoiceOnceNewestFirst() public {
         _seedInvoices();
         uint256 limit = 7;
         uint256 seen = 0;
@@ -750,20 +754,6 @@ contract ChainvoiceTest is Test {
         assertEq(seen, SEEDED);
     }
 
-    function testInvoiceCounts() public {
-        assertEq(chainvoice.getSentInvoicesCount(alice), 0);
-        assertEq(chainvoice.getReceivedInvoicesCount(alice), 0);
-
-        _seedInvoices();
-
-        assertEq(chainvoice.getSentInvoicesCount(alice), SEEDED);
-        assertEq(chainvoice.getReceivedInvoicesCount(alice), SEEDED);
-        assertEq(chainvoice.getReceivedInvoicesCount(bob), SEEDED);
-        assertEq(chainvoice.getSentInvoicesCount(charlie), SEEDED);
-        assertEq(chainvoice.getSentInvoicesCount(bob), 0);
-        assertEq(chainvoice.getReceivedInvoicesCount(charlie), 0);
-    }
-
     function testFuzz_GetSentInvoicesPage(uint256 offset, uint256 limit) public {
         _seedInvoices();
         offset = bound(offset, 0, SEEDED + 5);
@@ -774,7 +764,9 @@ contract ChainvoiceTest is Test {
 
         uint256 expectedLen = offset >= SEEDED ? 0 : (SEEDED - offset < limit ? SEEDED - offset : limit);
         _assertPage(page, offset, expectedLen, 0);
+    }
 
+    /* ------------------------------------------------------------ */
     /*                       ERC20 OPERATIONS                       */
     /* ------------------------------------------------------------ */
 
@@ -792,7 +784,8 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoicesBatch(tos, amounts, token, hashes);
 
-        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(alice);
+        (Chainvoice.InvoiceDetails[] memory sent, uint256 total) = chainvoice.getSentInvoices(alice, 0, 10);
+        assertEq(total, 2);
         assertEq(sent.length, 2);
         assertEq(sent[0].tokenAddress, token);
         assertEq(sent[1].tokenAddress, token);
@@ -838,7 +831,9 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoicesBatch(tos, amounts, token, hashes);
 
-        assertEq(chainvoice.getSentInvoices(alice).length, 0);
+        (Chainvoice.InvoiceDetails[] memory sent, uint256 total) = chainvoice.getSentInvoices(alice, 0, 10);
+        assertEq(total, 0);
+        assertEq(sent.length, 0);
     }
 
     function testCreateInvoice_ERC20() public {

@@ -34,7 +34,6 @@ import {
   formatPageLabel,
   fetchInvoicePage,
   filterSelectionToPage,
-  resolvePostTxUpdate,
 } from "@/utils/invoicePagination";
 import CancelIcon from "@mui/icons-material/Cancel";
 
@@ -134,12 +133,8 @@ function ReceivedInvoice() {
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchSuggestions, setBatchSuggestions] = useState([]);
 
-
-  // Identifies the list currently on screen. A payment handler captures this
-  // when it starts and compares it once the transaction resolves: if the user
-  // has paged, switched wallet or switched network in the meantime, the list
-  // the handler closed over is no longer what is displayed and must not be
-  // written back.
+  // Identifies the list on screen, so a payment handler can tell whether the
+  // user paged (or switched wallet/network) while its transaction was pending.
   const pageContextKey = `${address}-${chainId}-${page}-${rowsPerPage}`;
   const pageContextRef = useRef(pageContextKey);
   useEffect(() => {
@@ -151,7 +146,6 @@ function ReceivedInvoice() {
   const [bulkExportOpen, setBulkExportOpen] = useState(false);
   const [bulkExportFormat, setBulkExportFormat] = useState("csv");
   const [bulkExportMode, setBulkExportMode] = useState("single");
-
 
   // Drawer state
   const [drawerState, setDrawerState] = useState({
@@ -476,8 +470,6 @@ function ReceivedInvoice() {
   };
 
   const payEntireBatch = async (batchId) => {
-    if (loading || batchLoading) return;
-
     const batchInvoices = receivedInvoices.filter(
       (inv) =>
         inv.batchInfo?.batchId === batchId && !inv.isPaid && !inv.isCancelled
@@ -488,16 +480,14 @@ function ReceivedInvoice() {
       return;
     }
 
-    const batchIds = new Set(batchInvoices.map((inv) => inv.id));
-    setSelectedInvoices(batchIds);
+    setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
     toast(
       `Selected ${batchInvoices.length} invoices from batch #${batchId}`
     );
 
-    // Passed explicitly: a deferred call would re-enter through the closure
-    // captured before setSelectedInvoices landed and pay the previous
-    // selection instead of this batch.
-    await handleBatchPayment(batchIds);
+    setTimeout(() => {
+      handleBatchPayment();
+    }, 1000);
   };
 
   // UNIFORM INDIVIDUAL PAYMENT
@@ -609,26 +599,16 @@ function ReceivedInvoice() {
         toast.success("Payment successful! Paid with ETH");
       }
 
-      // The payment is confirmed at this point. The optimistic row patch is
-      // scoped to the page it started on, but the refetch is not: if the user
-      // paged while this was pending, that page may have loaded before the
-      // receipt and still show this invoice as unpaid.
-      const { applyOptimisticUpdate, refresh } = resolvePostTxUpdate({
-        startedContextKey: contextKey,
-        currentContextKey: pageContextRef.current,
-        confirmed: true,
-      });
-
-      if (applyOptimisticUpdate) {
+      // The optimistic row patch only applies if the page it started on is
+      // still the one on screen; the refetch always runs.
+      if (pageContextRef.current === contextKey) {
         setReceivedInvoice((prev) =>
           prev.map((inv) =>
             inv.id === invoiceId ? { ...inv, isPaid: true } : inv
           )
         );
       }
-      // Always refetches the page that is current when the effect re-runs, not
-      // the one captured in this closure.
-      if (refresh) setRefreshTrigger((p) => p + 1);
+      setRefreshTrigger((p) => p + 1);
     } catch (error) {
       console.error("Payment failed:", error);
       const errorMsg = getDetailedErrorMessage(error);
@@ -641,36 +621,31 @@ function ReceivedInvoice() {
   };
 
   // UNIFORM BATCH PAYMENT
-  const handleBatchPayment = async (invoiceIdsOverride) => {
-    const targetIds = invoiceIdsOverride ?? selectedInvoices;
-
-    if (!walletClient || targetIds.size === 0) return;
+  const handleBatchPayment = async () => {
+    if (!walletClient || selectedInvoices.size === 0) return;
     if (loading) {
       toast.error("Invoices are still loading. Please try again in a moment.");
       return;
     }
 
-    // Group first: only invoices on the loaded page can be grouped, so this is
-    // also the check that the selection still refers to what is on screen. A
-    // selection made before a page change would otherwise group to nothing and
-    // report success without a single payment having been sent.
-    const grouped = getGroupedInvoices(targetIds);
+    // Only invoices on the loaded page can be grouped, so grouping first also
+    // checks the selection still refers to what is on screen; otherwise a
+    // selection from an earlier page reports success having paid nothing.
+    const grouped = getGroupedInvoices(selectedInvoices);
     const payableCount = Array.from(grouped.values()).reduce(
       (count, group) => count + group.invoices.length,
       0
     );
 
-    if (payableCount === 0 || payableCount !== targetIds.size) {
+    if (payableCount !== selectedInvoices.size) {
       setSelectedInvoices(
-        filterSelectionToPage(targetIds, receivedInvoices)
+        filterSelectionToPage(selectedInvoices, receivedInvoices)
       );
       toast.error(
         "Selected invoices are no longer on this page. Please reselect."
       );
       return;
     }
-
-    let paidCount = 0;
 
     setBatchLoading(true);
     setPaymentError("");
@@ -778,14 +753,10 @@ function ReceivedInvoice() {
             `Successfully paid ${invoices.length} invoices with ETH!`
           );
         }
-
-        paidCount += invoices.length;
       }
 
       setSelectedInvoices(new Set());
-      if (paidCount > 0) {
-        toast.success("All batch payments completed successfully!");
-      }
+      toast.success("All batch payments completed successfully!");
     } catch (error) {
       console.error("Batch payment error:", error);
       const errorMsg = getDetailedErrorMessage(error);
@@ -796,14 +767,9 @@ function ReceivedInvoice() {
       );
     } finally {
       setBatchLoading(false);
-      // Some groups may have gone through before a later one failed, so refetch
-      // whenever anything was actually paid. This is deliberately not gated on
-      // the page context: a page loaded while these transactions were pending
-      // would otherwise keep showing the paid invoices as unpaid. The effect
-      // reads the current page, so this always refreshes what is on screen.
-      if (paidCount > 0) {
-        setRefreshTrigger((p) => p + 1);
-      }
+      // Earlier groups may have been paid before a later one failed, so the
+      // page is refetched either way.
+      setRefreshTrigger((p) => p + 1);
     }
   };
 
@@ -812,15 +778,8 @@ function ReceivedInvoice() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
-  // Another wallet or network has its own list; start it from the first page.
-  useEffect(() => {
-    setPage(0);
-  }, [address, chainId]);
-
   // Selection and batch actions only see the loaded page, so neither a
-  // selection nor a suggestion built from the previous page may outlive it:
-  // a suggestion left on screen while the next page loads would otherwise put
-  // ids that are no longer here back into the selection.
+  // selection nor a suggestion may outlive the page it was built from.
   useEffect(() => {
     setSelectedInvoices(new Set());
     setBatchSuggestions([]);
@@ -830,10 +789,6 @@ function ReceivedInvoice() {
   // Fetch invoices
   useEffect(() => {
     if (!walletClient || !address) return;
-
-    // A newer page, wallet or network may be requested before this one
-    // resolves; its results must not overwrite the newer ones.
-    let cancelled = false;
 
     const fetchReceivedInvoices = async () => {
       try {
@@ -860,7 +815,6 @@ function ReceivedInvoice() {
           page,
           rowsPerPage
         );
-        if (cancelled) return;
         setTotalInvoices(total);
 
         // Past the last page (e.g. a stale page number): jump to the last one,
@@ -1015,42 +969,29 @@ function ReceivedInvoice() {
           }
         }
 
-        if (cancelled) return;
         setReceivedInvoice(decryptedInvoices);
-        // A refetch of the same page may no longer carry every invoice that was
-        // selected, and suggestions are built only from what this page loaded.
+        // A refetch of the same page may no longer carry every selected invoice.
         setSelectedInvoices((prev) =>
           filterSelectionToPage(prev, decryptedInvoices)
         );
         const suggestions = findBatchSuggestions(decryptedInvoices);
         setBatchSuggestions(suggestions);
         const fee = await contract.fee();
-        if (cancelled) return;
         setFee(fee);
       } catch (error) {
-        if (cancelled) return;
         console.error("Fetch error:", error);
         setError(
           "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
         );
 
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     };
 
     fetchReceivedInvoices();
-
-
-    return () => {
-      cancelled = true;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletClient, address, tokens, chainId, refreshTrigger, page, rowsPerPage]);
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletClient, address, tokens, chainId, refreshTrigger]);
-
+  }, [walletClient, address, tokens, chainId, refreshTrigger, page, rowsPerPage]);
 
   // Relay ingestion runs independently of the display fetch above. Keeping it
   // out of the refreshTrigger cycle matters: if storing a message re-ran this
@@ -1257,10 +1198,6 @@ function ReceivedInvoice() {
   );
   const selectedCount = selectedInvoices.size;
   const grouped = getGroupedInvoices();
-  // While a page is loading, `receivedInvoices` still holds the previous one:
-  // anything that turns it into a selection would capture ids that are about to
-  // leave the screen, so every control that does is locked until it settles.
-  const batchControlsDisabled = loading || batchLoading;
 
   return (
     <>
@@ -1455,7 +1392,6 @@ function ReceivedInvoice() {
                       onClick={() => selectBatchSuggestion(suggestion)}
                       variant="contained"
                       size="small"
-                      disabled={batchControlsDisabled}
                       sx={{ minWidth: "auto" }}
                     >
                       Select & Pay
@@ -1504,7 +1440,7 @@ function ReceivedInvoice() {
                     onClick={handleSelectAll}
                     variant="outlined"
                     size="small"
-                    disabled={batchControlsDisabled || unpaidInvoices.length === 0}
+                    disabled={unpaidInvoices.length === 0}
                     sx={{ minWidth: { xs: 0, sm: 120 }, flex: { xs: 1, sm: "unset" }, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                   >
                     {unpaidInvoices.length > 0 ? `Select All (${unpaidInvoices.length})` : "Select All"}
@@ -1630,11 +1566,11 @@ function ReceivedInvoice() {
                     ))}
                   </Box>
                   <Button
-                    onClick={() => handleBatchPayment()}
+                    onClick={handleBatchPayment}
                     variant="contained"
                     color="success"
                     size="large"
-                    disabled={batchControlsDisabled}
+                    disabled={batchLoading}
                     startIcon={
                       batchLoading ? (
                         <CircularProgress size={20} color="inherit" />
@@ -1777,7 +1713,6 @@ function ReceivedInvoice() {
                                       selectedCount === unpaidInvoices.length &&
                                       unpaidInvoices.length > 0
                                     }
-                                    disabled={batchControlsDisabled}
                                     onChange={(e) => {
                                       if (e.target.checked) {
                                         handleSelectAll();
@@ -1850,11 +1785,7 @@ function ReceivedInvoice() {
                               <Checkbox
                                 checked={selectedInvoices.has(invoice.id)}
                                 onChange={() => handleSelectInvoice(invoice.id)}
-                                disabled={
-                                  batchControlsDisabled ||
-                                  invoice.isPaid ||
-                                  invoice.isCancelled
-                                }
+                                disabled={invoice.isPaid || invoice.isCancelled}
                                 color="success"
                               />
                             </TableCell>

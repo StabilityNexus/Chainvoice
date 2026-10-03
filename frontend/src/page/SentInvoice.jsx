@@ -30,7 +30,6 @@ import {
   getTotalPages,
   formatPageLabel,
   fetchInvoicePage,
-  resolvePostTxUpdate,
 } from "@/utils/invoicePagination";
 import {
   Skeleton,
@@ -180,19 +179,8 @@ function SentInvoice() {
   }, [isConnected]);
 
 
-  // Another wallet or network has its own list; start it from the first page.
-  useEffect(() => {
-    setPage(0);
-  }, [address, chainId]);
-
-
-
   useEffect(() => {
     if (!walletClient || !address) return;
-
-    // A newer page, wallet or network may be requested before this one
-    // resolves; its results must not overwrite the newer ones.
-    let cancelled = false;
 
     const fetchSentInvoices = async () => {
       try {
@@ -217,7 +205,6 @@ function SentInvoice() {
           page,
           rowsPerPage
         );
-        if (cancelled) return;
         console.log("Raw invoices data:", res);
         setTotalInvoices(total);
 
@@ -375,38 +362,23 @@ function SentInvoice() {
           }
         }
 
-        if (cancelled) return;
         setSentInvoices(decryptedInvoices);
         const fee = await contract.fee();
-        if (cancelled) return;
         setFee(fee);
       } catch (error) {
-        if (cancelled) return;
         console.error("Decryption error:", error);
         setError(
           "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
         );
 
       } finally {
-        if (!cancelled) {
-          console.log(sentInvoices);
-          setLoading(false);
-        }
+        setLoading(false);
       }
     };
 
     fetchSentInvoices();
-
-
-    return () => {
-      cancelled = true;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletClient, address, tokens, chainId, refreshTrigger, page, rowsPerPage]); // Added tokens and chainId to dependency array
-
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletClient, address, tokens, chainId, refreshTrigger]); // Added tokens and chainId to dependency array
-
+  }, [walletClient, address, tokens, chainId, refreshTrigger, page, rowsPerPage]); // Added tokens and chainId to dependency array
 
   /**
    * Re-deliver an invoice's encrypted payload to its recipient.
@@ -704,26 +676,16 @@ function SentInvoice() {
       const tx = await contract.cancelInvoice(invoiceId);
       await tx.wait();
 
-      // The cancellation is confirmed at this point. The optimistic row patch
-      // is scoped to the page it started on, but the refetch is not: if the
-      // user paged while this was pending, that page may have loaded before the
-      // receipt and still show this invoice as active.
-      const { applyOptimisticUpdate, refresh } = resolvePostTxUpdate({
-        startedContextKey: contextKey,
-        currentContextKey: pageContextRef.current,
-        confirmed: true,
-      });
-
-      if (applyOptimisticUpdate) {
+      // The optimistic row patch only applies if the page it started on is
+      // still the one on screen; the refetch always runs.
+      if (pageContextRef.current === contextKey) {
         setSentInvoices((prev) =>
           prev.map((inv) =>
             inv.id === invoiceId ? { ...inv, isCancelled: true } : inv
           )
         );
       }
-      // Always refetches the page that is current when the effect re-runs, not
-      // the one captured in this closure.
-      if (refresh) setRefreshTrigger((p) => p + 1);
+      setRefreshTrigger((p) => p + 1);
 
       toast.success("Invoice cancelled successfully");
     } catch (error) {

@@ -401,11 +401,11 @@ contract Chainvoice {
         }
     }
 
-    /// @notice Get one page of the invoices a user has sent, oldest first.
+    /// @notice Get one page of the invoices a user has sent, newest first.
     /// @param user The sender to look up.
-    /// @param offset Index of the first invoice to return.
+    /// @param offset How many of the newest invoices to skip.
     /// @param limit Maximum number of invoices to return (1 to MAX_PAGE_LIMIT).
-    /// @return page The invoices in [offset, min(offset + limit, total)); empty if offset >= total.
+    /// @return page Up to `limit` invoices starting at the `offset`-th newest; empty if offset >= total.
     /// @return total The number of invoices the user has sent.
     function getSentInvoices(
         address user,
@@ -415,11 +415,11 @@ contract Chainvoice {
         return _getInvoicesPage(sentInvoices[user], offset, limit);
     }
 
-    /// @notice Get one page of the invoices a user has received, oldest first.
+    /// @notice Get one page of the invoices a user has received, newest first.
     /// @param user The recipient to look up.
-    /// @param offset Index of the first invoice to return.
+    /// @param offset How many of the newest invoices to skip.
     /// @param limit Maximum number of invoices to return (1 to MAX_PAGE_LIMIT).
-    /// @return page The invoices in [offset, min(offset + limit, total)); empty if offset >= total.
+    /// @return page Up to `limit` invoices starting at the `offset`-th newest; empty if offset >= total.
     /// @return total The number of invoices the user has received.
     function getReceivedInvoices(
         address user,
@@ -429,21 +429,10 @@ contract Chainvoice {
         return _getInvoicesPage(receivedInvoices[user], offset, limit);
     }
 
-    /// @notice Number of invoices a user has sent.
-    /// @param user The sender to look up.
-    function getSentInvoicesCount(address user) external view returns (uint256) {
-        return sentInvoices[user].length;
-    }
-
-    /// @notice Number of invoices a user has received.
-    /// @param user The recipient to look up.
-    function getReceivedInvoicesCount(address user) external view returns (uint256) {
-        return receivedInvoices[user].length;
-    }
-
-    /// @dev Copies ids[offset, end) into memory, where end = min(offset + limit, ids.length).
-    ///      The bounded limit keeps the loop, and so the call's gas, independent of how
-    ///      many invoices a user has.
+    /// @dev Copies one page of ids into memory newest first: element i is
+    ///      ids[total - 1 - offset - i], so offset 0 starts at the most recently
+    ///      added invoice. The bounded limit keeps the loop, and so the call's gas,
+    ///      independent of how many invoices a user has.
     function _getInvoicesPage(
         uint256[] storage ids,
         uint256 offset,
@@ -454,13 +443,14 @@ contract Chainvoice {
         total = ids.length;
         if (offset >= total) return (new InvoiceDetails[](0), total);
 
-        // offset < total here, so total - offset cannot underflow, and
-        // offset + limit is only computed when it is below total, so a huge
-        // offset cannot overflow it.
-        uint256 end = total - offset > limit ? offset + limit : total;
-        page = new InvoiceDetails[](end - offset);
-        for (uint256 i = offset; i < end; i++) {
-            page[i - offset] = invoices[ids[i]];
+        // offset < total here, so total - offset cannot underflow; any larger
+        // offset returned above. i < len <= total - offset keeps the index
+        // total - 1 - offset - i at or above zero.
+        uint256 remaining = total - offset;
+        uint256 len = remaining > limit ? limit : remaining;
+        page = new InvoiceDetails[](len);
+        for (uint256 i = 0; i < len; i++) {
+            page[i] = invoices[ids[total - 1 - offset - i]];
         }
     }
 
