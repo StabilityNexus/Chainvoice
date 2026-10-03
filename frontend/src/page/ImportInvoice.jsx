@@ -1,0 +1,587 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { motion } from "framer-motion";
+import { useAccount } from "wagmi";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import toast from "react-hot-toast";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Download,
+  FileUp,
+  ImageUp,
+  Loader2,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import InvoicePreview from "@/components/InvoicePreview";
+import { cn } from "@/lib/utils";
+import { PAGE_CONTAINER } from "@/utils/layout";
+import {
+  decodeInvoiceShareInput,
+  readInvoiceShareFile,
+  scanQrImageFile,
+  SHARE_TOKEN_PARAM,
+  verifyShareAgainstChain,
+  VERIFY_OK,
+  VERIFY_FIELD_MISMATCH,
+  VERIFY_HASH_MISMATCH,
+  VERIFY_NOT_FOUND,
+  VERIFY_UNREACHABLE,
+  VERIFY_UNSUPPORTED_CHAIN,
+} from "@/services/share";
+import {
+  getInvoiceById,
+  storeInvoice,
+} from "@/services/invoiceStorage/invoiceDB.js";
+import { verifyInvoiceHash } from "@/services/relay/invoiceHashUtils.js";
+
+/**
+ * Import an invoice shared as a link, a QR code, or a `.cvinv` file.
+ *
+ * Deliberately usable before the wallet connects. Decoding needs no wallet,
+ * and verification reads the chain over a public RPC, so someone who taps a
+ * link sees the real invoice immediately instead of a connect prompt in front
+ * of a blank page. Connecting is needed only to save it.
+ *
+ * Nothing is saved on the strength of the link alone. A share token is public
+ * and anyone can edit one, so the payload is trusted only once its hash
+ * matches the `invoiceDataHash` the sender committed on-chain — the same
+ * check the relay path makes in `ReceivedInvoice`.
+ */
+
+/**
+ * Outline buttons sit on white cards inside a dark dashboard shell, and the
+ * variant sets a background but no text colour — without this it inherits the
+ * shell's white and renders invisible.
+ */
+const OUTLINE_ON_LIGHT = "border-gray-300 text-gray-700 hover:bg-gray-50";
+
+/** Wording for each way verification can fail. */
+function describeFailure(result) {
+  switch (result.code) {
+    case VERIFY_HASH_MISMATCH:
+      return {
+        title: "This invoice does not match the blockchain",
+        detail:
+          "The details in this link are not the ones the sender recorded on-chain. The link may have been edited or corrupted. Ask the sender to share it again.",
+      };
+    case VERIFY_FIELD_MISMATCH:
+      return {
+        title: "This invoice contradicts the blockchain",
+        detail: `The ${
+          result.mismatch || "details"
+        } in this link does not match the invoice recorded on-chain. Do not act on it — ask the sender to share it again.`,
+      };
+    case VERIFY_NOT_FOUND:
+      return {
+        title: "No such invoice on this network",
+        detail: `Invoice not found on ${
+          result.chainName || "this network"
+        }. The link may point at a different deployment, or the invoice was never created.`,
+      };
+    case VERIFY_UNSUPPORTED_CHAIN:
+      return {
+        title: "Network not supported yet",
+        detail: `This invoice is on ${
+          result.chainName || "a network"
+        } which this app is not configured for, so it cannot be verified here.`,
+      };
+    case VERIFY_UNREACHABLE:
+    default:
+      return {
+        title: "Could not reach the network",
+        detail: `Verification needs to read ${
+          result.chainName || "the network"
+        }, and that request failed. Check your connection and try again.`,
+      };
+  }
+}
+
+const ImportInvoice = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { address, isConnected, chainId: walletChainId } = useAccount();
+  const fileInputRef = useRef(null);
+  const imageInputRef = useRef(null);
+  // Monotonic ticket for processInput; see the comment there.
+  const requestRef = useRef(0);
+
+  const [manualInput, setManualInput] = useState("");
+  const [status, setStatus] = useState("idle");
+  const [decoded, setDecoded] = useState(null);
+  const [verification, setVerification] = useState(null);
+  const [problem, setProblem] = useState(null);
+  const [alreadySaved, setAlreadySaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  /**
+   * Start an import attempt: clear the last one and claim the latest ticket.
+   *
+   * Both halves matter. Clearing means a slow read never runs with the
+   * previous invoice still on screen — that invoice's Save button stayed
+   * live, so a failed read could leave someone saving the invoice they
+   * replaced. The ticket means a failure that arrives late cannot overwrite
+   * a newer attempt that has already succeeded.
+   *
+   * @returns {() => boolean} whether this attempt is still the current one
+   */
+  const beginAttempt = useCallback(() => {
+    const ticket = ++requestRef.current;
+    setStatus("working");
+    setProblem(null);
+    setDecoded(null);
+    setVerification(null);
+    setAlreadySaved(false);
+    setSaving(false);
+    return () => requestRef.current === ticket;
+  }, []);
+
+  /**
+   * Decode then verify.
+   *
+   * Wrapped in one call because the two are useless apart: a decoded payload
+   * that has not been checked against the chain must never reach the screen
+   * as an invoice.
+   */
+  const processInput = useCallback(async (input) => {
+    // Two runs can overlap — a token in the URL and a pasted link, or an
+    // impatient second paste — and each awaits a chain read, so they can
+    // finish out of order. Without this the slower run could pair its
+    // verification with the faster run's payload, and handleSave would store
+    // one invoice's details under another's on-chain identity, which is
+    // exactly what the verification exists to prevent.
+    const isCurrent = beginAttempt();
+    const superseded = () => !isCurrent();
+
+    let share;
+    try {
+      share = decodeInvoiceShareInput(input);
+    } catch (err) {
+      if (superseded()) return;
+      setStatus("failed");
+      setProblem({
+        title: "This link could not be read",
+        detail: err?.message || "The share code is not valid.",
+      });
+      return;
+    }
+
+    if (superseded()) return;
+    setDecoded(share);
+
+    const result = await verifyShareAgainstChain(share);
+    if (superseded()) return;
+    if (result.code !== VERIFY_OK) {
+      setStatus("failed");
+      setProblem(describeFailure(result));
+      return;
+    }
+
+    setVerification(result);
+    setStatus("verified");
+
+    // Tell the user it is already in their list rather than presenting a
+    // Save button that would be a no-op.
+    try {
+      const existing = await getInvoiceById(share.chainId, share.invoiceId);
+      if (
+        !superseded() &&
+        existing?.data &&
+        verifyInvoiceHash(existing.data, result.onChain.invoiceDataHash)
+      ) {
+        setAlreadySaved(true);
+      }
+    } catch {
+      // A failed lookup only costs us the "already saved" hint.
+    }
+  }, [beginAttempt]);
+
+  // A tapped link or a scanned QR lands here with the token in the URL.
+  const urlToken = searchParams.get(SHARE_TOKEN_PARAM);
+  useEffect(() => {
+    if (urlToken) processInput(urlToken);
+  }, [urlToken, processInput]);
+
+  /**
+   * Import from a picture of a QR code.
+   *
+   * Often all someone has: a screenshot of a chat, a photo of a printed
+   * invoice, or the card this app produced. Decoding happens in the page, so
+   * the image — which carries the whole invoice — never leaves the device.
+   */
+  const handleImage = useCallback(
+    async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const isCurrent = beginAttempt();
+      try {
+        const text = await scanQrImageFile(file);
+        // processInput takes a fresh ticket of its own, so a read that was
+        // overtaken while it ran must stop here or it would replace the newer
+        // import.
+        if (!isCurrent()) return;
+        await processInput(text);
+      } catch (err) {
+        console.error("[ImportInvoice] Could not read QR image:", err);
+        if (!isCurrent()) return;
+        setStatus("failed");
+        setProblem({
+          title: "Could not read that image",
+          detail:
+            err?.name === "InvoiceShareError"
+              ? err.message
+              : "That image could not be opened.",
+        });
+      } finally {
+        event.target.value = "";
+      }
+    },
+    [processInput, beginAttempt]
+  );
+
+  const handleFile = useCallback(
+    async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const isCurrent = beginAttempt();
+      try {
+        const text = await readInvoiceShareFile(file);
+        if (!isCurrent()) return;
+        await processInput(text);
+      } catch (err) {
+        console.error("[ImportInvoice] Could not read file:", err);
+        if (!isCurrent()) return;
+        // Reported in the panel rather than a toast, which a failed read
+        // shares with the image path — and which leaves no doubt that the
+        // invoice on screen is gone rather than still current.
+        setStatus("failed");
+        setProblem({
+          title: "Could not read that file",
+          detail:
+            err?.name === "InvoiceShareError"
+              ? err.message
+              : "That file could not be opened.",
+        });
+      } finally {
+        // Allow re-picking the same file after a failure.
+        event.target.value = "";
+      }
+    },
+    [processInput, beginAttempt]
+  );
+
+  /** Who this invoice concerns, and whether the connected wallet is one of them. */
+  const role = useMemo(() => {
+    if (!verification?.onChain || !address) return null;
+    const me = address.toLowerCase();
+    if (me === verification.onChain.to) return "recipient";
+    if (me === verification.onChain.from) return "sender";
+    return "bystander";
+  }, [verification, address]);
+
+  const handleSave = useCallback(async () => {
+    if (!decoded || !verification?.onChain) return;
+    const { onChain } = verification;
+    // The import controls stay usable while a save runs, so a newer import
+    // can start before this one finishes. Its outcome must not toast, navigate
+    // or release the Save button on the newer invoice's behalf.
+    const saveTicket = requestRef.current;
+    const stale = () => requestRef.current !== saveTicket;
+
+    setSaving(true);
+    try {
+      await storeInvoice({
+        invoiceId: decoded.invoiceId,
+        chainId: decoded.chainId,
+        from: onChain.from,
+        to: onChain.to,
+        isPaid: onChain.isPaid,
+        isCancelled: onChain.isCancelled,
+        invoiceDataHash: onChain.invoiceDataHash,
+        data: decoded.invoiceData,
+      });
+      if (stale()) return;
+      toast.success("Invoice saved");
+      navigate(role === "sender" ? "/dashboard/sent" : "/dashboard/pending");
+    } catch (err) {
+      if (stale()) return;
+      console.error("[ImportInvoice] Failed to save invoice:", err);
+      toast.error("Could not save the invoice locally.");
+    } finally {
+      if (!stale()) setSaving(false);
+    }
+  }, [decoded, verification, role, navigate]);
+
+  /** The invoice object InvoicePreview expects, built from verified pieces. */
+  const previewInvoice = useMemo(() => {
+    if (!decoded || !verification?.onChain) return null;
+    return {
+      ...decoded.invoiceData,
+      id: decoded.invoiceId,
+      isPaid: verification.onChain.isPaid,
+      isCancelled: verification.onChain.isCancelled,
+    };
+  }, [decoded, verification]);
+
+  // The page only splits once there is an invoice worth showing beside the
+  // form; before that the form is the whole page.
+  const hasInvoice = Boolean(previewInvoice);
+
+  const wrongNetwork =
+    isConnected &&
+    decoded &&
+    Number(walletChainId) !== Number(decoded.chainId);
+
+  return (
+    <div className={PAGE_CONTAINER}>
+      <div className="mb-3 sm:mb-4">
+        <h2 className="mb-2 flex items-center gap-2 text-xl font-bold text-white sm:text-2xl sm:gap-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-500/20 sm:h-10 sm:w-10">
+            <Download className="h-4 w-4 text-green-400 sm:h-5 sm:w-5" />
+          </div>
+          Import Invoice
+        </h2>
+        <p className="text-sm text-gray-300">
+          Open an invoice shared with you as a link, a QR code, or a file. Every
+          import is checked against the blockchain before it is saved.
+        </p>
+      </div>
+
+      {/* The page has two shapes. With nothing open there is only one thing
+          to do, so the form gets the full width and sits centred. Once an
+          invoice is verified it moves aside and the invoice takes the room —
+          side by side, so a verified invoice is not below the fold and the
+          Save button does not scroll away from it.
+
+          Splitting only once there is something to show also means the
+          second column never appears empty. */}
+      <div
+        className={cn(
+          "transition-all duration-500 ease-out",
+          hasInvoice
+            ? "lg:grid lg:grid-cols-[minmax(320px,400px)_1fr] lg:items-start lg:gap-4"
+            : "mx-auto max-w-2xl"
+        )}
+      >
+        {/* Sticky so the Save button stays put while a long invoice scrolls. */}
+        <div className="space-y-3 lg:sticky lg:top-4">
+          {/* Manual entry. Hidden once a link in the URL has been handled,
+              since there is nothing left to paste. */}
+          {!urlToken && (
+            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <Label className="mb-2 block text-sm font-medium text-gray-700">
+                Paste a share link
+              </Label>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <Input
+                  value={manualInput}
+                  onChange={(e) => setManualInput(e.target.value)}
+                  placeholder="https://…/#/dashboard/import?i=cv1.…"
+                  className="flex-1 border-gray-300 bg-gray-50 font-mono text-xs text-gray-700"
+                />
+                <Button
+                  onClick={() => processInput(manualInput)}
+                  disabled={!manualInput.trim() || status === "working"}
+                  className="bg-green-600 text-white hover:bg-green-700"
+                >
+                  Open invoice
+                </Button>
+              </div>
+
+              <div className="mt-4 border-t border-gray-100 pt-4">
+                <Label className="mb-2 block text-sm font-medium text-gray-700">
+                  Or open one you were sent
+                </Label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".cvinv,application/json,.json"
+                  onChange={handleFile}
+                  aria-label="Choose a shared invoice file"
+                  className="hidden"
+                />
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImage}
+                  aria-label="Choose an image of a QR code"
+                  className="hidden"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    className={OUTLINE_ON_LIGHT}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={status === "working"}
+                  >
+                    <FileUp className="h-4 w-4" /> Invoice file
+                  </Button>
+                  {/* A screenshot or photo of the code, decoded in the page. */}
+                  <Button
+                    variant="outline"
+                    className={OUTLINE_ON_LIGHT}
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={status === "working"}
+                  >
+                    <ImageUp className="h-4 w-4" /> QR image
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {status === "working" && (
+            <div className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600 shadow-sm">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Checking this invoice against the blockchain…
+            </div>
+          )}
+
+          {status === "failed" && problem && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+              <div className="flex items-start gap-3">
+                <XCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-red-600" />
+                <div>
+                  <p className="text-sm font-semibold text-red-800">
+                    {problem.title}
+                  </p>
+                  <p className="mt-1 text-sm text-red-700">{problem.detail}</p>
+                </div>
+              </div>
+              {urlToken && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className={cn("mt-3 bg-white", OUTLINE_ON_LIGHT)}
+                  onClick={() => processInput(urlToken)}
+                >
+                  Try again
+                </Button>
+              )}
+            </div>
+          )}
+
+          {status === "verified" && previewInvoice && (
+            <>
+              <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-4">
+                <ShieldCheck className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-600" />
+                <div className="text-sm text-green-800">
+                  <p className="font-semibold">Verified against the blockchain</p>
+                  <p className="mt-0.5 text-green-700">
+                    These details match invoice #{decoded.invoiceId} on{" "}
+                    {verification.chainName}, exactly as the sender recorded it.
+                  </p>
+                </div>
+              </div>
+
+              {role === "bystander" && (
+                <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
+                  <p className="text-sm text-amber-800">
+                    This invoice is between two other wallets, so there is nothing
+                    for you to save or pay. You can still read it.
+                  </p>
+                </div>
+              )}
+
+              {wrongNetwork && (
+                <div className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4">
+                  <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-600" />
+                  <p className="text-sm text-amber-800">
+                    Your wallet is on a different network. Saving still works, but
+                    switch to {verification.chainName} to see and pay this invoice.
+                  </p>
+                </div>
+              )}
+
+              {/* A connected bystander has nothing to do here — the banner
+                  above already explains why — and an empty card is worse
+                  than no card. */}
+              {!(isConnected && role === "bystander") && (
+              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                {!isConnected ? (
+                  <div className="flex flex-col items-start gap-3">
+                    <p className="text-sm text-gray-600">
+                      Connect your wallet to save this invoice and pay it.
+                    </p>
+                    <ConnectButton />
+                  </div>
+                ) : alreadySaved ? (
+                  <div className="flex flex-col items-start gap-3">
+                    <p className="flex items-center gap-2 text-sm text-gray-700">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      This invoice is already saved on this device.
+                    </p>
+                    <Button
+                      variant="outline"
+                      className={OUTLINE_ON_LIGHT}
+                      onClick={() =>
+                        navigate(
+                          role === "sender"
+                            ? "/dashboard/sent"
+                            : "/dashboard/pending"
+                        )
+                      }
+                    >
+                      Go to my invoices
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="w-full bg-green-600 text-white hover:bg-green-700 sm:w-auto"
+                  >
+                    {saving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" /> Saving…
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        {role === "sender"
+                          ? "Save to my sent invoices"
+                          : "Save to my invoices"}
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {/* The invoice. A placeholder rather than dead space before one
+            arrives, so the column reads as somewhere an invoice will go. */}
+        {/* Animated in, but not out. An exit animation has to keep the node
+            mounted while it plays, and AnimatePresence left it there for
+            good — an invisible copy of an invoice that had already been
+            replaced, still holding its place in the layout and still read
+            aloud by a screen reader. Nothing is gained by fading it away.
+
+            InvoicePreview carries its own vertical margin and a generous
+            desktop padding, both sized for the full-width drawers it was
+            written for. Overridden here rather than in the component, which
+            four other pages render. */}
+        {previewInvoice && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="mt-3 lg:mt-0 [&_#invoice-print]:my-0 lg:[&_#invoice-print]:p-6"
+          >
+            <InvoicePreview invoice={previewInvoice} />
+          </motion.div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default ImportInvoice;

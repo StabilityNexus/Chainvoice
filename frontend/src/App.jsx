@@ -46,6 +46,7 @@ export const config = getDefaultConfig({
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
 const GenerateLink = lazy(() => import("./page/GenerateLink"));
+const ImportInvoice = lazy(() => import("./page/ImportInvoice"));
 const CreateInvoicesBatch = lazy(() => import("./page/CreateInvoicesBatch"));
 const NotFound = lazy(() => import("./page/NotFound"));
 const Settings = lazy(() => import("./page/Settings"));
@@ -103,6 +104,7 @@ function App() {
                         <Route path="sent" element={<SentInvoice />} />
                         <Route path="pending" element={<ReceivedInvoice />} />
                         <Route path="generate-link" element={<GenerateLink />} />
+                        <Route path="import" element={<ImportInvoice />} />
                         <Route
                           path="batch-invoice"
                           element={<CreateInvoicesBatch />}
