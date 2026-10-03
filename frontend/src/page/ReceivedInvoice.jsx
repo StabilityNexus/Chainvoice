@@ -73,24 +73,14 @@ import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
 
 const columns = [
-
   { id: "select", label: "", minWidth: 50, sortable: false },
+  { id: "exportSelect", label: "", minWidth: 50, sortable: false },
   { id: "fname", label: "Client", minWidth: 120, sortable: true },
   { id: "to", label: "Sender", minWidth: 150, sortable: false },
   { id: "amountDue", label: "Amount", minWidth: 100, align: "right", sortable: true },
   { id: "status", label: "Status", minWidth: 100, sortable: true },
   { id: "date", label: "Date", minWidth: 100, sortable: true },
   { id: "actions", label: "Actions", minWidth: 150, sortable: false },
-
-  { id: "select", label: "", minWidth: 50 },
-  { id: "exportSelect", label: "", minWidth: 50 },
-  { id: "fname", label: "Client", minWidth: 120 },
-  { id: "to", label: "Sender", minWidth: 150 },
-  { id: "amountDue", label: "Amount", minWidth: 100, align: "right" },
-  { id: "status", label: "Status", minWidth: 100 },
-  { id: "date", label: "Date", minWidth: 100 },
-  { id: "actions", label: "Actions", minWidth: 150 },
-
 ];
 
 
