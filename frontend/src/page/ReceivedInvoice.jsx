@@ -778,17 +778,30 @@ function ReceivedInvoice() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
+  // A new wallet or network invalidates the loaded page outright. Declared
+  // before the fetch effect so nothing downstream can read invoices belonging
+  // to the previous address or chain.
+  useEffect(() => {
+    setReceivedInvoice([]);
+    setTotalInvoices(0);
+    setPage(0);
+  }, [address, chainId]);
+
   // Selection and batch actions only see the loaded page, so neither a
   // selection nor a suggestion may outlive the page it was built from.
   useEffect(() => {
     setSelectedInvoices(new Set());
     setBatchSuggestions([]);
     setBatchExportAnchorEl(null);
+    setSelectedExportInvoices(new Set());
+    setBulkExportOpen(false);
   }, [page, rowsPerPage, address, chainId]);
 
   // Fetch invoices
   useEffect(() => {
     if (!walletClient || !address) return;
+
+    let cancelled = false;
 
     const fetchReceivedInvoices = async () => {
       try {
@@ -815,6 +828,7 @@ function ReceivedInvoice() {
           page,
           rowsPerPage
         );
+        if (cancelled) return;
         setTotalInvoices(total);
 
         // Past the last page (e.g. a stale page number): jump to the last one,
@@ -969,6 +983,7 @@ function ReceivedInvoice() {
           }
         }
 
+        if (cancelled) return;
         setReceivedInvoice(decryptedInvoices);
         // A refetch of the same page may no longer carry every selected invoice.
         setSelectedInvoices((prev) =>
@@ -977,19 +992,25 @@ function ReceivedInvoice() {
         const suggestions = findBatchSuggestions(decryptedInvoices);
         setBatchSuggestions(suggestions);
         const fee = await contract.fee();
+        if (cancelled) return;
         setFee(fee);
       } catch (error) {
+        if (cancelled) return;
         console.error("Fetch error:", error);
         setError(
           "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
         );
 
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchReceivedInvoices();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [walletClient, address, tokens, chainId, refreshTrigger, page, rowsPerPage]);
 
@@ -1658,29 +1679,6 @@ function ReceivedInvoice() {
                   </p>
                 </div>
               </div>
-            ) : filteredAndSortedInvoices.length === 0 ? (
-              <div className="p-6 text-center">
-                <div className="bg-gray-50 p-8 rounded-lg">
-                  <DescriptionIcon
-                    className="text-gray-400"
-                    style={{ fontSize: 48 }}
-                  />
-                  <h3 className="text-lg font-medium text-gray-800 mt-2">
-                    No Matching Invoices
-                  </h3>
-                  <p className="text-gray-600 mt-1 mb-4">
-                    No invoices match your selected filter criteria.
-                  </p>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={clearFilters}
-                    sx={{ borderRadius: "8px" }}
-                  >
-                    Clear Filters
-                  </Button>
-                </div>
-              </div>
             ) : (
               <>
                 <TableContainer>
@@ -1768,6 +1766,28 @@ function ReceivedInvoice() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
+                      {/* Kept inside the table so pagination stays reachable. */}
+                      {filteredAndSortedInvoices.length === 0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={columns.length}
+                            align="center"
+                            sx={{ py: 6 }}
+                          >
+                            <p className="text-gray-600 mb-3">
+                              No invoices match your selected filter criteria.
+                            </p>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={clearFilters}
+                              sx={{ borderRadius: "8px" }}
+                            >
+                              Clear Filters
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )}
                       {filteredAndSortedInvoices
                         .map((invoice) => (
                           <TableRow
