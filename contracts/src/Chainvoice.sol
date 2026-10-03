@@ -109,15 +109,6 @@ contract Chainvoice {
     uint256 public constant MAX_BATCH = 50;
 
     // ========== Internal Utils ==========
-    function _isERC20(address token) internal view returns (bool) {
-        if (token == address(0)) return false;
-        if (token.code.length == 0) return false;
-        (bool success, ) = token.staticcall(
-            abi.encodeWithSignature("balanceOf(address)", address(this))
-        );
-        return success;
-    }
-
     function _validateToken(address tokenAddress) private view {
         if (tokenAddress.code.length == 0) revert NotContract();
 
