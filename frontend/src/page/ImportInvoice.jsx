@@ -352,7 +352,7 @@ const ImportInvoice = () => {
       </div>
 
       {/* The page has two shapes. With nothing open there is only one thing
-          to do, so the form gets the full width and sits centred. Once an
+          to do, so the form takes the full width of the page. Once an
           invoice is verified it moves aside and the invoice takes the room —
           side by side, so a verified invoice is not below the fold and the
           Save button does not scroll away from it.
@@ -362,9 +362,8 @@ const ImportInvoice = () => {
       <div
         className={cn(
           "transition-all duration-500 ease-out",
-          hasInvoice
-            ? "lg:grid lg:grid-cols-[minmax(320px,400px)_1fr] lg:items-start lg:gap-4"
-            : "mx-auto max-w-2xl"
+          hasInvoice &&
+            "lg:grid lg:grid-cols-[minmax(320px,400px)_1fr] lg:items-start lg:gap-4"
         )}
       >
         {/* Sticky so the Save button stays put while a long invoice scrolls. */}
