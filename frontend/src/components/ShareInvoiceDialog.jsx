@@ -537,9 +537,9 @@ const ShareInvoiceDialog = ({ open, onClose, invoiceId, chainId }) => {
                           {summary.rows.map((row) => (
                             <div
                               key={row.label}
-                              className="flex items-baseline justify-between gap-3 text-xs"
+                              className="flex items-baseline gap-1 text-xs"
                             >
-                              <dt className="text-gray-500">{row.label}</dt>
+                              <dt className="text-gray-500">{row.label}:</dt>
                               <dd className="truncate font-medium text-gray-800">
                                 {row.value}
                               </dd>
