@@ -340,10 +340,10 @@ function ReceivedInvoice() {
     }
   };
 
-  const getGroupedInvoices = () => {
+  const getGroupedInvoices = (ids = selectedInvoices) => {
     const grouped = new Map();
     receivedInvoices.forEach((invoice) => {
-      if (!selectedInvoices.has(invoice.id)) return;
+      if (!ids.has(invoice.id)) return;
 
       const tokenAddress = invoice.paymentToken?.address || ethers.ZeroAddress;
       const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"}`;
@@ -462,14 +462,13 @@ function ReceivedInvoice() {
       return;
     }
 
-    setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
+    const batchIds = new Set(batchInvoices.map((inv) => inv.id));
+    setSelectedInvoices(batchIds);
     toast(
       `Selected ${batchInvoices.length} invoices from batch #${batchId}`
     );
 
-    setTimeout(() => {
-      handleBatchPayment();
-    }, 1000);
+    await handleBatchPayment(batchIds);
   };
 
   // UNIFORM INDIVIDUAL PAYMENT
@@ -593,8 +592,8 @@ function ReceivedInvoice() {
   };
 
   // UNIFORM BATCH PAYMENT
-  const handleBatchPayment = async () => {
-    if (!walletClient || selectedInvoices.size === 0) return;
+  const handleBatchPayment = async (ids = selectedInvoices) => {
+    if (!walletClient || ids.size === 0) return;
 
     setBatchLoading(true);
     setPaymentError("");
@@ -613,7 +612,7 @@ function ReceivedInvoice() {
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-      const grouped = getGroupedInvoices();
+      const grouped = getGroupedInvoices(ids);
 
       // BALANCE CHECK (same as individual)
       toast("Checking balances...");
@@ -1494,7 +1493,7 @@ function ReceivedInvoice() {
                     ))}
                   </Box>
                   <Button
-                    onClick={handleBatchPayment}
+                    onClick={() => handleBatchPayment()}
                     variant="contained"
                     color="success"
                     size="large"
