@@ -61,6 +61,7 @@ import {
   validateBatchInvoiceData,
 } from "@/utils/invoiceValidation";
 import { toInvoiceUserDetails } from "@/utils/userProfile";
+import { toCalendarDate } from "@/utils/invoiceDates";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import SenderSummary from "@/components/SenderSummary";
@@ -554,8 +555,8 @@ function CreateInvoicesBatch() {
 
         const invoicePayload = {
           amountDue: row.totalAmountDue.toString(),
-          dueDate,
-          issueDate,
+          dueDate: toCalendarDate(dueDate),
+          issueDate: toCalendarDate(issueDate),
           paymentToken: {
             address: paymentToken.address,
             symbol: paymentToken.symbol,

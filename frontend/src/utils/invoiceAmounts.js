@@ -1,4 +1,5 @@
 import { ethers } from "ethers";
+import { formatCalendarDate } from "./invoiceDates";
 
 /**
  * Resolve the decimals to format an on-chain invoice amount with.
@@ -37,13 +38,10 @@ export function resolveInvoiceDecimals(paymentToken) {
  * carry — the chain does not store invoice dates, so a stub has none.
  *
  * @param {string|number|Date|null|undefined} value
- * @returns {string} a localised date-time, or an em dash placeholder
+ * @returns {string} the calendar day, or an em dash placeholder
  */
 export function formatInvoiceDate(value) {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString();
+  return formatCalendarDate(value, "—");
 }
 
 /**

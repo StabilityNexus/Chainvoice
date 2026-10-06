@@ -1,3 +1,5 @@
+import { isPastDue, parseInvoiceDate, toCalendarDate } from "./invoiceDates";
+
 /**
  * Pure helper function for filtering and sorting invoice arrays.
  */
@@ -25,30 +27,19 @@ export function filterAndSortInvoices(
       if (inv.isPaid || inv.isCancelled) return false;
     } else if (status === "overdue") {
       if (inv.isPaid || inv.isCancelled) return false;
-      if (!inv.dueDate) return false;
-      const dueTs = new Date(inv.dueDate).getTime();
-      if (isNaN(dueTs) || dueTs >= Date.now()) return false;
+      if (!isPastDue(inv.dueDate)) return false;
     } else if (status === "cancelled") {
       if (!inv.isCancelled) return false;
     }
 
-    // 2. Date Range Filter
-    if (fromDate) {
-      const fromTs = new Date(`${fromDate}T00:00:00`).getTime();
-      if (!isNaN(fromTs)) {
-        if (!inv.issueDate) return false;
-        const invTs = new Date(inv.issueDate).getTime();
-        if (isNaN(invTs) || invTs < fromTs) return false;
-      }
-    }
-
-    if (toDate) {
-      const toTs = new Date(`${toDate}T23:59:59.999`).getTime();
-      if (!isNaN(toTs)) {
-        if (!inv.issueDate) return false;
-        const invTs = new Date(inv.issueDate).getTime();
-        if (isNaN(invTs) || invTs > toTs) return false;
-      }
+    // 2. Date Range Filter (calendar days, so "YYYY-MM-DD" compares lexically)
+    const from = toCalendarDate(fromDate);
+    const to = toCalendarDate(toDate);
+    if (from || to) {
+      const issued = toCalendarDate(inv.issueDate);
+      if (!issued) return false;
+      if (from && issued < from) return false;
+      if (to && issued > to) return false;
     }
 
     // 3. Token Filter
@@ -111,9 +102,9 @@ export function filterAndSortInvoices(
       let cmp = 0;
 
       if (sortBy === "date") {
-        const timeA = a.issueDate ? new Date(a.issueDate).getTime() : 0;
-        const timeB = b.issueDate ? new Date(b.issueDate).getTime() : 0;
-        cmp = (isNaN(timeA) ? 0 : timeA) - (isNaN(timeB) ? 0 : timeB);
+        const timeA = parseInvoiceDate(a.issueDate)?.getTime() ?? 0;
+        const timeB = parseInvoiceDate(b.issueDate)?.getTime() ?? 0;
+        cmp = timeA - timeB;
       } else if (sortBy === "amountDue" || sortBy === "amount") {
         try {
           const toBigDecimal = (val) => {
@@ -142,10 +133,7 @@ export function filterAndSortInvoices(
         const getStatusRank = (inv) => {
           if (inv.isCancelled) return 4;
           if (inv.isPaid) return 3;
-          if (inv.dueDate && !inv.isPaid && !inv.isCancelled) {
-            const dueTs = new Date(inv.dueDate).getTime();
-            if (!isNaN(dueTs) && dueTs < Date.now()) return 2;
-          }
+          if (isPastDue(inv.dueDate)) return 2;
           return 1;
         };
         cmp = getStatusRank(a) - getStatusRank(b);

@@ -2,6 +2,7 @@
 
 import { ethers } from "ethers";
 import { getWagmiChainInfo } from "./wagmiChainHelpers";
+import { formatCalendarDate, toCalendarDate } from "./invoiceDates";
 
 /**
  * Resolve chain and token metadata for an invoice.
@@ -69,31 +70,13 @@ export const normalizeItem = (item) => ({
  * Convert a date value to a locale-formatted string for CSV / PDF display.
  * Returns an empty string when the input is missing or invalid.
  */
-export const toDisplayDate = (value) => {
-  if (!value) return "";
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-};
+export const toDisplayDate = (value) => formatCalendarDate(value);
 
 /**
  * Convert a date value to a date-only ISO string (YYYY-MM-DD) for JSON export.
  * Returns null when the input is missing or invalid.
  */
-export const toISODate = (value) => {
-  if (!value) return null;
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return null;
-  // Use UTC components to avoid timezone-shift issues
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-};
+export const toISODate = (value) => toCalendarDate(value);
 
 /**
  * Format the total amount display for an invoice drawer.

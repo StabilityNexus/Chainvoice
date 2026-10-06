@@ -33,6 +33,7 @@ function getNetworkName(chainId) {
 }
 
 import { ethers } from "ethers";
+import { formatCalendarDate } from "@/utils/invoiceDates";
 import { Chip, Typography } from "@mui/material";
 import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
@@ -293,11 +294,7 @@ const InvoicePreview = ({
                 Issued:
               </span>
               <span className="text-gray-600">
-                {new Date(invoice.issueDate).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
+                {formatCalendarDate(invoice.issueDate, "—")}
               </span>
             </div>
             <div className="flex items-center">
@@ -305,11 +302,7 @@ const InvoicePreview = ({
                 Due:
               </span>
               <span className="text-gray-600">
-                {new Date(invoice.dueDate).toLocaleDateString("en-US", {
-                  year: "numeric",
-                  month: "short",
-                  day: "numeric",
-                })}
+                {formatCalendarDate(invoice.dueDate, "—")}
               </span>
             </div>
           </div>

@@ -5,6 +5,7 @@ import {
   formatNetworkFeeValue,
   resolveInvoicePaymentContext,
 } from "./invoicePaymentSymbols";
+import { formatCalendarDate } from "./invoiceDates";
 
 /**
  * Load logo image with multiple fallback methods
@@ -396,16 +397,8 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   pdf.setTextColor(...darkGray);
   pdf.setFontSize(9);
   pdf.setFont("helvetica", "normal");
-  const issueDate = new Date(invoice.issueDate).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-  const dueDate = new Date(invoice.dueDate).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const issueDate = formatCalendarDate(invoice.issueDate, "N/A");
+  const dueDate = formatCalendarDate(invoice.dueDate, "N/A");
   pdf.text(`Issued: ${issueDate}`, 25, yPos + 5.5);
   pdf.text(`Due: ${dueDate}`, 160, yPos + 5.5);
 

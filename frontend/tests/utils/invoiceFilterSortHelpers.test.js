@@ -147,6 +147,23 @@ describe("filterAndSortInvoices helper", () => {
     expect(resToStrict.map((i) => i.id)).toEqual(["2", "1"]);
   });
 
+  it("matches legacy timestamps against the date range by their local day", () => {
+    // 18:30 UTC on Feb 14 is 00:00 on Feb 15 in the test zone (Asia/Kolkata).
+    const legacy = [{ id: "1", issueDate: "2026-02-14T18:30:00.000Z" }];
+
+    expect(filterAndSortInvoices(legacy, { fromDate: "2026-02-15" })).toHaveLength(1);
+    expect(filterAndSortInvoices(legacy, { toDate: "2026-02-14" })).toHaveLength(0);
+  });
+
+  it("does not treat an invoice due today as overdue", () => {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+    const dueToday = [{ id: "1", isPaid: false, isCancelled: false, dueDate: today }];
+
+    expect(filterAndSortInvoices(dueToday, { status: "overdue" })).toHaveLength(0);
+  });
+
   it("sorts by client correctly for both sent and received invoice branches", () => {
     const clientInvoices = [
       {
