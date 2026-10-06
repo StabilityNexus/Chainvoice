@@ -114,6 +114,13 @@ export function buildDerivationMessage({ origin, address }) {
  * @returns {Promise<{privateKey: Uint8Array, publicKey: Uint8Array}>}
  */
 export async function deriveRelayKeyPair(signer, address, rememberSession = false) {
+  // Built before the cache lookups so a page without a real origin is
+  // rejected even when a key is already cached.
+  const message = buildDerivationMessage({
+    origin: globalThis.location?.origin,
+    address,
+  });
+
   // Check in-memory cache first (avoids re-derivation within the same page session)
   const memCached = getMemoryCachedKeys(address);
   if (memCached) return memCached;
@@ -134,9 +141,7 @@ export async function deriveRelayKeyPair(signer, address, rememberSession = fals
 
   const startedAtGeneration = currentGeneration(cacheKey);
   const derivation = (async () => {
-    const signature = await signer.signMessage(
-      buildDerivationMessage({ origin: globalThis.location?.origin, address })
-    );
+    const signature = await signer.signMessage(message);
 
     // Use keccak256 of the raw signature bytes as the private key (32 bytes)
     const privateKeyHex = ethers.keccak256(signature);

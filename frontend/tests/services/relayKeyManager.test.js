@@ -129,6 +129,26 @@ describe("deriveRelayKeyPair", () => {
     expect(signer.signMessage).not.toHaveBeenCalled();
   });
 
+  it("refuses a memory-cached key when there is no origin", async () => {
+    await deriveRelayKeyPair(makeSigner(), ADDRESS);
+    globalThis.location = { origin: "null" };
+    await expect(deriveRelayKeyPair(makeSigner(), ADDRESS)).rejects.toThrow(
+      /origin is required/i
+    );
+  });
+
+  it("refuses a session-cached key when there is no origin", async () => {
+    await deriveRelayKeyPair(makeSigner(), ADDRESS, true);
+
+    jest.resetModules();
+    const reloaded = await import("../../src/services/relay/relayKeyManager.js");
+    globalThis.location = { origin: "null" };
+
+    await expect(
+      reloaded.deriveRelayKeyPair(makeSigner(), ADDRESS, true)
+    ).rejects.toThrow(/origin is required/i);
+  });
+
   it("treats addresses case-insensitively", async () => {
     const signer = makeSigner();
     await deriveRelayKeyPair(signer, ADDRESS);
