@@ -471,6 +471,8 @@ contract Chainvoice {
         uint256 amount = accumulatedFees;
         accumulatedFees = 0;
 
+        // Destination is the owner-set treasury, so a permissionless trigger is safe.
+        // slither-disable-next-line arbitrary-send-eth
         (bool success, ) = payable(treasuryAddress).call{value: amount}("");
         if (!success) revert WithdrawFailed();
     }
