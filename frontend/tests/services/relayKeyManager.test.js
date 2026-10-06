@@ -8,10 +8,12 @@ import {
   registerPublicKeyOnChain,
   hexToBytes,
   bytesToHex,
-  DERIVATION_MESSAGE,
+  buildDerivationMessage,
 } from "../../src/services/relay/relayKeyManager.js";
 
 const ADDRESS = "0x69fF0f180e74112cF707DdDEC729095631c4B809";
+const ORIGIN = "https://chainvoice.stability.nexus";
+const MESSAGE = buildDerivationMessage({ origin: ORIGIN, address: ADDRESS });
 
 /** Minimal sessionStorage stand-in; jsdom is not configured for these tests. */
 function installSessionStorage() {
@@ -38,7 +40,48 @@ function makeSigner() {
 let store;
 beforeEach(() => {
   store = installSessionStorage();
+  globalThis.location = { origin: ORIGIN };
   clearCachedKeys(ADDRESS);
+});
+
+afterAll(() => {
+  delete globalThis.location;
+});
+
+describe("buildDerivationMessage", () => {
+  it("names the version, origin and checksummed address", () => {
+    expect(MESSAGE).toContain("Key Derivation v3");
+    expect(MESSAGE).toContain(`Origin: ${ORIGIN}`);
+    expect(MESSAGE).toContain(`Address: ${ADDRESS}`);
+    expect(MESSAGE).toContain(`Only sign it on ${ORIGIN}`);
+  });
+
+  it("is the same whatever the address casing", () => {
+    expect(
+      buildDerivationMessage({ origin: ORIGIN, address: ADDRESS.toLowerCase() })
+    ).toBe(MESSAGE);
+  });
+
+  it("differs per origin", () => {
+    expect(
+      buildDerivationMessage({ origin: "https://evil.example", address: ADDRESS })
+    ).not.toBe(MESSAGE);
+  });
+
+  it.each(["", "null", undefined])(
+    "refuses to build without a real origin (%p)",
+    (origin) => {
+      expect(() => buildDerivationMessage({ origin, address: ADDRESS })).toThrow(
+        /origin is required/i
+      );
+    }
+  );
+
+  it("rejects an invalid address", () => {
+    expect(() =>
+      buildDerivationMessage({ origin: ORIGIN, address: "0x1234" })
+    ).toThrow();
+  });
 });
 
 describe("deriveRelayKeyPair", () => {
@@ -63,10 +106,27 @@ describe("deriveRelayKeyPair", () => {
     expect(signer.signMessage).toHaveBeenCalledTimes(1);
   });
 
-  it("signs the documented derivation message", async () => {
+  it("signs the message bound to the current origin and address", async () => {
     const signer = makeSigner();
     await deriveRelayKeyPair(signer, ADDRESS);
-    expect(signer.signMessage).toHaveBeenCalledWith(DERIVATION_MESSAGE);
+    expect(signer.signMessage).toHaveBeenCalledWith(MESSAGE);
+  });
+
+  it("derives a different keypair on a different origin", async () => {
+    const ours = await deriveRelayKeyPair(makeSigner(), ADDRESS);
+    clearCachedKeys(ADDRESS);
+    globalThis.location = { origin: "https://evil.example" };
+    const theirs = await deriveRelayKeyPair(makeSigner(), ADDRESS);
+    expect(bytesToHex(theirs.privateKey)).not.toBe(bytesToHex(ours.privateKey));
+  });
+
+  it("never asks for a signature when there is no origin", async () => {
+    delete globalThis.location;
+    const signer = makeSigner();
+    await expect(deriveRelayKeyPair(signer, ADDRESS)).rejects.toThrow(
+      /origin is required/i
+    );
+    expect(signer.signMessage).not.toHaveBeenCalled();
   });
 
   it("treats addresses case-insensitively", async () => {
@@ -295,22 +355,25 @@ describe("malformed cache entries", () => {
 });
 
 describe("derivation version migration", () => {
-  it("ignores a key cached under the previous derivation version", async () => {
-    // A v1 record must not be served to v2 callers: registering a stale key on
-    // the redeployed registry would leave it permanently mismatched against the
-    // key the same wallet derives after a reload.
+  it.each([
+    ["v1", "chainvoice_relay_keys_"],
+    ["v2", "chainvoice_relay_keys_v2_"],
+  ])("ignores a key cached under the %s derivation", async (_label, prefix) => {
+    // An older record must not be served to current callers: registering a
+    // stale key on the redeployed registry would leave it permanently
+    // mismatched against the key the same wallet derives after a reload.
     const { privateKey, publicKey } = await deriveRelayKeyPair(
       makeSigner(),
       ADDRESS,
       true
     );
-    const v1Record = JSON.stringify({
+    const staleRecord = JSON.stringify({
       privateKey: bytesToHex(privateKey),
       publicKey: bytesToHex(publicKey),
     });
 
     store.clear();
-    store.set(`chainvoice_relay_keys_${ADDRESS.toLowerCase()}`, v1Record);
+    store.set(`${prefix}${ADDRESS.toLowerCase()}`, staleRecord);
 
     jest.resetModules();
     const reloaded = await import("../../src/services/relay/relayKeyManager.js");
@@ -325,7 +388,7 @@ describe("derivation version migration", () => {
 
   it("stores under the versioned prefix", async () => {
     await deriveRelayKeyPair(makeSigner(), ADDRESS, true);
-    expect([...store.keys()].every((k) => k.includes("_v2_"))).toBe(true);
+    expect([...store.keys()].every((k) => k.includes("_v3_"))).toBe(true);
   });
 });
 
@@ -343,7 +406,7 @@ describe("concurrent derivation", () => {
 
     const first = deriveRelayKeyPair({ signMessage }, ADDRESS, true);
     const second = deriveRelayKeyPair({ signMessage }, ADDRESS, true);
-    complete(await wallet.signMessage(DERIVATION_MESSAGE));
+    complete(await wallet.signMessage(MESSAGE));
     const [a, b] = await Promise.all([first, second]);
 
     expect(signMessage).toHaveBeenCalledTimes(1);
@@ -363,7 +426,7 @@ describe("clearing during an in-flight derivation", () => {
     );
     return {
       signer: { signMessage },
-      finish: async () => complete(await wallet.signMessage(DERIVATION_MESSAGE)),
+      finish: async () => complete(await wallet.signMessage(MESSAGE)),
     };
   }
 

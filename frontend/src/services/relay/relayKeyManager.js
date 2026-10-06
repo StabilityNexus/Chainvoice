@@ -1,23 +1,23 @@
 import { ethers } from 'ethers';
 
 /**
- * Message the user signs to derive their messaging keypair.
+ * Version of the message the user signs to derive their messaging keypair.
  *
- * Treat this as a wire-compatibility constant: the derived public key is
+ * Treat the message as a wire-compatibility format: the derived public key is
  * what users register on-chain, and a different message derives a different
  * key, silently breaking decryption for anyone who registered under the old
  * one. It may only change alongside a contract redeployment, which clears
  * the registry and forces everyone to re-register anyway. Bump the version
- * suffix if that ever happens again.
+ * if that ever happens again.
  */
-const DERIVATION_MESSAGE = 'ChainVoice Messaging Key Derivation v2';
+const DERIVATION_VERSION = 3;
 // Versioned with the derivation message. Without this, a tab still holding a
-// key derived from the v1 message would have it served straight from the
+// key derived from an older message would have it served straight from the
 // session cache — and register that stale key on the redeployed registry,
-// where it would never match the v2 key the same wallet derives after a
-// reload. Bumping the prefix alongside DERIVATION_MESSAGE makes old records
+// where it would never match the key the same wallet derives after a reload.
+// Bumping the prefix alongside DERIVATION_VERSION makes old records
 // unreadable rather than silently wrong.
-const KEY_STORAGE_PREFIX = 'chainvoice_relay_keys_v2_';
+const KEY_STORAGE_PREFIX = `chainvoice_relay_keys_v${DERIVATION_VERSION}_`;
 
 /** secp256k1 key sizes, as the on-chain registry validates them. */
 const PRIVATE_KEY_BYTES = 32;
@@ -74,12 +74,39 @@ function bytesToHex(bytes) {
 }
 
 /**
+ * Build the message the user signs to derive their messaging keypair.
+ *
+ * The signature determines the private key, so any site that gets a user to
+ * sign the same text can decrypt their invoices. Naming the origin means a
+ * lookalike site either shows its own origin, deriving a useless key, or
+ * shows ours, which the wallet prompt lets the user catch.
+ *
+ * @param {{origin: string, address: string}} params
+ * @returns {string}
+ */
+export function buildDerivationMessage({ origin, address }) {
+  // Opaque origins (file://, sandboxed frames) serialize as the string "null".
+  if (!origin || origin === 'null') {
+    throw new Error('An origin is required to derive messaging keys');
+  }
+  return [
+    `ChainVoice Messaging Key Derivation v${DERIVATION_VERSION}`,
+    '',
+    `Origin: ${origin}`,
+    `Address: ${ethers.getAddress(address)}`,
+    '',
+    'Signing this creates the key that decrypts your ChainVoice invoices.',
+    `Only sign it on ${origin}. Any other site asking for this signature can read your invoices.`,
+  ].join('\n');
+}
+
+/**
  * Derive an ECIES keypair from a wallet signature.
  *
- * The user signs a deterministic message, and we use keccak256 of the
- * signature as the 32-byte private key for secp256k1. This ensures the
- * same wallet always derives the same key pair, so the key never has to
- * be stored anywhere durable.
+ * The user signs a deterministic message bound to this origin and address,
+ * and we use keccak256 of the signature as the 32-byte private key for
+ * secp256k1. This ensures the same wallet always derives the same key pair,
+ * so the key never has to be stored anywhere durable.
  *
  * @param {import('ethers').Signer} signer - ethers v6 signer
  * @param {string} address - wallet address
@@ -107,8 +134,9 @@ export async function deriveRelayKeyPair(signer, address, rememberSession = fals
 
   const startedAtGeneration = currentGeneration(cacheKey);
   const derivation = (async () => {
-    // Sign deterministic message to derive keys
-    const signature = await signer.signMessage(DERIVATION_MESSAGE);
+    const signature = await signer.signMessage(
+      buildDerivationMessage({ origin: globalThis.location?.origin, address })
+    );
 
     // Use keccak256 of the raw signature bytes as the private key (32 bytes)
     const privateKeyHex = ethers.keccak256(signature);
@@ -313,4 +341,4 @@ export async function fetchPublicKeyFromChain(contract, userAddress) {
   return publicKey;
 }
 
-export { hexToBytes, bytesToHex, DERIVATION_MESSAGE };
+export { hexToBytes, bytesToHex };

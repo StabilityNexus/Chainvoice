@@ -13,7 +13,7 @@ export {
   getCachedKeyPair,
   hexToBytes,
   bytesToHex,
-  DERIVATION_MESSAGE,
+  buildDerivationMessage,
 } from './relayKeyManager.js';
 export {
   encryptPayload,
