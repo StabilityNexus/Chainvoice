@@ -183,9 +183,12 @@ export default function InvoiceFilterBar({
                 borderRadius: "8px",
                 textTransform: "none",
                 fontSize: "0.875rem",
-                color: "#64748b",
-                borderColor: "#cbd5e1",
-                "&:hover": { borderColor: "#94a3b8", backgroundColor: "#f8fafc" },
+                color: "hsl(var(--muted-foreground))",
+                borderColor: "hsl(var(--border))",
+                "&:hover": {
+                  borderColor: "hsl(var(--muted-foreground))",
+                  backgroundColor: "hsl(var(--accent))",
+                },
               }}
             >
               {t("clearFilters")}
@@ -195,7 +198,7 @@ export default function InvoiceFilterBar({
 
         {/* Showing results count when filters active */}
         {hasActiveFilters && (
-          <div className="text-xs font-medium text-slate-500 w-full lg:w-auto text-left lg:text-right mt-1 lg:mt-0">
+          <div className="text-xs font-medium text-muted-foreground w-full lg:w-auto text-left lg:text-right mt-1 lg:mt-0">
             {t("showingResults", { totalCount, rawCount })}
           </div>
         )}
