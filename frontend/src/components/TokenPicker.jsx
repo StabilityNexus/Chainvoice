@@ -137,12 +137,10 @@ const TokenItem = memo(function TokenItem({
       )}
     >
       <Avatar
-        src={token.image || token.logo || `${import.meta.env.BASE_URL}tokenImages/generic.png`}
+        src={token.image || token.logo}
+        fallbackSrc={`${import.meta.env.BASE_URL}tokenImages/generic.png`}
         alt={`${token.name} icon`}
         className="w-10 h-10 flex-shrink-0"
-        onError={(e) => {
-          e.currentTarget.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
-        }}
       >
         {token.symbol.slice(0, 2)}
       </Avatar>
@@ -259,14 +257,10 @@ export function TokenPicker({
         {selected ? (
           <div className="flex items-center gap-3">
             <Avatar
-              src={
-                selected.image || selected.logo || `${import.meta.env.BASE_URL}tokenImages/generic.png`
-              }
+              src={selected.image || selected.logo}
+              fallbackSrc={`${import.meta.env.BASE_URL}tokenImages/generic.png`}
               alt={`${selected.name} icon`}
               className="w-6 h-6"
-              onError={(e) => {
-                e.currentTarget.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
-              }}
             >
               {selected.symbol.slice(0, 2)}
             </Avatar>
