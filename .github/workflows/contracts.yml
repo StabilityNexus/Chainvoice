@@ -44,3 +44,34 @@ jobs:
 
       - name: Test
         run: forge test -vvv
+
+  slither:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: ./contracts
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: stable
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      # Run on the runner rather than via crytic/slither-action: its Docker
+      # container has no forge, which crytic-compile needs for Foundry projects.
+      - name: Install Slither
+        run: pip install slither-analyzer==0.11.6
+
+      - name: Run Slither
+        run: slither . --config-file slither.config.json --fail-high
