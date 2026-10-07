@@ -152,11 +152,13 @@ contract ReentrantERC20 is MockERC20 {
     }
 }
 
-/// Invoice issuer whose receive() calls back into Chainvoice when paid.
-/// Records the error the re-entrant call reverted with.
+/// Invoice issuer whose receive() calls back into Chainvoice when paid,
+/// optionally forwarding native value. Records the error the re-entrant call
+/// reverted with.
 contract ReentrantIssuer {
     Chainvoice public immutable target;
     bytes public reentryCall;
+    uint256 public reentryValue;
     bytes public reentryError;
 
     constructor(Chainvoice _target) {
@@ -167,15 +169,16 @@ contract ReentrantIssuer {
         target.createInvoice(to, amount, address(0), keccak256("reentrant"));
     }
 
-    function arm(bytes calldata data) external {
+    function arm(bytes calldata data, uint256 value) external {
         reentryCall = data;
+        reentryValue = value;
     }
 
     receive() external payable {
         if (reentryCall.length == 0) return;
         bytes memory data = reentryCall;
         delete reentryCall;
-        (bool ok, bytes memory err) = address(target).call(data);
+        (bool ok, bytes memory err) = address(target).call{value: reentryValue}(data);
         require(!ok, "re-entry succeeded");
         reentryError = err;
     }
@@ -1323,6 +1326,8 @@ contract ChainvoiceTest is Test {
         vm.stopPrank();
 
         assertEq(token.reentryError(), _reentrancyError());
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertTrue(chainvoice.getInvoice(1).isPaid);
         assertFalse(chainvoice.getInvoice(2).isPaid);
         assertEq(token.balanceOf(alice), 2 ether);
     }
@@ -1331,7 +1336,7 @@ contract ChainvoiceTest is Test {
         ReentrantIssuer issuer = new ReentrantIssuer(chainvoice);
         issuer.createInvoice(bob, 1 ether);
         issuer.createInvoice(bob, 1 ether);
-        issuer.arm(abi.encodeCall(Chainvoice.payInvoice, (1)));
+        issuer.arm(abi.encodeCall(Chainvoice.payInvoice, (1)), 0);
 
         uint256 fee = chainvoice.fee();
         vm.prank(bob);
@@ -1350,7 +1355,7 @@ contract ChainvoiceTest is Test {
 
         uint256[] memory reentryIds = new uint256[](1);
         reentryIds[0] = 1;
-        issuer.arm(abi.encodeCall(Chainvoice.payInvoicesBatch, (reentryIds)));
+        issuer.arm(abi.encodeCall(Chainvoice.payInvoicesBatch, (reentryIds)), 0);
 
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
@@ -1359,8 +1364,30 @@ contract ChainvoiceTest is Test {
         chainvoice.payInvoicesBatch{value: 1 ether + fee}(ids);
 
         assertEq(issuer.reentryError(), _reentrancyError());
+        assertTrue(chainvoice.getInvoice(0).isPaid);
         assertFalse(chainvoice.getInvoice(1).isPaid);
         assertEq(address(issuer).balance, 1 ether);
+    }
+
+    /// The re-entrant caller here is the authorized payer of the nested invoice
+    /// and forwards the exact amount, so only the reentrancy guard can stop it.
+    function testPayInvoice_Native_AuthorizedFundedReentryReverts() public {
+        ReentrantIssuer issuer = new ReentrantIssuer(chainvoice);
+        issuer.createInvoice(bob, 2 ether);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(address(issuer), 1 ether, address(0), keccak256("nested"));
+
+        uint256 fee = chainvoice.fee();
+        issuer.arm(abi.encodeCall(Chainvoice.payInvoice, (1)), 1 ether + fee);
+
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 2 ether + fee}(0);
+
+        assertEq(issuer.reentryError(), _reentrancyError());
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(address(issuer).balance, 2 ether);
     }
 
     /* ------------------------------------------------------------ */
