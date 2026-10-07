@@ -32,7 +32,6 @@
       "mismatch": "Details mismatch",
       "mismatchHint": "The details stored on this device state a different {{field}} from the invoice recorded on-chain. Only the on-chain record is shown, and the recipient cannot pay it from Chainvoice."
     },
-    "payBlocked": "This invoice's details contradict its on-chain record, so it can't be paid here.",
-    "batchHasUnpayable": "Some selected invoices can no longer be paid and were deselected. Please review the selection and try again."
+    "payBlocked": "This invoice's details contradict its on-chain record, so it can't be paid here."
   }
 }
