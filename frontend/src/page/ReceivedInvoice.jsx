@@ -464,8 +464,7 @@ function ReceivedInvoice() {
 
   const payEntireBatch = async (batchId) => {
     const batchInvoices = receivedInvoices.filter(
-      (inv) =>
-        inv.batchInfo?.batchId === batchId && !inv.isPaid && !inv.isCancelled
+      (inv) => inv.batchInfo?.batchId === batchId && isInvoicePayable(inv)
     );
 
     if (batchInvoices.length === 0) {
@@ -1145,9 +1144,7 @@ function ReceivedInvoice() {
 
   const formatDate = formatInvoiceDate;
 
-  const unpaidInvoices = filteredAndSortedInvoices.filter(
-    (inv) => !inv.isPaid && !inv.isCancelled
-  );
+  const unpaidInvoices = filteredAndSortedInvoices.filter(isInvoicePayable);
   const selectedCount = selectedInvoices.size;
   const grouped = getGroupedInvoices();
 
