@@ -9,6 +9,7 @@ import html2canvas from "html2canvas";
 import { ERC20_ABI } from "../contractsABI/ERC20_ABI";
 import { getReceivedInvoices as getLocalReceivedInvoices } from "../services/invoiceStorage/invoiceDB.js";
 import { verifyInvoiceHash } from "../services/relay/invoiceHashUtils.js";
+import { MAX_PAGE_LIMIT } from "../utils/invoicePagination";
 import toast from "react-hot-toast";
 import {
   resolveInvoiceDecimals,
@@ -343,9 +344,23 @@ function BatchPayment() {
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-        const res = await contract.getReceivedInvoices(address);
+        // Batch grouping needs every invoice, and the view returns one page
+        // at a time, so walk the pages until the whole list is collected.
+        const res = [];
+        let offset = 0;
+        let total = 0;
+        do {
+          const [page, pageTotal] = await contract.getReceivedInvoices(
+            address,
+            offset,
+            MAX_PAGE_LIMIT
+          );
+          total = Number(pageTotal);
+          res.push(...page);
+          offset += MAX_PAGE_LIMIT;
+        } while (offset < total);
 
-        if (!res || !Array.isArray(res) || res.length === 0) {
+        if (res.length === 0) {
           setReceivedInvoices([]);
           setLoading(false);
           return;

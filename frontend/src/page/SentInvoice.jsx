@@ -9,7 +9,7 @@ import TableRow from "@mui/material/TableRow";
 import Checkbox from "@mui/material/Checkbox";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { BrowserProvider, Contract, ethers } from "ethers";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
@@ -19,11 +19,19 @@ import { useInvoiceExport } from "@/hooks/useInvoiceExport";
 import { getSentInvoices as getLocalSentInvoices, getInvoiceById, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
 import { verifyInvoiceHash } from "@/services/relay/invoiceHashUtils.js";
 import { sendEncryptedInvoice } from "@/services/relay/relayInvoiceMessaging.js";
+import ShareInvoiceDialog from "@/components/ShareInvoiceDialog";
 import { fetchPublicKeyFromChain } from "@/services/relay/relayKeyManager.js";
 
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import toast from "react-hot-toast";
 import { resolveInvoiceDecimals, formatInvoiceDate } from "@/utils/invoiceAmounts";
+import {
+  INVOICE_PAGE_SIZES,
+  DEFAULT_INVOICE_PAGE_SIZE,
+  getTotalPages,
+  formatPageLabel,
+  fetchInvoicePage,
+} from "@/utils/invoicePagination";
 import {
   Skeleton,
   Chip,
@@ -49,6 +57,7 @@ import UnpaidIcon from "@mui/icons-material/Pending";
 import DownloadIcon from "@mui/icons-material/Download";
 import TableChartIcon from "@mui/icons-material/TableChart";
 import DataObjectIcon from "@mui/icons-material/DataObject";
+import ShareIcon from "@mui/icons-material/Share";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import CancelIcon from "@mui/icons-material/Cancel";
 import SendIcon from "@mui/icons-material/Send";
@@ -79,7 +88,7 @@ const columns = [
 
 function SentInvoice() {
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_INVOICE_PAGE_SIZE);
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId } = useAccount();
 
@@ -87,7 +96,9 @@ function SentInvoice() {
   const openExportMenu = Boolean(anchorEl);
 
   const [loading, setLoading] = useState(true);
+  // Only the current page is held; totalInvoices is the on-chain count.
   const [sentInvoices, setSentInvoices] = useState([]);
+  const [totalInvoices, setTotalInvoices] = useState(0);
   const [fee, setFee] = useState(0);
   const [error, setError] = useState(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -99,6 +110,14 @@ function SentInvoice() {
   const [bulkExportOpen, setBulkExportOpen] = useState(false);
   const [bulkExportFormat, setBulkExportFormat] = useState("csv");
   const [bulkExportMode, setBulkExportMode] = useState("single");
+
+  // Identifies the list on screen, so a handler can tell whether the user
+  // paged (or switched wallet/network) while its transaction was pending.
+  const pageContextKey = `${address}-${chainId}-${page}-${rowsPerPage}`;
+  const pageContextRef = useRef(pageContextKey);
+  useEffect(() => {
+    pageContextRef.current = pageContextKey;
+  }, [pageContextKey]);
 
   const {
     filteredAndSortedInvoices,
@@ -161,9 +180,26 @@ function SentInvoice() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
+  // A new wallet or network invalidates the loaded page outright. Declared
+  // before the fetch effect so nothing downstream (auto-delivery included)
+  // can read invoices belonging to the previous address or chain.
+  useEffect(() => {
+    setSentInvoices([]);
+    setTotalInvoices(0);
+    setPage(0);
+  }, [address, chainId]);
+
+  // The export selection only ever refers to the page it was made on.
+  useEffect(() => {
+    setSelectedExportInvoices(new Set());
+    setBulkExportOpen(false);
+  }, [page, rowsPerPage, address, chainId]);
+
 
   useEffect(() => {
     if (!walletClient || !address) return;
+
+    let cancelled = false;
 
     const fetchSentInvoices = async () => {
       try {
@@ -182,13 +218,26 @@ function SentInvoice() {
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-        const res = await contract.getSentInvoices(address);
-        console.log("Raw invoices data:", res);
+        const { invoices: res, total } = await fetchInvoicePage(
+          contract.getSentInvoices,
+          address,
+          page,
+          rowsPerPage
+        );
+        if (cancelled) return;
+        setTotalInvoices(total);
 
-        if (!res || !Array.isArray(res) || res.length === 0) {
+        // Past the last page (e.g. a stale page number): jump to the last one,
+        // which re-runs this effect.
+        const lastPage = getTotalPages(total, rowsPerPage) - 1;
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
+
+        if (res.length === 0) {
           console.warn("No invoices found.");
           setSentInvoices([]);
-          setLoading(false);
           return;
         }
 
@@ -332,24 +381,30 @@ function SentInvoice() {
           }
         }
 
+        if (cancelled) return;
         setSentInvoices(decryptedInvoices);
         const fee = await contract.fee();
+        if (cancelled) return;
         setFee(fee);
       } catch (error) {
+        if (cancelled) return;
         console.error("Decryption error:", error);
         setError(
           "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
         );
 
       } finally {
-        console.log(sentInvoices);
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchSentInvoices();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletClient, address, tokens, chainId, refreshTrigger]); // Added tokens and chainId to dependency array
+  }, [walletClient, address, tokens, chainId, refreshTrigger, page, rowsPerPage]); // Added tokens and chainId to dependency array
 
   /**
    * Re-deliver an invoice's encrypted payload to its recipient.
@@ -534,6 +589,12 @@ function SentInvoice() {
     selectedInvoice: null,
   });
 
+  // Invoice currently open in the share dialog, by id. Held as an id rather
+  // than the invoice object because the dialog reads the payload it shares
+  // from IndexedDB — the object rendered here has been enriched with token
+  // logos and status, which would change its hash.
+  const [shareInvoiceId, setShareInvoiceId] = useState(null);
+
   const toggleDrawer = (invoice) => (event) => {
     if (
       event &&
@@ -627,6 +688,10 @@ function SentInvoice() {
   };
 
   const handleCancelInvoice = async (invoiceId) => {
+    // Captured before the transaction so its result can be matched against the
+    // list that is on screen when it resolves.
+    const contextKey = pageContextRef.current;
+
     try {
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
@@ -642,11 +707,17 @@ function SentInvoice() {
 
       const tx = await contract.cancelInvoice(invoiceId);
       await tx.wait();
-      setSentInvoices((prev) =>
-        prev.map((inv) =>
-          inv.id === invoiceId ? { ...inv, isCancelled: true } : inv
-        )
-      );
+
+      // The optimistic row patch only applies if the page it started on is
+      // still the one on screen; the refetch always runs.
+      if (pageContextRef.current === contextKey) {
+        setSentInvoices((prev) =>
+          prev.map((inv) =>
+            inv.id === invoiceId ? { ...inv, isCancelled: true } : inv
+          )
+        );
+      }
+      setRefreshTrigger((p) => p + 1);
 
       toast.success("Invoice cancelled successfully");
     } catch (error) {
@@ -734,7 +805,7 @@ function SentInvoice() {
                   <p className="text-red-600 font-medium">{error}</p>
                 </div>
               </div>
-            ) : sentInvoices.length === 0 ? (
+            ) : totalInvoices === 0 ? (
               <div className="p-6 text-center">
                 <div className="bg-blue-50 p-8 rounded-lg">
                   <DescriptionIcon
@@ -747,29 +818,6 @@ function SentInvoice() {
                   <p className="text-gray-600 mt-1">
                     You haven&apos;t sent any invoices yet.
                   </p>
-                </div>
-              </div>
-            ) : filteredAndSortedInvoices.length === 0 ? (
-              <div className="p-6 text-center">
-                <div className="bg-gray-50 p-8 rounded-lg">
-                  <DescriptionIcon
-                    className="text-gray-400"
-                    style={{ fontSize: 48 }}
-                  />
-                  <h3 className="text-lg font-medium text-gray-800 mt-2">
-                    No Matching Invoices
-                  </h3>
-                  <p className="text-gray-600 mt-1 mb-4">
-                    No invoices match your selected filter criteria.
-                  </p>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={clearFilters}
-                    sx={{ borderRadius: "8px" }}
-                  >
-                    Clear Filters
-                  </Button>
                 </div>
               </div>
             ) : (
@@ -833,11 +881,29 @@ function SentInvoice() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
+                      {/* Kept inside the table so pagination stays reachable. */}
+                      {filteredAndSortedInvoices.length === 0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={columns.length}
+                            align="center"
+                            sx={{ py: 6 }}
+                          >
+                            <p className="text-gray-600 mb-3">
+                              No invoices match your selected filter criteria.
+                            </p>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={clearFilters}
+                              sx={{ borderRadius: "8px" }}
+                            >
+                              Clear Filters
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )}
                       {filteredAndSortedInvoices
-                        .slice(
-                          page * rowsPerPage,
-                          page * rowsPerPage + rowsPerPage
-                        )
                         .map((invoice) => (
                           <TableRow
                             key={invoice.id}
@@ -1052,6 +1118,25 @@ function SentInvoice() {
                                     </span>
                                   </Tooltip>
                                 )}
+                                {!invoice._onChainOnly && (
+                                  <Tooltip title="Share as link or QR code">
+                                    <IconButton
+                                      size="small"
+                                      onClick={() =>
+                                        setShareInvoiceId(invoice.id.toString())
+                                      }
+                                      sx={{
+                                        backgroundColor: "#dcfce7",
+                                        "&:hover": { backgroundColor: "#bbf7d0" },
+                                      }}
+                                    >
+                                      <ShareIcon
+                                        fontSize="small"
+                                        sx={{ color: "#16a34a" }}
+                                      />
+                                    </IconButton>
+                                  </Tooltip>
+                                )}
                                 <Tooltip title="View Details">
                                   <IconButton
                                     size="small"
@@ -1075,13 +1160,18 @@ function SentInvoice() {
                   </Table>
                 </TableContainer>
                 <TablePagination
-                  rowsPerPageOptions={[10, 25, 100]}
+                  rowsPerPageOptions={INVOICE_PAGE_SIZES}
                   component="div"
-                  count={filteredAndSortedInvoices.length}
+                  count={totalInvoices}
                   rowsPerPage={rowsPerPage}
                   page={page}
                   onPageChange={handleChangePage}
                   onRowsPerPageChange={handleChangeRowsPerPage}
+                  labelDisplayedRows={(info) =>
+                    formatPageLabel(info, rowsPerPage)
+                  }
+                  showFirstButton
+                  showLastButton
                   sx={{
                     borderTop: "1px solid #f1f5f9",
                     "& .MuiTablePagination-actions svg": {
@@ -1410,52 +1500,68 @@ function SentInvoice() {
                 >
                   Close
                 </button>
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={handleExportClick}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
-                    aria-haspopup="true"
-                    aria-expanded={openExportMenu}
-                  >
-                    <DownloadIcon className="mr-2" fontSize="small" />
-                    Export Invoice
-                  </button>
-                  <Menu
-                    anchorEl={anchorEl}
-                    open={openExportMenu}
-                    onClose={handleExportClose}
-                    anchorOrigin={{
-                      vertical: "top",
-                      horizontal: "right",
-                    }}
-                    transformOrigin={{
-                      vertical: "bottom",
-                      horizontal: "right",
-                    }}
-                    PaperProps={{
-                      sx: { mb: 1, width: 200 }
-                    }}
-                  >
-                    <MenuItem onClick={() => { handlePrint(); handleExportClose(); }}>
-                      <ListItemIcon>
-                        <PictureAsPdfIcon fontSize="small" sx={{ color: "#ef4444" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as PDF</ListItemText>
-                    </MenuItem>
-                    <MenuItem onClick={handleExportCSV}>
-                      <ListItemIcon>
-                        <TableChartIcon fontSize="small" sx={{ color: "#16a34a" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as CSV</ListItemText>
-                    </MenuItem>
-                    <MenuItem onClick={handleExportJSON}>
-                      <ListItemIcon>
-                        <DataObjectIcon fontSize="small" sx={{ color: "#3b82f6" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as JSON</ListItemText>
-                    </MenuItem>
-                  </Menu>
+                <div className="flex items-center gap-2">
+                  {!drawerState.selectedInvoice._onChainOnly && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setShareInvoiceId(
+                          drawerState.selectedInvoice?.id?.toString() ?? null
+                        )
+                      }
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm font-medium flex items-center"
+                    >
+                      <ShareIcon className="mr-2" fontSize="small" />
+                      Share
+                    </button>
+                  )}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={handleExportClick}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm font-medium flex items-center"
+                      aria-haspopup="true"
+                      aria-expanded={openExportMenu}
+                    >
+                      <DownloadIcon className="mr-2" fontSize="small" />
+                      Export Invoice
+                    </button>
+                    <Menu
+                      anchorEl={anchorEl}
+                      open={openExportMenu}
+                      onClose={handleExportClose}
+                      anchorOrigin={{
+                        vertical: "top",
+                        horizontal: "right",
+                      }}
+                      transformOrigin={{
+                        vertical: "bottom",
+                        horizontal: "right",
+                      }}
+                      PaperProps={{
+                        sx: { mb: 1, width: 200 }
+                      }}
+                    >
+                      <MenuItem onClick={() => { handlePrint(); handleExportClose(); }}>
+                        <ListItemIcon>
+                          <PictureAsPdfIcon fontSize="small" sx={{ color: "#ef4444" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as PDF</ListItemText>
+                      </MenuItem>
+                      <MenuItem onClick={handleExportCSV}>
+                        <ListItemIcon>
+                          <TableChartIcon fontSize="small" sx={{ color: "#16a34a" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as CSV</ListItemText>
+                      </MenuItem>
+                      <MenuItem onClick={handleExportJSON}>
+                        <ListItemIcon>
+                          <DataObjectIcon fontSize="small" sx={{ color: "#3b82f6" }} />
+                        </ListItemIcon>
+                        <ListItemText>Export as JSON</ListItemText>
+                      </MenuItem>
+                    </Menu>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1593,6 +1699,13 @@ function SentInvoice() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        <ShareInvoiceDialog
+          open={shareInvoiceId !== null}
+          onClose={() => setShareInvoiceId(null)}
+          invoiceId={shareInvoiceId}
+          chainId={chainId}
+        />
       </div>
     </>
   );

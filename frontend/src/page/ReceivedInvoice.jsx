@@ -27,6 +27,14 @@ import { useRelayKeys } from "@/hooks/useRelayKeys";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import toast from "react-hot-toast";
 import { resolveInvoiceDecimals, formatInvoiceDate } from "@/utils/invoiceAmounts";
+import {
+  INVOICE_PAGE_SIZES,
+  DEFAULT_INVOICE_PAGE_SIZE,
+  getTotalPages,
+  formatPageLabel,
+  fetchInvoicePage,
+  filterSelectionToPage,
+} from "@/utils/invoicePagination";
 import CancelIcon from "@mui/icons-material/Cancel";
 
 import {
@@ -87,7 +95,7 @@ const columns = [
 
 function ReceivedInvoice() {
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_INVOICE_PAGE_SIZE);
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId } = useAccount();
 
@@ -96,7 +104,9 @@ function ReceivedInvoice() {
   const [batchExportAnchorEl, setBatchExportAnchorEl] = useState(null);
   const openBatchExportMenu = Boolean(batchExportAnchorEl);
   const [loading, setLoading] = useState(true);
+  // Only the current page is held; totalInvoices is the on-chain count.
   const [receivedInvoices, setReceivedInvoice] = useState([]);
+  const [totalInvoices, setTotalInvoices] = useState(0);
   const [fee, setFee] = useState(0);
   const [error, setError] = useState(null);
 
@@ -122,6 +132,14 @@ function ReceivedInvoice() {
   const [selectedInvoices, setSelectedInvoices] = useState(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchSuggestions, setBatchSuggestions] = useState([]);
+
+  // Identifies the list on screen, so a payment handler can tell whether the
+  // user paged (or switched wallet/network) while its transaction was pending.
+  const pageContextKey = `${address}-${chainId}-${page}-${rowsPerPage}`;
+  const pageContextRef = useRef(pageContextKey);
+  useEffect(() => {
+    pageContextRef.current = pageContextKey;
+  }, [pageContextKey]);
 
   // Bulk export states (kept separate from batch-payment selection)
   const [selectedExportInvoices, setSelectedExportInvoices] = useState(new Set());
@@ -340,10 +358,17 @@ function ReceivedInvoice() {
     }
   };
 
+
   const getGroupedInvoices = (ids = selectedInvoices) => {
     const grouped = new Map();
     receivedInvoices.forEach((invoice) => {
       if (!ids.has(invoice.id)) return;
+
+  const getGroupedInvoices = (selection = selectedInvoices) => {
+    const grouped = new Map();
+    receivedInvoices.forEach((invoice) => {
+      if (!selection.has(invoice.id)) return;
+
 
       const tokenAddress = invoice.paymentToken?.address || ethers.ZeroAddress;
       const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"}`;
@@ -481,6 +506,10 @@ function ReceivedInvoice() {
       return;
     }
 
+    // Captured before the transaction so the result can be matched against
+    // the list that is on screen when it resolves.
+    const contextKey = pageContextRef.current;
+
     setPaymentLoading((prev) => ({ ...prev, [invoiceId]: true }));
     setPaymentError("");
     setShowPaymentError(false);
@@ -576,10 +605,16 @@ function ReceivedInvoice() {
         toast.success("Payment successful! Paid with ETH");
       }
 
-      const updatedInvoices = receivedInvoices.map((inv) =>
-        inv.id === invoiceId ? { ...inv, isPaid: true } : inv
-      );
-      setReceivedInvoice(updatedInvoices);
+      // The optimistic row patch only applies if the page it started on is
+      // still the one on screen; the refetch always runs.
+      if (pageContextRef.current === contextKey) {
+        setReceivedInvoice((prev) =>
+          prev.map((inv) =>
+            inv.id === invoiceId ? { ...inv, isPaid: true } : inv
+          )
+        );
+      }
+      setRefreshTrigger((p) => p + 1);
     } catch (error) {
       console.error("Payment failed:", error);
       const errorMsg = getDetailedErrorMessage(error);
@@ -592,8 +627,36 @@ function ReceivedInvoice() {
   };
 
   // UNIFORM BATCH PAYMENT
+
   const handleBatchPayment = async (ids = selectedInvoices) => {
     if (!walletClient || ids.size === 0) return;
+
+  const handleBatchPayment = async () => {
+    if (!walletClient || selectedInvoices.size === 0) return;
+    if (loading) {
+      toast.error("Invoices are still loading. Please try again in a moment.");
+      return;
+    }
+
+    // Only invoices on the loaded page can be grouped, so grouping first also
+    // checks the selection still refers to what is on screen; otherwise a
+    // selection from an earlier page reports success having paid nothing.
+    const grouped = getGroupedInvoices(selectedInvoices);
+    const payableCount = Array.from(grouped.values()).reduce(
+      (count, group) => count + group.invoices.length,
+      0
+    );
+
+    if (payableCount !== selectedInvoices.size) {
+      setSelectedInvoices(
+        filterSelectionToPage(selectedInvoices, receivedInvoices)
+      );
+      toast.error(
+        "Selected invoices are no longer on this page. Please reselect."
+      );
+      return;
+    }
+
 
     setBatchLoading(true);
     setPaymentError("");
@@ -612,7 +675,10 @@ function ReceivedInvoice() {
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
+
       const grouped = getGroupedInvoices(ids);
+
+
 
       // BALANCE CHECK (same as individual)
       toast("Checking balances...");
@@ -703,13 +769,6 @@ function ReceivedInvoice() {
             `Successfully paid ${invoices.length} invoices with ETH!`
           );
         }
-
-        const updatedInvoices = receivedInvoices.map((inv) =>
-          invoiceIds.some((id) => id === BigInt(inv.id))
-            ? { ...inv, isPaid: true }
-            : inv
-        );
-        setReceivedInvoice(updatedInvoices);
       }
 
       setSelectedInvoices(new Set());
@@ -724,6 +783,9 @@ function ReceivedInvoice() {
       );
     } finally {
       setBatchLoading(false);
+      // Earlier groups may have been paid before a later one failed, so the
+      // page is refetched either way.
+      setRefreshTrigger((p) => p + 1);
     }
   };
 
@@ -732,9 +794,30 @@ function ReceivedInvoice() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
+  // A new wallet or network invalidates the loaded page outright. Declared
+  // before the fetch effect so nothing downstream can read invoices belonging
+  // to the previous address or chain.
+  useEffect(() => {
+    setReceivedInvoice([]);
+    setTotalInvoices(0);
+    setPage(0);
+  }, [address, chainId]);
+
+  // Selection and batch actions only see the loaded page, so neither a
+  // selection nor a suggestion may outlive the page it was built from.
+  useEffect(() => {
+    setSelectedInvoices(new Set());
+    setBatchSuggestions([]);
+    setBatchExportAnchorEl(null);
+    setSelectedExportInvoices(new Set());
+    setBulkExportOpen(false);
+  }, [page, rowsPerPage, address, chainId]);
+
   // Fetch invoices
   useEffect(() => {
     if (!walletClient || !address) return;
+
+    let cancelled = false;
 
     const fetchReceivedInvoices = async () => {
       try {
@@ -755,11 +838,27 @@ function ReceivedInvoice() {
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-        const res = await contract.getReceivedInvoices(address);
+        const { invoices: res, total } = await fetchInvoicePage(
+          contract.getReceivedInvoices,
+          address,
+          page,
+          rowsPerPage
+        );
+        if (cancelled) return;
+        setTotalInvoices(total);
 
-        if (!res || !Array.isArray(res) || res.length === 0) {
+        // Past the last page (e.g. a stale page number): jump to the last one,
+        // which re-runs this effect.
+        const lastPage = getTotalPages(total, rowsPerPage) - 1;
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
+
+        if (res.length === 0) {
           setReceivedInvoice([]);
-          setLoading(false);
+          setBatchSuggestions([]);
+          setSelectedInvoices(new Set());
           return;
         }
 
@@ -900,25 +999,36 @@ function ReceivedInvoice() {
           }
         }
 
+        if (cancelled) return;
         setReceivedInvoice(decryptedInvoices);
+        // A refetch of the same page may no longer carry every selected invoice.
+        setSelectedInvoices((prev) =>
+          filterSelectionToPage(prev, decryptedInvoices)
+        );
         const suggestions = findBatchSuggestions(decryptedInvoices);
         setBatchSuggestions(suggestions);
         const fee = await contract.fee();
+        if (cancelled) return;
         setFee(fee);
       } catch (error) {
+        if (cancelled) return;
         console.error("Fetch error:", error);
         setError(
           "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
         );
 
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchReceivedInvoices();
+
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletClient, address, tokens, chainId, refreshTrigger]);
+  }, [walletClient, address, tokens, chainId, refreshTrigger, page, rowsPerPage]);
 
   // Relay ingestion runs independently of the display fetch above. Keeping it
   // out of the refreshTrigger cycle matters: if storing a message re-ran this
@@ -1570,7 +1680,7 @@ function ReceivedInvoice() {
                   <p className="text-red-700 font-medium">{error}</p>
                 </div>
               </div>
-            ) : receivedInvoices.length === 0 ? (
+            ) : totalInvoices === 0 ? (
               <div className="p-6 text-center">
                 <div className="bg-blue-50 p-8 rounded-lg">
                   <DescriptionIcon
@@ -1583,29 +1693,6 @@ function ReceivedInvoice() {
                   <p className="text-gray-600 mt-1">
                     You don&apos;t have any received invoices yet.
                   </p>
-                </div>
-              </div>
-            ) : filteredAndSortedInvoices.length === 0 ? (
-              <div className="p-6 text-center">
-                <div className="bg-gray-50 p-8 rounded-lg">
-                  <DescriptionIcon
-                    className="text-gray-400"
-                    style={{ fontSize: 48 }}
-                  />
-                  <h3 className="text-lg font-medium text-gray-800 mt-2">
-                    No Matching Invoices
-                  </h3>
-                  <p className="text-gray-600 mt-1 mb-4">
-                    No invoices match your selected filter criteria.
-                  </p>
-                  <Button
-                    variant="outlined"
-                    size="small"
-                    onClick={clearFilters}
-                    sx={{ borderRadius: "8px" }}
-                  >
-                    Clear Filters
-                  </Button>
                 </div>
               </div>
             ) : (
@@ -1695,11 +1782,29 @@ function ReceivedInvoice() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
+                      {/* Kept inside the table so pagination stays reachable. */}
+                      {filteredAndSortedInvoices.length === 0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={columns.length}
+                            align="center"
+                            sx={{ py: 6 }}
+                          >
+                            <p className="text-gray-600 mb-3">
+                              No invoices match your selected filter criteria.
+                            </p>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={clearFilters}
+                              sx={{ borderRadius: "8px" }}
+                            >
+                              Clear Filters
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )}
                       {filteredAndSortedInvoices
-                        .slice(
-                          page * rowsPerPage,
-                          page * rowsPerPage + rowsPerPage
-                        )
                         .map((invoice) => (
                           <TableRow
                             key={invoice.id}
@@ -1980,13 +2085,18 @@ function ReceivedInvoice() {
                   </Table>
                 </TableContainer>
                 <TablePagination
-                  rowsPerPageOptions={[10, 25, 100]}
+                  rowsPerPageOptions={INVOICE_PAGE_SIZES}
                   component="div"
-                  count={filteredAndSortedInvoices.length}
+                  count={totalInvoices}
                   rowsPerPage={rowsPerPage}
                   page={page}
                   onPageChange={handleChangePage}
                   onRowsPerPageChange={handleChangeRowsPerPage}
+                  labelDisplayedRows={(info) =>
+                    formatPageLabel(info, rowsPerPage)
+                  }
+                  showFirstButton
+                  showLastButton
                   sx={{
                     borderTop: "1px solid #f1f5f9",
                     "& .MuiTablePagination-actions svg": {
