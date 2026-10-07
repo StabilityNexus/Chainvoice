@@ -89,7 +89,6 @@ import { cn } from "@/lib/utils";
 
 const columns = [
   { id: "select", label: "", minWidth: 50, sortable: false },
-  { id: "exportSelect", label: "", minWidth: 50, sortable: false },
   { id: "fname", label: "Client", minWidth: 120, sortable: true },
   { id: "to", label: "Sender", minWidth: 150, sortable: false },
   { id: "amountDue", label: "Amount", minWidth: 100, align: "right", sortable: true },
@@ -109,8 +108,6 @@ function ReceivedInvoice() {
 
   const [anchorEl, setAnchorEl] = useState(null);
   const openExportMenu = Boolean(anchorEl);
-  const [batchExportAnchorEl, setBatchExportAnchorEl] = useState(null);
-  const openBatchExportMenu = Boolean(batchExportAnchorEl);
   const [loading, setLoading] = useState(true);
   // Only the current page is held; totalInvoices is the on-chain count.
   const [receivedInvoices, setReceivedInvoice] = useState([]);
@@ -149,8 +146,7 @@ function ReceivedInvoice() {
     pageContextRef.current = pageContextKey;
   }, [pageContextKey]);
 
-  // Bulk export states (kept separate from batch-payment selection)
-  const [selectedExportInvoices, setSelectedExportInvoices] = useState(new Set());
+  // Bulk export dialog
   const [bulkExportOpen, setBulkExportOpen] = useState(false);
   const [bulkExportFormat, setBulkExportFormat] = useState("csv");
   const [bulkExportMode, setBulkExportMode] = useState("single");
@@ -353,11 +349,9 @@ function ReceivedInvoice() {
     }
   };
 
-  const getGroupedInvoices = (selection = selectedInvoices) => {
+  const getGroupedInvoices = (invoices) => {
     const grouped = new Map();
-    receivedInvoices.forEach((invoice) => {
-      if (!selection.has(invoice.id)) return;
-
+    invoices.forEach((invoice) => {
       const { address: tokenAddress, symbol, logo, decimals } =
         invoice.paymentToken;
       const tokenKey = tokenAddress.toLowerCase();
@@ -388,10 +382,14 @@ function ReceivedInvoice() {
     return () => clearTimeout(timer);
   }, [showPaymentError]);
 
-  const handleSelectInvoice = (invoiceId) => {
-    const invoice = receivedInvoices.find((inv) => inv.id === invoiceId);
-    if (!isInvoicePayable(invoice)) return;
+  // One selection drives both actions: export takes every selected invoice,
+  // batch payment only the ones that can still be paid.
+  const selectedOnPage = receivedInvoices.filter((invoice) =>
+    selectedInvoices.has(invoice.id)
+  );
+  const payableSelected = selectedOnPage.filter(isInvoicePayable);
 
+  const handleSelectInvoice = (invoiceId) => {
     setSelectedInvoices((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(invoiceId)) {
@@ -412,48 +410,23 @@ function ReceivedInvoice() {
     setSelectedInvoices(new Set());
   };
 
-  // Bulk export selection is intentionally separate from payment selection.
-  const handleExportSelect = (invoiceId) => {
-    const id = String(invoiceId);
-    setSelectedExportInvoices((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  const handleToggleAllVisible = (checked) => {
+    setSelectedInvoices(
+      checked
+        ? new Set(filteredAndSortedInvoices.map((invoice) => invoice.id))
+        : new Set()
+    );
   };
-
-  const handleSelectAllForExport = () => {
-    if (selectedExportInvoices.size === receivedInvoices.length) {
-      setSelectedExportInvoices(new Set());
-    } else {
-      setSelectedExportInvoices(
-        new Set(receivedInvoices.map((invoice) => String(invoice.id)))
-      );
-    }
-  };
-
-  const selectedExportInvoiceList = receivedInvoices.filter((invoice) =>
-    selectedExportInvoices.has(String(invoice.id))
-  );
 
   const handleBulkExportSubmit = async () => {
-    if (!selectedExportInvoiceList.length) {
+    if (!selectedOnPage.length) {
       toast.error("Select at least one invoice");
       return;
     }
 
-    await handleBulkExport(
-      selectedExportInvoiceList,
-      bulkExportFormat,
-      bulkExportMode
-    );
+    await handleBulkExport(selectedOnPage, bulkExportFormat, bulkExportMode);
 
     setBulkExportOpen(false);
-    setSelectedExportInvoices(new Set());
   };
 
   const selectBatchSuggestion = (suggestion) => {
@@ -607,22 +580,15 @@ function ReceivedInvoice() {
 
   // UNIFORM BATCH PAYMENT
   const handleBatchPayment = async () => {
-    if (!walletClient || selectedInvoices.size === 0) return;
+    if (!walletClient || payableSelected.length === 0) return;
     if (loading) {
       toast.error("Invoices are still loading. Please try again in a moment.");
       return;
     }
 
-    // Only invoices on the loaded page can be grouped, so grouping first also
-    // checks the selection still refers to what is on screen; otherwise a
-    // selection from an earlier page reports success having paid nothing.
-    const grouped = getGroupedInvoices(selectedInvoices);
-    const payableCount = Array.from(grouped.values()).reduce(
-      (count, group) => count + group.invoices.length,
-      0
-    );
-
-    if (payableCount !== selectedInvoices.size) {
+    // Only invoices on the loaded page can be paid; otherwise a selection
+    // from an earlier page reports success having paid nothing.
+    if (selectedOnPage.length !== selectedInvoices.size) {
       setSelectedInvoices(
         filterSelectionToPage(selectedInvoices, receivedInvoices)
       );
@@ -632,20 +598,9 @@ function ReceivedInvoice() {
       return;
     }
 
-    // A refetch can mark a selected invoice paid or cancelled after it was
-    // selected, and the contract reverts the whole batch for one such invoice.
-    const unpayable = Array.from(grouped.values()).flatMap((group) =>
-      group.invoices.filter((invoice) => !isInvoicePayable(invoice))
-    );
-    if (unpayable.length > 0) {
-      setSelectedInvoices((prev) => {
-        const next = new Set(prev);
-        unpayable.forEach((invoice) => next.delete(invoice.id));
-        return next;
-      });
-      toast.error(t("batchHasUnpayable"));
-      return;
-    }
+    // Paid, cancelled and mismatched invoices can stay selected for export;
+    // the contract would revert the whole batch for any one of them.
+    const grouped = getGroupedInvoices(payableSelected);
 
     setBatchLoading(true);
     setPaymentError("");
@@ -786,8 +741,6 @@ function ReceivedInvoice() {
   useEffect(() => {
     setSelectedInvoices(new Set());
     setBatchSuggestions([]);
-    setBatchExportAnchorEl(null);
-    setSelectedExportInvoices(new Set());
     setBulkExportOpen(false);
   }, [page, rowsPerPage, address, chainId]);
 
@@ -1099,14 +1052,6 @@ function ReceivedInvoice() {
     setAnchorEl(null);
   };
 
-  const handleBatchExportClick = (event) => {
-    setBatchExportAnchorEl(event.currentTarget);
-  };
-
-  const handleBatchExportClose = () => {
-    setBatchExportAnchorEl(null);
-  };
-
   const handlePrint = async () => {
     if (!drawerState.selectedInvoice) {
       toast.error("No invoice selected");
@@ -1145,8 +1090,11 @@ function ReceivedInvoice() {
   const formatDate = formatInvoiceDate;
 
   const unpaidInvoices = filteredAndSortedInvoices.filter(isInvoicePayable);
-  const selectedCount = selectedInvoices.size;
-  const grouped = getGroupedInvoices();
+  const selectedCount = payableSelected.length;
+  const grouped = getGroupedInvoices(payableSelected);
+  const visibleSelectedCount = filteredAndSortedInvoices.filter((invoice) =>
+    selectedInvoices.has(invoice.id)
+  ).length;
 
   return (
     <>
@@ -1172,10 +1120,10 @@ function ReceivedInvoice() {
               startIcon={<DownloadIcon />}
               onClick={() => setBulkExportOpen(true)}
               variant="contained"
-              disabled={selectedExportInvoices.size === 0}
+              disabled={selectedOnPage.length === 0}
               sx={{ whiteSpace: "nowrap" }}
             >
-              Export Selected ({selectedExportInvoices.size})
+              Export Selected ({selectedOnPage.length})
             </Button>
           </div>
 
@@ -1392,7 +1340,7 @@ function ReceivedInvoice() {
                     disabled={unpaidInvoices.length === 0}
                     sx={{ minWidth: { xs: 0, sm: 120 }, flex: { xs: 1, sm: "unset" }, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                   >
-                    {unpaidInvoices.length > 0 ? `Select All (${unpaidInvoices.length})` : "Select All"}
+                    {unpaidInvoices.length > 0 ? `Select All Unpaid (${unpaidInvoices.length})` : "Select All Unpaid"}
                   </Button>
                   <Button
                     startIcon={<ClearAllIcon />}
@@ -1404,47 +1352,6 @@ function ReceivedInvoice() {
                   >
                     Clear
                   </Button>
-                  <Button
-                    startIcon={<DownloadIcon />}
-                    onClick={handleBatchExportClick}
-                    variant="outlined"
-                    size="small"
-                    disabled={selectedCount === 0}
-                    aria-haspopup="true"
-                    aria-expanded={openBatchExportMenu}
-                    sx={{ minWidth: { xs: 0, sm: 140 }, flex: { xs: 1, sm: "unset" }, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                  >
-                    Export Selected
-                  </Button>
-                  <Menu
-                    anchorEl={batchExportAnchorEl}
-                    open={openBatchExportMenu}
-                    onClose={handleBatchExportClose}
-                    anchorOrigin={{
-                      vertical: "bottom",
-                      horizontal: "right",
-                    }}
-                    transformOrigin={{
-                      vertical: "top",
-                      horizontal: "right",
-                    }}
-                    PaperProps={{
-                      sx: { mt: 1, width: 200 }
-                    }}
-                  >
-                    <MenuItem onClick={() => { handleExportCSV(); handleBatchExportClose(); }}>
-                      <ListItemIcon>
-                        <TableChartIcon fontSize="small" sx={{ color: "#16a34a" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as CSV</ListItemText>
-                    </MenuItem>
-                    <MenuItem onClick={() => { handleExportJSON(); handleBatchExportClose(); }}>
-                      <ListItemIcon>
-                        <DataObjectIcon fontSize="small" sx={{ color: "#3b82f6" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as JSON</ListItemText>
-                    </MenuItem>
-                  </Menu>
                 </Box>
               </Box>
 
@@ -1633,19 +1540,20 @@ function ReceivedInvoice() {
                                 control={
                                   <Checkbox
                                     indeterminate={
-                                      selectedCount > 0 &&
-                                      selectedCount < unpaidInvoices.length
+                                      visibleSelectedCount > 0 &&
+                                      visibleSelectedCount <
+                                        filteredAndSortedInvoices.length
                                     }
                                     checked={
-                                      selectedCount === unpaidInvoices.length &&
-                                      unpaidInvoices.length > 0
+                                      filteredAndSortedInvoices.length > 0 &&
+                                      visibleSelectedCount ===
+                                        filteredAndSortedInvoices.length
                                     }
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        handleSelectAll();
-                                      } else {
-                                        handleClearAll();
-                                      }
+                                    onChange={(e) =>
+                                      handleToggleAllVisible(e.target.checked)
+                                    }
+                                    inputProps={{
+                                      "aria-label": "Select all invoices on this page",
                                     }}
                                   />
                                 }
@@ -1671,21 +1579,6 @@ function ReceivedInvoice() {
                               >
                                 {column.label}
                               </TableSortLabel>
-
-                            ) : column.id === "exportSelect" ? (
-                              <Checkbox
-                                indeterminate={
-                                  selectedExportInvoices.size > 0 &&
-                                  selectedExportInvoices.size < receivedInvoices.length
-                                }
-                                checked={
-                                  selectedExportInvoices.size === receivedInvoices.length &&
-                                  receivedInvoices.length > 0
-                                }
-                                onChange={handleSelectAllForExport}
-                                color="primary"
-                                inputProps={{ "aria-label": "Select invoices for export" }}
-                              />
 
                             ) : (
                               column.label
@@ -1734,18 +1627,9 @@ function ReceivedInvoice() {
                               <Checkbox
                                 checked={selectedInvoices.has(invoice.id)}
                                 onChange={() => handleSelectInvoice(invoice.id)}
-                                disabled={!isInvoicePayable(invoice)}
                                 color="success"
-                              />
-                            </TableCell>
-
-                            <TableCell>
-                              <Checkbox
-                                checked={selectedExportInvoices.has(String(invoice.id))}
-                                onChange={() => handleExportSelect(invoice.id)}
-                                color="primary"
                                 inputProps={{
-                                  "aria-label": `Select invoice ${invoice.id} for export`,
+                                  "aria-label": `Select invoice ${invoice.id}`,
                                 }}
                               />
                             </TableCell>
@@ -2001,8 +1885,8 @@ function ReceivedInvoice() {
           <DialogTitle>Export Selected Invoices</DialogTitle>
           <DialogContent dividers>
             <Typography sx={{ mb: 2 }}>
-              {selectedExportInvoices.size} invoice
-              {selectedExportInvoices.size !== 1 ? "s" : ""} selected.
+              {selectedOnPage.length} invoice
+              {selectedOnPage.length !== 1 ? "s" : ""} selected.
             </Typography>
 
             <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -2049,7 +1933,7 @@ function ReceivedInvoice() {
               onClick={handleBulkExportSubmit}
               variant="contained"
               startIcon={<DownloadIcon />}
-              disabled={selectedExportInvoices.size === 0}
+              disabled={selectedOnPage.length === 0}
             >
               Export
             </Button>
