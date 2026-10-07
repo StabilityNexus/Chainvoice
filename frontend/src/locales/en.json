@@ -14,5 +14,25 @@
     "maxAmount": "Max Amount",
     "clearFilters": "Clear Filters",
     "showingResults": "Showing {{totalCount}} of {{rawCount}} invoices"
+  },
+  "invoiceVerification": {
+    "received": {
+      "pending": "Details pending",
+      "pendingHint": "Full details have not arrived yet. The amount and addresses shown come from the blockchain.",
+      "unverified": "Unverified",
+      "unverifiedHint": "The details delivered for this invoice do not match the hash the sender recorded on-chain, so they are not shown. Only the on-chain amount and addresses can be trusted.",
+      "mismatch": "Details mismatch",
+      "mismatchHint": "The sender's details for this invoice state a different {{field}} from the invoice recorded on-chain. Only the on-chain record is shown, and this invoice cannot be paid here."
+    },
+    "sent": {
+      "pending": "Details unavailable",
+      "pendingHint": "This invoice's details are not on this device. Only the chain's record of it is shown.",
+      "unverified": "Unverified",
+      "unverifiedHint": "The details stored on this device do not match the hash recorded on-chain for this invoice.",
+      "mismatch": "Details mismatch",
+      "mismatchHint": "The details stored on this device state a different {{field}} from the invoice recorded on-chain. Only the on-chain record is shown, and the recipient cannot pay it from Chainvoice."
+    },
+    "payBlocked": "This invoice's details contradict its on-chain record, so it can't be paid here.",
+    "batchHasUnpayable": "Some selected invoices can no longer be paid and were deselected. Please review the selection and try again."
   }
 }

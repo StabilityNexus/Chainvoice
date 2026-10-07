@@ -17,14 +17,17 @@ import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
 import { getSentInvoices as getLocalSentInvoices, getInvoiceById, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
-import { verifyInvoiceHash } from "@/services/relay/invoiceHashUtils.js";
 import { sendEncryptedInvoice } from "@/services/relay/relayInvoiceMessaging.js";
 import ShareInvoiceDialog from "@/components/ShareInvoiceDialog";
 import { fetchPublicKeyFromChain } from "@/services/relay/relayKeyManager.js";
 
-import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import toast from "react-hot-toast";
-import { resolveInvoiceDecimals, formatInvoiceDate } from "@/utils/invoiceAmounts";
+import { formatInvoiceDate } from "@/utils/invoiceAmounts";
+import {
+  buildChainInvoice,
+  createTokenMetadataReader,
+} from "@/utils/chainInvoice";
+import InvoiceVerificationChip from "@/components/InvoiceVerificationChip";
 import {
   INVOICE_PAGE_SIZES,
   DEFAULT_INVOICE_PAGE_SIZE,
@@ -61,8 +64,6 @@ import ShareIcon from "@mui/icons-material/Share";
 import PictureAsPdfIcon from "@mui/icons-material/PictureAsPdf";
 import CancelIcon from "@mui/icons-material/Cancel";
 import SendIcon from "@mui/icons-material/Send";
-import ErrorIcon from "@mui/icons-material/Error";
-import WarningIcon from "@mui/icons-material/Warning";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
@@ -90,7 +91,7 @@ function SentInvoice() {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_INVOICE_PAGE_SIZE);
   const { data: walletClient } = useWalletClient();
-  const { address, isConnected, chainId } = useAccount();
+  const { address, isConnected, chainId, chain } = useAccount();
 
   const [anchorEl, setAnchorEl] = useState(null);
   const openExportMenu = Boolean(anchorEl);
@@ -135,36 +136,6 @@ function SentInvoice() {
 
   // Get tokens from the hook
   const { tokens } = useTokenList(chainId || 1);
-
-  // Helper function to get token info
-  const getTokenInfo = (tokenAddress) => {
-    if (!tokens || tokens.length === 0) return null;
-
-    return tokens.find(
-      (token) =>
-        token.contract_address?.toLowerCase() === tokenAddress?.toLowerCase() ||
-        token.address?.toLowerCase() === tokenAddress?.toLowerCase()
-    );
-  };
-
-  // Helper function to get token logo
-  // eslint-disable-next-line no-unused-vars
-  const getTokenLogo = (tokenAddress, fallbackLogo) => {
-    const tokenInfo = getTokenInfo(tokenAddress);
-    return (
-      tokenInfo?.image ||
-      tokenInfo?.logo ||
-      fallbackLogo ||
-      `${import.meta.env.BASE_URL}tokenImages/generic.png`
-    );
-  };
-
-  // Helper function to get token decimals
-  // eslint-disable-next-line no-unused-vars
-  const getTokenDecimals = (tokenAddress, fallbackDecimals = 18) => {
-    const tokenInfo = getTokenInfo(tokenAddress);
-    return tokenInfo?.decimals || fallbackDecimals;
-  };
 
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
@@ -252,6 +223,13 @@ function SentInvoice() {
           }
         }
 
+        const readToken = createTokenMetadataReader({
+          runner: provider,
+          tokens,
+          nativeCurrency: chain?.nativeCurrency,
+          fallbackLogo: `${import.meta.env.BASE_URL}tokenImages/generic.png`,
+        });
+
         // 2. Process on-chain invoices and merge
         for (const invoice of res) {
           try {
@@ -260,7 +238,6 @@ function SentInvoice() {
             const to = invoice[2].toLowerCase();
             const isPaid = invoice[5];
             const isCancelled = invoice[6];
-            const invoiceDataHash = invoice[7];
 
             const currentUserAddress = address.toLowerCase();
             if (currentUserAddress !== from && currentUserAddress !== to) {
@@ -268,113 +245,39 @@ function SentInvoice() {
               continue;
             }
 
+            // As the sender, the payload only ever existed on this device. If
+            // storage was cleared, the invoice was made on another device, or
+            // the payload no longer matches the on-chain record, buildChainInvoice
+            // falls back to what the chain knows.
             const localInv = localInvoiceMap.get(id);
-            let parsed;
+            const parsed = buildChainInvoice(
+              invoice,
+              localInv?.data,
+              await readToken(invoice[4])
+            );
+            if (!parsed) {
+              // Showing a base-unit figure as if it were a token amount is
+              // worse than omitting the invoice.
+              console.warn(`Invoice ${id}: cannot read token decimals, skipping`);
+              continue;
+            }
+            if (parsed._hashMismatch || parsed._payloadMismatch) {
+              console.warn(
+                `Invoice ${id}: stored payload does not match the on-chain record` +
+                  (parsed._payloadMismatch ? ` (${parsed._payloadMismatch})` : "") +
+                  "; showing on-chain data only"
+              );
+            }
 
-            // As the sender, the payload only ever existed on this device.
-            // Check it still matches the on-chain commitment before trusting it.
-            const payloadTrusted =
-              localInv?.data && verifyInvoiceHash(localInv.data, invoiceDataHash);
-
-            if (payloadTrusted) {
-              parsed = { ...localInv.data };
-
-              // Update local status if it changed
-              if (localInv.isPaid !== isPaid || localInv.isCancelled !== isCancelled) {
-                await updateInvoiceStatus(chainId, id, { isPaid, isCancelled });
-              }
-            } else {
-              if (localInv?.data) {
-                console.warn(
-                  `Invoice ${id}: stored payload does not match the on-chain hash; showing on-chain data only`
-                );
-              }
-              // Local storage was cleared, or this invoice was created on
-              // another device. The details are unrecoverable — the chain only
-              // holds the hash — so show what the chain does know.
-              parsed = {
-                amountDue: invoice[3].toString(),
-                user: { address: from },
-                client: { address: to },
-                paymentToken: { address: invoice[4] },
-                issueDate: null,
-                dueDate: null,
-                _onChainOnly: true,
-                _hashMismatch: Boolean(localInv?.data),
-              };
+            // Update local status if it changed
+            if (
+              !parsed._onChainOnly &&
+              (localInv.isPaid !== isPaid || localInv.isCancelled !== isCancelled)
+            ) {
+              await updateInvoiceStatus(chainId, id, { isPaid, isCancelled });
             }
 
             parsed["relayDelivered"] = localInv?.relayDelivered ?? false;
-            parsed["id"] = BigInt(id);
-            parsed["isPaid"] = isPaid;
-            parsed["isCancelled"] = isCancelled;
-
-            // Enhance with token details using the new token fetching system
-            if (parsed.paymentToken?.address) {
-              const tokenInfo = getTokenInfo(parsed.paymentToken.address);
-              if (tokenInfo) {
-                parsed.paymentToken = {
-                  ...parsed.paymentToken,
-                  logo: tokenInfo.image || tokenInfo.logo,
-                  decimals: tokenInfo.decimals || parsed.paymentToken.decimals,
-                  name: tokenInfo.name || parsed.paymentToken.name,
-                  symbol: tokenInfo.symbol || parsed.paymentToken.symbol,
-                };
-              } else {
-                // Fallback: try to fetch token info from blockchain if not in our list
-                try {
-                  const tokenContract = new ethers.Contract(
-                    parsed.paymentToken.address,
-                    ERC20_ABI,
-                    provider
-                  );
-
-                  const [symbol, name, decimals] = await Promise.all([
-                    tokenContract
-                      .symbol()
-                      .catch(() => parsed.paymentToken.symbol || "UNKNOWN"),
-                    tokenContract
-                      .name()
-                      .catch(() => parsed.paymentToken.name || "Unknown Token"),
-                    tokenContract
-                      .decimals()
-                      .catch(() => parsed.paymentToken.decimals || 18),
-                  ]);
-
-                  parsed.paymentToken = {
-                    ...parsed.paymentToken,
-                    symbol,
-                    name,
-                    decimals: Number(decimals),
-                    logo: `${import.meta.env.BASE_URL}tokenImages/generic.png`, // Generic fallback
-                  };
-                } catch (error) {
-                  console.error(
-                    "Failed to fetch token info from blockchain:",
-                    error
-                  );
-                  // Keep existing data or set defaults
-                  parsed.paymentToken.logo =
-                    parsed.paymentToken.logo || `${import.meta.env.BASE_URL}tokenImages/generic.png`;
-                }
-              }
-            }
-
-            // On-chain amounts are raw token units; the stored payload carries
-            // an already-formatted decimal string, so only stubs need scaling.
-            if (parsed._onChainOnly) {
-              const decimals = resolveInvoiceDecimals(parsed.paymentToken);
-              if (decimals === null) {
-                // Showing a base-unit figure as if it were a token amount, or
-                // feeding it to parseUnits, is worse than omitting the invoice.
-                console.warn(
-                  `Invoice ${parsed.id}: cannot resolve token decimals, skipping`
-                );
-                continue;
-              }
-              parsed.amountDue = ethers.formatUnits(parsed.amountDue, decimals);
-            }
-
             decryptedInvoices.push(parsed);
           } catch (err) {
             console.error(`Error processing invoice ${invoice[0]}:`, err);
@@ -1008,36 +911,10 @@ function SentInvoice() {
                                   variant="outlined"
                                 />
                               )}
-                              {invoice._onChainOnly && (
-                                <Tooltip
-                                  title={
-                                    invoice._hashMismatch
-                                      ? "The details stored on this device do not match the hash recorded on-chain for this invoice."
-                                      : "This invoice's details are not on this device. Only the chain's record of it is shown."
-                                  }
-                                >
-                                  <Chip
-                                    icon={
-                                      invoice._hashMismatch ? (
-                                        <ErrorIcon />
-                                      ) : (
-                                        <WarningIcon />
-                                      )
-                                    }
-                                    label={
-                                      invoice._hashMismatch
-                                        ? "Unverified"
-                                        : "Details unavailable"
-                                    }
-                                    color={
-                                      invoice._hashMismatch ? "error" : "default"
-                                    }
-                                    size="small"
-                                    variant="outlined"
-                                    sx={{ mt: 0.5 }}
-                                  />
-                                </Tooltip>
-                              )}
+                              <InvoiceVerificationChip
+                                invoice={invoice}
+                                variant="sent"
+                              />
                             </TableCell>
 
                             {/* Date Column */}
