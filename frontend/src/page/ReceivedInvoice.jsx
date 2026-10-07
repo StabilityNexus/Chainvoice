@@ -855,6 +855,9 @@ function ReceivedInvoice() {
               await updateInvoiceStatus(chainId, id, { isPaid, isCancelled });
             }
 
+            // The PDF export reads the network from here; the payload has none.
+            parsed.chainId = chainId;
+
             const batchInfo = detectBatchFromMetadata(parsed);
             if (batchInfo) {
               parsed.batchInfo = batchInfo;
