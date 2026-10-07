@@ -278,6 +278,8 @@ function SentInvoice() {
             }
 
             parsed["relayDelivered"] = localInv?.relayDelivered ?? false;
+            // The PDF export reads the network from here; the payload has none.
+            parsed.chainId = chainId;
             decryptedInvoices.push(parsed);
           } catch (err) {
             console.error(`Error processing invoice ${invoice[0]}:`, err);

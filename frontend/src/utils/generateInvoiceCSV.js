@@ -15,7 +15,7 @@ import {
  * @param {string|BigInt} fee - Network fee (wei)
  * @returns {string} CSV formatted string
  */
-const generateCSVContent = (invoice, fee = 0) => {
+export const generateCSVContent = (invoice, fee = 0) => {
   if (!invoice) {
     throw new Error("Invoice is required");
   }
