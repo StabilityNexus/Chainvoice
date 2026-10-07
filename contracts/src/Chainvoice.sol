@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.13;
+pragma solidity 0.8.19;
 
-interface IERC20 {
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-    function allowance(address owner, address spender) external view returns (uint256);
-}
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract Chainvoice {
+    // Tokens that return nothing from transferFrom (USDT and others) would
+    // otherwise make every payment revert while the return value is decoded.
+    using SafeERC20 for IERC20;
+
     // ========== Errors ==========
     // Existing
     error MixedTokenBatch();
@@ -34,7 +35,7 @@ contract Chainvoice {
     error IncorrectPaymentAmount();
     error NativeTransferFailed();
     error FeeMustBeNative();
-    error TokenTransferFailed();
+    error TokenAmountShortfall();
     error TreasuryNotSet();
     error NoFeesAvailable();
     error WithdrawFailed();
@@ -111,15 +112,6 @@ contract Chainvoice {
     uint256 public constant MAX_PAGE_LIMIT = 50;
 
     // ========== Internal Utils ==========
-    function _isERC20(address token) internal view returns (bool) {
-        if (token == address(0)) return false;
-        if (token.code.length == 0) return false;
-        (bool success, ) = token.staticcall(
-            abi.encodeWithSignature("balanceOf(address)", address(this))
-        );
-        return success;
-    }
-
     function _validateToken(address tokenAddress) private view {
         if (tokenAddress.code.length == 0) revert NotContract();
 
@@ -133,6 +125,17 @@ contract Chainvoice {
         if (!balOk || balData.length < 32 || !allowanceOk || allowanceData.length < 32) {
             revert InvalidToken();
         }
+    }
+
+    /// @dev Move `amount` of `token` from `payer` to `payee` and require the
+    ///      payee to have received all of it. A fee-on-transfer token (or one
+    ///      that switches a fee on later) would otherwise settle the invoice
+    ///      in full while the issuer is paid short.
+    function _pullToken(IERC20 token, address payer, address payee, uint256 amount) private {
+        uint256 before = token.balanceOf(payee);
+        token.safeTransferFrom(payer, payee, amount);
+        uint256 afterBal = token.balanceOf(payee);
+        if (afterBal < before || afterBal - before < amount) revert TokenAmountShortfall();
     }
 
     // ========== Messaging Key Management ==========
@@ -283,12 +286,7 @@ contract Chainvoice {
             }
             accumulatedFees += fee;
 
-            bool transferSuccess = IERC20(invoice.tokenAddress).transferFrom(
-                msg.sender,
-                invoice.from,
-                invoice.amountDue
-            );
-            if (!transferSuccess) revert TokenTransferFailed();
+            _pullToken(IERC20(invoice.tokenAddress), msg.sender, invoice.from, invoice.amountDue);
         }
 
         emit InvoicePaid(
@@ -354,8 +352,7 @@ contract Chainvoice {
 
             for (uint256 i = 0; i < n; i++) {
                 InvoiceDetails storage inv = invoices[invoiceIds[i]];
-                bool ok = erc20.transferFrom(msg.sender, inv.from, inv.amountDue);
-                if (!ok) revert TokenTransferFailed();
+                _pullToken(erc20, msg.sender, inv.from, inv.amountDue);
                 emit InvoicePaid(inv.id, inv.from, inv.to, inv.amountDue, token);
             }
         }
@@ -379,7 +376,7 @@ contract Chainvoice {
         if (invoiceId >= invoices.length) revert InvalidInvoiceId();
         InvoiceDetails memory invoice = invoices[invoiceId];
 
-        if (invoice.isCancelled) {
+        if (invoice.isCancelled || invoice.isPaid) {
             return (false, payer.balance, 0);
         }
 
@@ -393,8 +390,9 @@ contract Chainvoice {
         } else {
             uint256 bal = IERC20(invoice.tokenAddress).balanceOf(payer);
             uint256 allw = IERC20(invoice.tokenAddress).allowance(payer, address(this));
+            // The fee is charged in native currency on the token path too.
             return (
-                bal >= invoice.amountDue && allw >= invoice.amountDue,
+                bal >= invoice.amountDue && allw >= invoice.amountDue && payer.balance >= fee,
                 bal,
                 allw
             );
