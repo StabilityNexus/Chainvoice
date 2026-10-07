@@ -135,6 +135,8 @@ contract Chainvoice {
         uint256 before = token.balanceOf(payee);
         token.safeTransferFrom(payer, payee, amount);
         uint256 afterBal = token.balanceOf(payee);
+        // Both callers are nonReentrant, so `before` can't go stale mid-call.
+        // slither-disable-next-line reentrancy-balance
         if (afterBal < before || afterBal - before < amount) revert TokenAmountShortfall();
     }
 
