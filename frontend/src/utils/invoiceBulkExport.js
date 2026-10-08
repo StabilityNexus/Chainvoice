@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import { PDFDocument } from "pdf-lib";
-import { downloadInvoiceCSV } from "./generateInvoiceCSV";
-import { downloadInvoiceJSON } from "./generateInvoiceJSON";
+import { downloadInvoiceCSV, generateCSVContent } from "./generateInvoiceCSV";
+import { downloadInvoiceJSON, generateJSONContent } from "./generateInvoiceJSON";
 import { generateInvoicePDF } from "./generateInvoicePDF";
 
 const downloadBlob = (blob, filename) => {
@@ -23,51 +23,6 @@ const getInvoiceId = (invoice) =>
 
 const getInvoiceFilename = (invoice, extension) =>
     `invoice-${getInvoiceId(invoice)}.${extension}`;
-
-const escapeCSVValue = (value) => {
-    let text = String(value ?? "");
-
-    // Prevent spreadsheet formula injection.
-    if (/^[=+\-@]/.test(text)) {
-        text = `'${text}`;
-    }
-
-    if (
-        text.includes(",") ||
-        text.includes('"') ||
-        text.includes("\n") ||
-        text.includes("\r")
-    ) {
-        return `"${text.replace(/"/g, '""')}"`;
-    }
-
-    return text;
-};
-
-const createSimpleCSV = (invoice) => {
-    const headers = [
-        "Invoice ID",
-        "Client",
-        "Receiver",
-        "Amount",
-        "Status",
-        "Date",
-    ];
-
-    const row = [
-        invoice?.id,
-        invoice?.fname ?? invoice?.senderName ?? "",
-        invoice?.to ?? invoice?.receiverName ?? "",
-        invoice?.amountDue ?? invoice?.amount ?? "",
-        invoice?.status ?? "",
-        invoice?.date ?? invoice?.createdAt ?? "",
-    ];
-
-    return [
-        headers.map(escapeCSVValue).join(","),
-        row.map(escapeCSVValue).join(","),
-    ].join("\n");
-};
 
 const createMergedPDF = async (invoices, fee) => {
     const mergedPdf = await PDFDocument.create();
@@ -107,13 +62,18 @@ const createZipExport = async (invoices, format, fee) => {
             continue;
         }
 
+        // Same content as a single-file export; the raw invoice can't be
+        // stringified directly because its id is a BigInt.
         if (format === "json") {
-            zip.file(filename, JSON.stringify(invoice, null, 2));
+            zip.file(
+                filename,
+                JSON.stringify(generateJSONContent(invoice, fee), null, 2)
+            );
             continue;
         }
 
         if (format === "csv") {
-            zip.file(filename, createSimpleCSV(invoice));
+            zip.file(filename, "﻿" + generateCSVContent(invoice, fee));
             continue;
         }
 

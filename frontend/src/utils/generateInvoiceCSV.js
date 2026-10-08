@@ -15,7 +15,7 @@ import {
  * @param {string|BigInt} fee - Network fee (wei)
  * @returns {string} CSV formatted string
  */
-const generateCSVContent = (invoice, fee = 0) => {
+export const generateCSVContent = (invoice, fee = 0) => {
   if (!invoice) {
     throw new Error("Invoice is required");
   }
@@ -39,7 +39,12 @@ const generateCSVContent = (invoice, fee = 0) => {
       str = `'${str}`;
     }
 
-    if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+    if (
+      str.includes(",") ||
+      str.includes('"') ||
+      str.includes("\n") ||
+      str.includes("\r")
+    ) {
       return `"${str.replace(/"/g, '""')}"`;
     }
     return str;

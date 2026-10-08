@@ -1044,7 +1044,7 @@ export const ChainvoiceABI = [
   },
   {
     "type": "error",
-    "name": "TokenTransferFailed",
+    "name": "TokenAmountShortfall",
     "inputs": []
   },
   {
