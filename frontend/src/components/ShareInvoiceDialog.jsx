@@ -229,7 +229,10 @@ const ShareInvoiceDialog = ({ open, onClose, invoiceId, chainId }) => {
       })
       .catch((err) => {
         console.warn("[ShareInvoiceDialog] QR generation failed:", err);
-        if (!cancelled) setQrDataUrl("");
+        if (!cancelled) {
+          setQrDataUrl("");
+          toast.error("Could not generate the QR code. You can still share the link.");
+        }
       });
     return () => {
       cancelled = true;
