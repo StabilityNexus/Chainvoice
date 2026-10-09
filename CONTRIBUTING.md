@@ -20,7 +20,7 @@ Once your PR is ready and all CI checks pass, drop the PR link (along with the l
 ---
 
 ## Smart Contract Contribution Guidelines 
-The following guidelines apply to all contributions that modify or introduce smart contract logic in ChainVoice. Since smart contracts form the core logic of the system, a higher standard of review and validation is required compared to frontend or general application changes.
+The following guidelines apply to all contributions that modify or introduce smart contract logic in Chainvoice. Since smart contracts form the core logic of the system, a higher standard of review and validation is required compared to frontend or general application changes.
 
 **1. Test Requirements:**
 Any pull request that modifies or introduces smart contract logic must include comprehensive automated tests. Tests must validate expected behavior, cover relevant edge cases, and properly test revert and failure scenarios. If existing logic is modified, corresponding tests must also be updated. Pull requests without sufficient test coverage will not be reviewed, as tests serve as the primary validation mechanism for contract correctness.
@@ -34,7 +34,7 @@ During review, emphasis will be placed on architectural soundness, correctness o
 ---
 
 ## Frontend Contribution Guidelines
-The following guidelines apply to all contributions that modify or introduce frontend changes in ChainVoice.
+The following guidelines apply to all contributions that modify or introduce frontend changes in Chainvoice.
 
 **1. Static Asset Paths:**
 All static file references (images, icons, fonts, etc.) must use `import.meta.env.BASE_URL` instead of hardcoded absolute paths. This ensures assets resolve correctly in both the production site and automated PR preview deployments.

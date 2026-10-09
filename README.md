@@ -242,7 +242,7 @@ Join our community for support, updates, and discussions:
 - **Telegram** - [t.me/StabilityNexus](https://t.me/StabilityNexus)
 - **Discord** - [discord.gg/YzDKeEfWtS](https://discord.gg/YzDKeEfWtS)
 - **X (Twitter)** - [@StabilityNexus](https://x.com/StabilityNexus)
-- **Stable ViewPoints** - [news.stability.nexus](https://viewpoints.stability.nexus/)
+- **Stable Viewpoints** - [news.stability.nexus](https://viewpoints.stability.nexus/)
 - **LinkedIn** - [linkedin.com/company/stability-nexus](https://linkedin.com/company/stability-nexus)
 - **YouTube** - [youtube.com/@StabilityNexus](https://www.youtube.com/@StabilityNexus)
 
