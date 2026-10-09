@@ -2,10 +2,13 @@
 
 import Navbar from "@/components/Navbar";
 import TermsOfUseProvider from "@/components/TermsOfUseProvider";
+import { useDocumentMeta } from "@/hooks/useDocumentMeta";
 
 import { Outlet } from "react-router-dom";
 
 function Applayout() {
+  useDocumentMeta();
+
   return (
     // Wraps every route, so the daily Terms of Use prompt appears wherever a
     // visit starts, including deep links straight into the dashboard.
