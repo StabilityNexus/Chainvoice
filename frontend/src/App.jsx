@@ -82,9 +82,6 @@ function App() {
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider
             coolMode
-            // initialChain={citreaTestnet} 
-            // Keep this commented out or removed. 
-            // If undefined, RainbowKit defaults to the user's current chain (if supported).
             theme={darkTheme({
               accentColor: "#22c55e",
               accentColorForeground: "white",
