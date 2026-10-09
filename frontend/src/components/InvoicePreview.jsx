@@ -23,6 +23,8 @@ const CHAIN_ID_TO_NAME = {
   59141: "Linea Sepolia",
   1111: "WEMIX3.0 Testnet",
   1112: "WEMIX3.0 Mainnet",
+  61: "Ethereum Classic",
+  5115: "Citrea Testnet",
   // Add more as needed
 };
 
