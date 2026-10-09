@@ -15,9 +15,10 @@
             1. /pr-preview/* paths: fix the "Go to app" link to the correct base
                path (works on both custom domains and github.io project pages),
                then reveal the tombstone.
-            2. All other paths: run the standard SPA redirect so the React app
-               can handle client-side routing. The tombstone is hidden via CSS
-               until JS confirms we are on a pr-preview path.
+            2. All other paths: redirect to the same route as a HashRouter URL
+               (<base>/#/<path><?query>) so a deep link or refresh opens that
+               page. The tombstone is hidden via CSS until JS confirms we are
+               on a pr-preview path.
     -->
     <style>
         /* ── Tombstone styles ───────────────────────────────────────────────── */
@@ -188,8 +189,12 @@
 
         } else {
             // ── SPA redirect branch ───────────────────────────────────────────
-            // Rewrite the 404 path back to the root so the React app can handle
-            // client-side routing via its HashRouter / query-string technique.
+            // The app uses HashRouter, so the route has to live in the fragment:
+            //   /dashboard/received?page=2  ->  /#/dashboard/received?page=2
+            // Hash URLs never reach the server, so this page only ever sees
+            // path-style URLs. Any fragment already on the 404'd URL is
+            // dropped: it was never an app route, and a second '#' inside
+            // the hash route would be ambiguous.
             //
             // Auto-detect path segments to keep.
             // If we are on github.io and have a path like /RepoName/, keep 1 segment.
@@ -202,12 +207,11 @@
             }
 
             var l = window.location;
+            var segments = l.pathname.split('/');
+            var basePath = segments.slice(0, 1 + pathSegmentsToKeep).join('/') + '/';
+            var route = segments.slice(1 + pathSegmentsToKeep).join('/');
             l.replace(
-                l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
-                l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
-                l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
-                (l.search ? '&q=' + l.search.slice(1).replace(/&/g, '~and~') : '') +
-                l.hash
+                l.protocol + '//' + l.host + basePath + '#/' + route + l.search
             );
         }
     </script>
