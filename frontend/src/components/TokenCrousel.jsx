@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import { motion } from "framer-motion";
 import { SiEthereum } from "react-icons/si";
 import { useTokenList } from "../hooks/useTokenList";
+import ImageWithFallback from "./ImageWithFallback";
 
 const TokenCarousel = () => {
   const carouselRef = useRef();
@@ -55,17 +56,11 @@ const {
             >
               <div className="flex items-center space-x-3 w-[180px]">
                 <div className="relative">
-                  <img
-                    src={
-                      token.image ||
-                      token.logo ||
-                      `${import.meta.env.BASE_URL}tokenImages/generic.png`
-                    }
+                  <ImageWithFallback
+                    src={token.image || token.logo}
+                    fallbackSrc={`${import.meta.env.BASE_URL}tokenImages/generic.png`}
                     alt={token.symbol}
                     className="w-8 h-8 rounded-full object-contain"
-                    onError={(e) => {
-                      e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
-                    }}
                   />
                   {token.address ===
                     "0x0000000000000000000000000000000000000000" && (

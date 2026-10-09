@@ -38,6 +38,7 @@ import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
+import ImageWithFallback from "./ImageWithFallback";
 
 const InvoicePreview = ({
   invoice,
@@ -67,23 +68,18 @@ const InvoicePreview = ({
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div className="flex items-center space-x-4">
               <div className="bg-white p-3.5 rounded-xl border-2 border-gray-200 shadow-lg flex-shrink-0 hover:shadow-xl transition-shadow duration-200">
-                <img
+                <ImageWithFallback
                   src={`${import.meta.env.BASE_URL}logo.png`}
                   alt="Chainvoice"
                   className="h-14 w-14 sm:h-16 sm:w-16 md:h-20 md:w-20 object-contain"
-                  onError={(e) => {
-                    e.target.style.display = "none";
-                    const fallback = e.target.parentElement.querySelector(
-                      ".logo-fallback"
-                    );
-                    if (fallback) fallback.style.display = "flex";
-                  }}
+                  fallback={
+                    <div className="flex h-14 w-14 sm:h-16 sm:w-16 md:h-20 md:w-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl items-center justify-center shadow-sm">
+                      <span className="text-white font-bold text-xl sm:text-2xl md:text-3xl">
+                        CV
+                      </span>
+                    </div>
+                  }
                 />
-                <div className="logo-fallback hidden h-14 w-14 sm:h-16 sm:w-16 md:h-20 md:w-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl items-center justify-center shadow-sm">
-                  <span className="text-white font-bold text-xl sm:text-2xl md:text-3xl">
-                    CV
-                  </span>
-                </div>
               </div>
               <div className="flex flex-col justify-center">
                 <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-1 leading-tight">
@@ -238,13 +234,11 @@ const InvoicePreview = ({
           <div className="flex items-center">
             {invoice.paymentToken?.logo ? (
               <div className="bg-white p-1.5 rounded-lg border border-gray-200 mr-3">
-                <img
+                <ImageWithFallback
                   src={invoice.paymentToken.logo}
+                  fallbackSrc={`${import.meta.env.BASE_URL}tokenImages/generic.png`}
                   alt={invoice.paymentToken.symbol}
                   className="w-7 h-7 sm:w-8 sm:h-8 object-contain"
-                  onError={(e) => {
-                    e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
-                  }}
                 />
               </div>
             ) : (
