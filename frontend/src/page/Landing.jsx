@@ -205,7 +205,7 @@ function Landing() {
                 className="rounded-xl border border-gray-700/50 shadow-xl"
               />
               <div className="absolute -bottom-4 -left-4 bg-[#1E2029] px-3 py-1.5 rounded-lg border border-gray-700/50 shadow-sm flex gap-3 items-center">
-                <span className="text-xs font-bold"> 1000+ ERC20 Token</span>
+                <span className="text-xs font-bold"> 1000+ ERC20 Tokens</span>
               </div>
             </motion.div>
           </div>

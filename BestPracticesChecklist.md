@@ -186,16 +186,16 @@
 ### Cryptography (mark N/A if project does not handle cryptography)
 
 - [ ] 🔴 **crypto_published** — Only publicly reviewed cryptographic protocols/algorithms are used by default.
-  - *Note:* Corrected after code review — `contracts/src/Chainvoice.sol` does not call `keccak256`, `ecrecover`, or any ECDSA/ECIES function; it only stores an off-chain-computed `invoiceDataHash` and validates the byte-length/prefix of a Waku public key (`registerWakuPublicKey`, lines 124–126). The frontend's "encryption" (`frontend/src/page/CreateInvoice.jsx:528`, `CreateInvoicesBatch.jsx:618`, `BatchPayment.jsx:340`) is `btoa`/`atob` — Base64 encoding, not a cryptographic algorithm — and `dataToEncryptHash` is hardcoded to `""` rather than computed. No genuine cryptographic protocol is currently in use despite the project's intent to end-to-end encrypt invoice data via Waku.
+  - *Note:* `contracts/src/Chainvoice.sol` performs no cryptography itself: it stores an off-chain-computed `invoiceDataHash` (rejecting a zero hash) and checks that a registered messaging public key is 65 bytes with the `0x04` prefix (`registerPublicKey`). The frontend encrypts invoice payloads end to end with ECIES over secp256k1 (ephemeral ECDH, HKDF-SHA256, AES-256-GCM) via `eciesjs` in `frontend/src/services/relay/invoiceCrypto.js`, and commits to the plaintext with a `keccak256` hash computed by `computeInvoiceHash` in `frontend/src/services/relay/invoiceHashUtils.js`. Base64 (`btoa`/`atob`) is used only to encode the ciphertext for transport. These are publicly reviewed primitives; this status has not yet been re-assessed by a maintainer.
 
 - [~] 🟡 **crypto_call** — Project calls an established crypto library rather than reimplementing crypto functions.
-  - *Library used:* N/A — no cryptographic library is called; see `crypto_published` note above.
+  - *Library used:* `eciesjs` (ECIES encryption) and `ethers` (`keccak256` hashing, and the wallet signature from which the messaging key pair is derived in `frontend/src/services/relay/relayKeyManager.js`). No primitives are reimplemented; this status has not yet been re-assessed by a maintainer.
 
 - [ ] 🔴 **crypto_working** — No broken algorithms (MD4, MD5, single DES, RC4, Dual_EC_DRBG) used unless required for interoperability (must be documented).
-  - *Note:* Base64 (`btoa`/`atob`) is not a cryptographic algorithm at all, so this criterion can't be assessed as "met" — there is no real algorithm in place to evaluate for weakness.
+  - *Note:* The algorithms in use (secp256k1 ECDH, HKDF-SHA256, AES-256-GCM, keccak256) are not on the broken list; see `crypto_published` above. Not yet re-assessed by a maintainer.
 
 - [ ] 🔴 **crypto_keylength** — Key lengths meet [NIST 2030 minimums](https://www.keylength.com/en/4/) by default.
-  - *Note:* The registered Waku public key is a standard uncompressed secp256k1 point (65 bytes, prefix `0x04`), which would meet minimums if used — but it is only stored/validated for format, never actually used to encrypt anything on the paths above.
+  - *Note:* The registered messaging public key is a standard uncompressed secp256k1 point (65 bytes, prefix `0x04`) and is used to ECIES-encrypt every invoice payload sent over the relay; the symmetric layer is AES-256-GCM. Not yet re-assessed by a maintainer.
 
 - [~] 🔴 **crypto_password_storage** — Passwords for external users are stored as iterated salted hashes (Argon2id, bcrypt, scrypt, PBKDF2).
   - *Note:* N/A — *Justification: project doesn't store user passwords (wallet-based auth).*
@@ -244,7 +244,7 @@
 ### Web3 / Solidity Notes
 
 - Scorecard does not audit Solidity-specific security. Use [Slither](https://github.com/crytic/slither) for `static_analysis` and `warnings` criteria — **not currently configured, recommended next step.**
-- For `crypto_*` criteria: no genuine cryptography is currently implemented anywhere in the stack — the frontend's "encryption" of invoice data is Base64 encoding (`btoa`/`atob`), not a cipher, and the invoice data hash is never actually computed. **Recommended next step:** use the registered Waku public key (`registerWakuPublicKey`) to actually ECIES-encrypt the payload, and compute a real `keccak256` hash for `invoiceDataHash` instead of leaving it empty.
+- For `crypto_*` criteria: invoice payloads are ECIES-encrypted (`eciesjs`) to the recipient's on-chain registered public key before they reach the relay, and `invoiceDataHash` is a real `keccak256` commitment that the receiver recomputes to detect tampering. The checkbox statuses in the Cryptography section predate this implementation and still need re-assessing.
 - `know_secure_design` requires evidence of a primary developer's own knowledge (training, experience, or self-certification) — a third-party audit report demonstrates external review, not developer knowledge, and should not be cited as evidence for this criterion.
 
 ### Full-Stack Notes
