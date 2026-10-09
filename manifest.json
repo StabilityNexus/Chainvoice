@@ -4,18 +4,23 @@
   "description": "Decentralized Invoicing Platform by Stability Nexus. Create, manage, and pay invoices securely on the blockchain.",
   "start_url": ".",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#ffffff",
+  "background_color": "#161920",
+  "theme_color": "#161920",
   "icons": [
     {
-      "src": "correct.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
     },
     {
-      "src": "logo.png",
+      "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
+    },
+    {
+      "src": "logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
     }
   ]
 }
