@@ -1,5 +1,3 @@
-import JSZip from "jszip";
-import { PDFDocument } from "pdf-lib";
 import { downloadInvoiceCSV, generateCSVContent } from "./generateInvoiceCSV";
 import { downloadInvoiceJSON, generateJSONContent } from "./generateInvoiceJSON";
 import { generateInvoicePDF } from "./generateInvoicePDF";
@@ -25,6 +23,7 @@ const getInvoiceFilename = (invoice, extension) =>
     `invoice-${getInvoiceId(invoice)}.${extension}`;
 
 const createMergedPDF = async (invoices, fee) => {
+    const { PDFDocument } = await import("pdf-lib");
     const mergedPdf = await PDFDocument.create();
 
     for (const invoice of invoices) {
@@ -51,6 +50,7 @@ const createMergedPDF = async (invoices, fee) => {
 };
 
 const createZipExport = async (invoices, format, fee) => {
+    const { default: JSZip } = await import("jszip");
     const zip = new JSZip();
 
     for (const invoice of invoices) {

@@ -1,4 +1,3 @@
-import jsPDF from "jspdf";
 import { getWagmiChainName, getWagmiChainInfo } from "./wagmiChainHelpers";
 import {
   buildInvoiceTotalText,
@@ -159,13 +158,14 @@ const loadLogoImage = async () => {
  * Generate PDF for invoice
  * @param {Object} invoice - Invoice object
  * @param {string|BigInt} fee - Network fee (wei)
- * @returns {Promise<jsPDF>} Generated PDF document
+ * @returns {Promise<import("jspdf").jsPDF>} Generated PDF document
  */
 export const generateInvoicePDF = async (invoice, fee = 0) => {
   if (!invoice) {
     throw new Error("Invoice is required");
   }
 
+  const { default: jsPDF } = await import("jspdf");
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",
