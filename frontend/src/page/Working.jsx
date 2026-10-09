@@ -31,7 +31,7 @@ export default function Working() {
 
             <div className="bg-white p-6  shadow-lg w-full max-w-2xl font-Montserrat">
               <div className="flex justify-between items-center">
-                <img src="whiteLogo.png" alt="" width={100} />
+                <img src={`${import.meta.env.BASE_URL}whiteLogo.png`} alt="Chainvoice logo" width={100} />
                 <div>
                   <p className="text-gray-700 text-xs py-1">Issued on March 4, 2025</p>
                   <p className="text-gray-700 text-xs ">Payment due by April 3, 2025</p>
@@ -39,7 +39,7 @@ export default function Working() {
               </div>
 
               <div className="border-b border-green-500 pb-4 mb-4">
-                <h1 className="text-sm font-bold">Invoice #1</h1>
+                <p className="text-sm font-bold">Invoice #1</p>
               </div>
 
               <div className="mb-4">
@@ -112,8 +112,8 @@ export default function Working() {
               </div>
 
               <div className="p-2 flex items-center">
-                <h1 className="text-xs text-center pr-1">Powered by</h1>
-                <img src="whiteLogo.png" alt="" width={80} />
+                <p className="text-xs text-center pr-1">Powered by</p>
+                <img src={`${import.meta.env.BASE_URL}whiteLogo.png`} alt="Chainvoice" width={80} />
               </div>
             </div>
           </div>

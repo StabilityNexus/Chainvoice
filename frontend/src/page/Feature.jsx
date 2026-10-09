@@ -7,28 +7,28 @@ function Feature() {
       icon: <Lock className="w-12 h-12 text-blue-600" />,
       title: "Secure and Transparent Transactions",
       description: "Leverage blockchain technology to ensure encrypted, tamper-proof, and immutable transactions. Provide complete transparency for invoice verification.",
-      image: "/secure.png",
+      image: `${import.meta.env.BASE_URL}secure.png`,
       width:500
     },
     {
       icon: <Send className="w-12 h-12 text-green-600" />,
       title: "Send and Receive Invoices",
       description: "Effortlessly create and manage invoices with a few clicks. Track real-time status and maintain a comprehensive invoice dashboard.",
-      image: "/transaction.png",
+      image: `${import.meta.env.BASE_URL}transaction.png`,
       width:500
     },
     {
       icon: <Layers className="w-12 h-12 text-purple-600" />,
       title: "Smart Contract Integration",
       description: "Automate payment processes with secure smart contracts. Ensure funds are released only when invoice conditions are met, reducing intermediary dependencies.",
-      image: "/contract.png",
+      image: `${import.meta.env.BASE_URL}contract.png`,
       width:300
     },
     {
       icon: <BarChart className="w-12 h-12 text-orange-600" />,
       title: "Comprehensive Invoice Tracking",
       description: "Gain complete visibility into your invoice lifecycle. Monitor payment statuses, track financial performance, and manage all transactions seamlessly.",
-      image: "/image.png",
+      image: `${import.meta.env.BASE_URL}image.png`,
       width:300
     }
   ];
