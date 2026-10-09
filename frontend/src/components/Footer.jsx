@@ -18,6 +18,10 @@ function Footer() {
               <img
                 src={`${import.meta.env.BASE_URL}logo-animated.gif`}
                 alt="Stability Nexus"
+                width={56}
+                height={56}
+                loading="lazy"
+                decoding="async"
                 className="h-14"
               />
             </a>

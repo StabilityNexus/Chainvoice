@@ -63,6 +63,12 @@ function Landing() {
                 <img
                   src={`${import.meta.env.BASE_URL}dashboard.png`}
                   alt="Secure Invoice Dashboard"
+                  width={1841}
+                  height={759}
+                  // React 18 does not know fetchPriority yet; the lowercase attribute passes through.
+                  // eslint-disable-next-line react/no-unknown-property
+                  fetchpriority="high"
+                  decoding="async"
                   className="rounded-xl shadow-2xl border border-gray-700/50"
                 />
                 <div className="absolute -bottom-6 -right-6 bg-gradient-to-r from-green-500 to-emerald-600 p-2 rounded-lg shadow-lg">

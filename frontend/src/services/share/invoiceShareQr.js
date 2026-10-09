@@ -1,5 +1,3 @@
-import QRCode from 'qrcode';
-
 /**
  * QR rendering for share links: a Chainvoice mark in the middle, and a
  * downloadable card that says what the code is for.
@@ -77,6 +75,7 @@ function roundedRect(ctx, x, y, width, height, radius) {
  */
 export async function renderShareQr(url, { size = 512, logoSrc = DEFAULT_LOGO_SRC } = {}) {
   const canvas = document.createElement('canvas');
+  const { default: QRCode } = await import('qrcode');
   await QRCode.toCanvas(canvas, url, {
     errorCorrectionLevel: ERROR_CORRECTION,
     margin: 2,

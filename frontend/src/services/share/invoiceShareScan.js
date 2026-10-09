@@ -1,4 +1,3 @@
-import jsQR from 'jsqr';
 import { InvoiceShareError } from './invoiceShareCodec.js';
 
 /**
@@ -99,7 +98,10 @@ export async function scanQrImageFile(file) {
     );
   }
 
-  const img = await loadImageFromFile(file);
+  const [{ default: jsQR }, img] = await Promise.all([
+    import('jsqr'),
+    loadImageFromFile(file),
+  ]);
   const pixels = pixelsFor(img, DECODE_MAX_EDGE);
 
   for (const inversion of ['dontInvert', 'onlyInvert']) {
