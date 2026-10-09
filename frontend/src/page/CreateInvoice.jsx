@@ -74,12 +74,12 @@ import {
 
 /** Public RPC URLs by chain ID for token verification when visitor has no wallet (e.g. opening invoice request link in incognito). */
 const CHAIN_ID_TO_PUBLIC_RPC = {
-  1: "https://eth.llamarpc.com",
-  61: "https://etc.blockscout.com",
-  137: "https://polygon-rpc.com",
+  1: "https://ethereum-rpc.publicnode.com",
+  61: "https://etc.etcdesktop.com",
+  137: "https://polygon-bor-rpc.publicnode.com",
   56: "https://bsc-dataseed.binance.org",
   8453: "https://mainnet.base.org",
-  11155111: "https://rpc.ankr.com/eth_sepolia",
+  11155111: "https://ethereum-sepolia-rpc.publicnode.com",
   5115: "https://rpc.testnet.citrea.xyz",
 };
 

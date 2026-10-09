@@ -134,7 +134,7 @@ forge test -vvv
 ### Prerequisites
 - [Foundry](https://getfoundry.sh/) installed
 - Wallet funded with ETC
-- ETC RPC URL (e.g., Rivet, Ankr, Chainstack)
+- ETC RPC URL (e.g., `https://etc.etcdesktop.com`, Ankr, Chainstack)
 
 ### Deployment Steps
 
