@@ -233,7 +233,7 @@ function About() {
                 blockchains and is verifiable by anyone.
               </p>
               <a
-                href="https://github.com/StabilityNexus/Chainvoice"
+                href="https://github.com/StabilityNexus/Chainvoice/tree/main/contracts"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center text-green-400 font-semibold hover:text-green-300 transition-colors"

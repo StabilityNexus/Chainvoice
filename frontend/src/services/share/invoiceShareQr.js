@@ -37,6 +37,10 @@ const ERROR_CORRECTION = 'M';
  */
 const LOGO_RATIO = 0.16;
 
+// BASE_URL keeps the logo resolvable when the app is served from a
+// subdirectory, such as a /pr-preview/pr-N/ build.
+const DEFAULT_LOGO_SRC = `${import.meta.env?.BASE_URL ?? '/'}logo.png`;
+
 /** Load an image, resolving to null rather than throwing. */
 function loadImage(src) {
   return new Promise((resolve) => {
@@ -68,10 +72,10 @@ function roundedRect(ctx, x, y, width, height, radius) {
  * @param {string} url - the share link to encode
  * @param {Object} [options]
  * @param {number} [options.size=512] - pixel width of the rendered code
- * @param {string} [options.logoSrc='/logo.png']
+ * @param {string} [options.logoSrc=DEFAULT_LOGO_SRC]
  * @returns {Promise<string>} PNG data URL
  */
-export async function renderShareQr(url, { size = 512, logoSrc = '/logo.png' } = {}) {
+export async function renderShareQr(url, { size = 512, logoSrc = DEFAULT_LOGO_SRC } = {}) {
   const canvas = document.createElement('canvas');
   await QRCode.toCanvas(canvas, url, {
     errorCorrectionLevel: ERROR_CORRECTION,
@@ -130,12 +134,12 @@ function fitText(ctx, text, maxWidth) {
  * @param {string} [params.subheading] - a line under the heading
  * @param {string} [params.caption] - printed under the code, e.g. "Invoice #6 · 10.0 DAI"
  * @param {string} [params.footnote] - the call to action
- * @param {string} [params.logoSrc='/logo.png']
+ * @param {string} [params.logoSrc=DEFAULT_LOGO_SRC]
  * @returns {Promise<string>} PNG data URL
  */
 export async function renderShareQrCard(
   url,
-  { heading, subheading, caption, footnote, logoSrc = '/logo.png' } = {}
+  { heading, subheading, caption, footnote, logoSrc = DEFAULT_LOGO_SRC } = {}
 ) {
   const qrDataUrl = await renderShareQr(url, { size: 640, logoSrc });
   const qr = await loadImage(qrDataUrl);
