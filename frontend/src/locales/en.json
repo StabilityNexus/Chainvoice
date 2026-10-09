@@ -33,5 +33,62 @@
       "mismatchHint": "The details stored on this device state a different {{field}} from the invoice recorded on-chain. Only the on-chain record is shown, and the recipient cannot pay it from Chainvoice."
     },
     "payBlocked": "This invoice's details contradict its on-chain record, so it can't be paid here."
+  },
+  "seo": {
+    "titleTemplate": "{{page}} | Chainvoice",
+    "pages": {
+      "dashboard": {
+        "title": "Dashboard",
+        "description": "Your Chainvoice dashboard. Send, request, import and track blockchain invoices from one place."
+      },
+      "createInvoice": {
+        "title": "Send Invoice",
+        "description": "Create an invoice and send it on-chain to any wallet address, payable in the token of your choice."
+      },
+      "batchInvoice": {
+        "title": "Send Multiple Invoices",
+        "description": "Create and send several on-chain invoices in a single transaction."
+      },
+      "sentInvoices": {
+        "title": "Sent Invoices",
+        "description": "Track the invoices you have sent, see which ones are paid and cancel those that are still pending."
+      },
+      "requestInvoice": {
+        "title": "Request Invoices",
+        "description": "Create a shareable link that lets someone send you an invoice pre-filled with your details."
+      },
+      "receivedInvoices": {
+        "title": "Received Invoices",
+        "description": "Review the invoices sent to your wallet and pay them securely on the blockchain."
+      },
+      "importInvoice": {
+        "title": "Import Invoice",
+        "description": "Import an invoice shared with you by link, QR code or file."
+      },
+      "settings": {
+        "title": "Settings",
+        "description": "Manage your sender details and product catalog for new invoices."
+      },
+      "features": {
+        "title": "Features",
+        "description": "Explore what Chainvoice offers: on-chain invoices, multi-token payments and full invoice tracking."
+      },
+      "about": {
+        "title": "About",
+        "description": "Learn why Stability Nexus built Chainvoice, a decentralized platform for creating and paying invoices on the blockchain."
+      },
+      "working": {
+        "title": "How It Works",
+        "description": "See how a Chainvoice invoice moves from creation to on-chain payment."
+      },
+      "treasury": {
+        "title": "Treasury",
+        "description": "Manage Chainvoice platform fees and treasury configuration."
+      },
+      "notFound": {
+        "title": "Page Not Found",
+        "description": "The page you are looking for does not exist on Chainvoice."
+      }
+    }
   }
 }

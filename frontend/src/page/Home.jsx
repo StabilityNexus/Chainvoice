@@ -20,6 +20,7 @@ import { FileStackIcon, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useTermsOfUse } from "@/hooks/useTermsOfUse";
+import { useTranslation } from "@/hooks/useTranslation";
 import { SHELL } from "@/utils/layout";
 
 const MENU_ITEMS = [
@@ -174,6 +175,7 @@ export default function Home() {
     dismissOnboarding,
   } = useUserProfile();
   const { accepted: termsAccepted } = useTermsOfUse();
+  const { t } = useTranslation("seo");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(readRailCollapsed);
@@ -348,6 +350,8 @@ export default function Home() {
             }}
             className="text-white"
           >
+            {/* Each section renders its own visible h2 beneath this. */}
+            <h1 className="sr-only">{t("pages.dashboard.title")}</h1>
             <Outlet />
           </Box>
         </Box>

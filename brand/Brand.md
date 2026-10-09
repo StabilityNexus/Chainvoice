@@ -21,6 +21,7 @@ Generated from `frontend/public/logo.svg` at the standard sizes used across brow
 | [`favicon-32x32.png`](./favicon-32x32.png) | 32×32 | Browser tab (HiDPI) |
 | [`favicon-48x48.png`](./favicon-48x48.png) | 48×48 | Windows taskbar |
 | [`apple-touch-icon.png`](./apple-touch-icon.png) | 180×180 | iOS home screen |
+| [`icon-192.png`](./icon-192.png) | 192×192 | PWA manifest / Android home screen |
 | [`icon-512.png`](./icon-512.png) | 512×512 | PWA manifest / app icon |
 
 ## Color Palette
