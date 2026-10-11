@@ -11,9 +11,7 @@ on:
     types: [completed]
 
 permissions:
-  issues: write
-  pull-requests: write
-  actions: read
+  contents: read
 
 # One report in flight per head branch. Without this, two pushes in quick
 # succession race: both runs list the comments, both see no existing report, and
@@ -28,6 +26,10 @@ jobs:
     name: Label and comment
     if: github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      actions: read
     steps:
       # This job holds a write token, so it must never check out or execute the
       # PR's code. It only reads text out of the artifact and quotes it.
