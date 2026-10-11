@@ -10,7 +10,7 @@ Pull requests must remain focused and limited in scope. Each pull request should
 
 **2. Build, Test & CI Policy:**
 Before opening a pull request, you must ensure that your local build is successful, all relevant tests pass, and there are no new console errors or warnings in the browser. All automated CI checks must pass before a pull request can be merged:
-- **Frontend (`frontend/`):** New or modified frontend features must include unit tests using Jest (`npm run test` or `npm run test:ci`). The frontend CI suite (`test.yml`) enforces that linting (`npm run lint`), unit tests with coverage (`npm run test:ci`), and the production build (`npm run build`) pass.
+- **Frontend (`frontend/`):** New or modified frontend features must include unit tests using Jest (`npm run test` or `npm run test:ci`). The frontend CI suite (`test.yml`) enforces that unit tests with coverage (`npm run test:ci`) and the production build (`npm run build`) pass. Linting (`npm run lint`) runs in CI as an advisory check (`continue-on-error: true`).
 - **Smart Contracts (`contracts/`):** Any new or modified contract logic must include comprehensive automated tests in Foundry (`forge test` / `forge test -vvv`) covering expected behavior, edge cases, and revert conditions. The contract CI suite (`contracts.yml`) enforces that compilation (`forge build --sizes`), test execution (`forge test -vvv`), and Slither static analysis (`slither . --config-file slither.config.json --fail-high`) pass.
 - **Static Analysis & Security:** The CodeQL workflow (`codeql.yml`) checks frontend JavaScript/TypeScript code for vulnerabilities.
 
