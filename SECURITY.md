@@ -22,12 +22,13 @@ The following table outlines the security support status for components in this 
 
 If you discover a security vulnerability in Chainvoice, please report it privately rather than opening a public issue or discussing it in public channels.
 
-- **Preferred Method:** Submit a private report through GitHub's Private Vulnerability Reporting:  
-  [Report a vulnerability](https://github.com/StabilityNexus/Chainvoice/security/advisories/new)
+- **Preferred Route (once enabled):** GitHub's Private Vulnerability Reporting:  
+  [Report a vulnerability](https://github.com/StabilityNexus/Chainvoice/security/advisories/new)  
+  *(Note: This route requires repository maintainers to enable Private Vulnerability Reporting in repository settings.)*
 
-- **Alternative Contact:** If you are unable to use GitHub's private reporting tool, you can reach out to the maintainers:
+- **Current Direct Contact:** You can reach out directly and privately to the maintainers:
+  - Maintainer: Atharva Naik ([@Atharva0506](https://github.com/Atharva0506)) via direct message on Discord (Stability Nexus Discord server). Please do not post vulnerability details in public channels.
   <!-- Maintainers: please configure an official security contact email if desired (e.g., security@stability.nexus) -->
-  - Maintainer: Atharva Naik ([@Atharva0506](https://github.com/Atharva0506)) via the [#chainvoice channel](https://discord.com/channels/995968619034984528/1328282666335993856) on the Stability Nexus Discord server
 
 Please provide:
 - A description of the issue and potential impact

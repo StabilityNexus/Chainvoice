@@ -121,7 +121,7 @@
   - *Evidence URL:* `SECURITY.md`
 
 - [x] 🟡 **vulnerability_report_private** — If private vulnerability reporting is supported, the method for private submission is documented.
-  - *Evidence URL:* `SECURITY.md` (GitHub Private Vulnerability Reporting at `https://github.com/StabilityNexus/Chainvoice/security/advisories/new`)
+  - *Evidence URL:* `SECURITY.md` (documents GitHub Private Vulnerability Reporting once enabled by maintainers, with direct Discord maintainer contact as fallback)
 
 - [~] 🔴 **vulnerability_report_response** — Initial response to any vulnerability report received in the last 6 months was within 14 days.
   - *Self-certification note:* N/A — *Justification: no vulnerability reports received in the last 6 months.*
