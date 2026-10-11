@@ -50,7 +50,7 @@
   - *Evidence URL:* `CONTRIBUTING.md` — sections 3–5 (PR scope, CI requirements)
 
 - [x] 🟡 **contribution_requirements** — `CONTRIBUTING.md` references acceptable contribution standards (coding style, tests required, etc.).
-  - *Evidence URL:* `CONTRIBUTING.md` — "Test Requirements" section
+  - *Evidence URL:* `CONTRIBUTING.md` — "Build, Test & CI Policy"
 
 - [x] 🔴 **documentation_basics** — Basic documentation exists for the software (README, Wiki, or docs folder).
   - *Evidence URL:* `README.md`, `docs/`
@@ -158,7 +158,7 @@
   - *Evidence URL (recent PR with tests):* Not yet compiled — needs a sample PR link.
 
 - [x] 🔵 **tests_documented_added** — The test policy is documented in contribution instructions. *(SUGGESTED)*
-  - *Evidence URL:* `CONTRIBUTING.md` "Test Requirements"
+  - *Evidence URL:* `CONTRIBUTING.md` — "Build, Test & CI Policy"
 
 ### Linting / Warning Flags
 
