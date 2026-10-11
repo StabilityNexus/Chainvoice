@@ -124,7 +124,7 @@
   - *Evidence URL:* `SECURITY.md` (GitHub Private Vulnerability Reporting at `https://github.com/StabilityNexus/Chainvoice/security/advisories/new`)
 
 - [~] 🔴 **vulnerability_report_response** — Initial response to any vulnerability report received in the last 6 months was within 14 days.
-  - *Self-certification note:* N/A — *Justification: no reports received (no vulnerability reporting process exists yet).*
+  - *Self-certification note:* N/A — *Justification: no vulnerability reports received in the last 6 months.*
 
 ---
 
