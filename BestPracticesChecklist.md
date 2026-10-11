@@ -28,11 +28,11 @@
 |--------------------|-----|-------|--------|
 | Basics             | 7   | 8     | 🟡     |
 | Change Control     | 3   | 6     | 🔴     |
-| Reporting          | 3   | 8     | 🔴     |
-| Quality            | 6   | 11    | 🔴     |
+| Reporting          | 5   | 8     | 🔴     |
+| Quality            | 7   | 11    | 🔴     |
 | Security           | 0   | 9     | 🔴     |
 | Analysis           | 0   | 7     | 🔴     |
-| **Total**          | **19** | **49** | **39%** |
+| **Total**          | **22** | **49** | **45%** |
 
 ---
 
@@ -117,11 +117,11 @@
 
 ### Vulnerability Reporting
 
-- [ ] 🔴 **vulnerability_report_process** — A vulnerability reporting process is documented (e.g., `SECURITY.md`).
-  - *Evidence URL:* Not present — no `SECURITY.md` in repo.
+- [x] 🔴 **vulnerability_report_process** — A vulnerability reporting process is documented (e.g., `SECURITY.md`).
+  - *Evidence URL:* `SECURITY.md`
 
-- [~] 🟡 **vulnerability_report_private** — If private vulnerability reporting is supported, the method for private submission is documented.
-  - *Evidence URL:* N/A — *Justification: no `SECURITY.md`/private channel documented yet.*
+- [x] 🟡 **vulnerability_report_private** — If private vulnerability reporting is supported, the method for private submission is documented.
+  - *Evidence URL:* `SECURITY.md` (GitHub Private Vulnerability Reporting at `https://github.com/StabilityNexus/Chainvoice/security/advisories/new`)
 
 - [~] 🔴 **vulnerability_report_response** — Initial response to any vulnerability report received in the last 6 months was within 14 days.
   - *Self-certification note:* N/A — *Justification: no reports received (no vulnerability reporting process exists yet).*
@@ -151,8 +151,8 @@
 
 ### New Functionality Testing Policy
 
-- [ ] 🔴 **test_policy** — The project has a general policy that new functionality must include tests in the automated test suite.
-  - *Evidence (CONTRIBUTING reference or informal policy):* `CONTRIBUTING.md` "Test Requirements" mandates tests only for smart contract logic changes — there's no equivalent stated policy for frontend/general functionality.
+- [x] 🔴 **test_policy** — The project has a general policy that new functionality must include tests in the automated test suite.
+  - *Evidence (CONTRIBUTING reference or informal policy):* `CONTRIBUTING.md` — "Build, Test & CI Policy" mandates automated tests for all new functionality across both frontend (`npm run test:ci`) and smart contracts (`forge test`).
 
 - [ ] 🔴 **tests_are_added** — Evidence exists that the test policy has been followed in recent major changes (e.g., PRs include tests).
   - *Evidence URL (recent PR with tests):* Not yet compiled — needs a sample PR link.
