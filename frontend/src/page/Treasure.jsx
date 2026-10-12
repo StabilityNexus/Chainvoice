@@ -31,8 +31,8 @@ const Treasure = () => {
     feeUpdate: false,
   });
   const [feeController, setFeeController] = useState("");
-  const [treasuryAddress, setTreasuryAddress] = useState("");
-  const [newTreasuryAddress, setNewTreasuryAddress] = useState("");
+  const [feeRecipient, setFeeRecipient] = useState("");
+  const [newFeeRecipient, setNewFeeRecipient] = useState("");
   // Fee settings are controlled by the contract's fee controller, not an owner.
   const isController =
     !!account &&
@@ -66,7 +66,7 @@ const Treasure = () => {
           contract.fee(),
         ]);
         setTreasureAmount(ethers.formatUnits(amt));
-        setTreasuryAddress(recipient);
+        setFeeRecipient(recipient);
         setFeeController(controller);
         setFee(ethers.formatUnits(feeAmt));
       } catch (error) {
@@ -79,12 +79,12 @@ const Treasure = () => {
     fetchTreasureAmount();
   }, [walletClient, chainId]);
 
-  const handleSetTreasuryAddress = async () => {
+  const handleSetFeeRecipient = async () => {
     if (!isController) {
       toast.error("Only the fee controller can update the treasury address");
       return;
     }
-    if (!ethers.isAddress(newTreasuryAddress)) {
+    if (!ethers.isAddress(newFeeRecipient)) {
       toast.error("Please enter a valid Ethereum address");
       return;
     }
@@ -105,10 +105,10 @@ const Treasure = () => {
       }
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
-      const tx = await contract.setFeeRecipient(newTreasuryAddress);
+      const tx = await contract.setFeeRecipient(newFeeRecipient);
       await tx.wait();
-      setTreasuryAddress(newTreasuryAddress);
-      setNewTreasuryAddress("");
+      setFeeRecipient(newFeeRecipient);
+      setNewFeeRecipient("");
       toast.success("Treasury address updated successfully!");
     } catch (error) {
       console.error("Error setting treasury address:", error);
@@ -290,8 +290,8 @@ const Treasure = () => {
               <p className="text-sm font-mono text-green-400 break-all">
                 {loading.fetch ? (
                   <Loader2 className="h-4 w-4 animate-spin inline" />
-                ) : treasuryAddress ? (
-                  treasuryAddress
+                ) : feeRecipient ? (
+                  feeRecipient
                 ) : (
                   "Not configured"
                 )}
@@ -300,13 +300,13 @@ const Treasure = () => {
             <div className="space-y-3">
               <Input
                 placeholder="New treasury address (0x...)"
-                value={newTreasuryAddress}
-                onChange={(e) => setNewTreasuryAddress(e.target.value)}
+                value={newFeeRecipient}
+                onChange={(e) => setNewFeeRecipient(e.target.value)}
                 className="bg-gray-800 border-gray-700 text-white font-mono"
               />
               <Button
-                onClick={handleSetTreasuryAddress}
-                disabled={loading.setAddress || !newTreasuryAddress || !isController}
+                onClick={handleSetFeeRecipient}
+                disabled={loading.setAddress || !newFeeRecipient || !isController}
                 className="w-full bg-green-600 hover:bg-green-700 h-11"
               >
                 {loading.setAddress ? (
