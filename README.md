@@ -150,8 +150,11 @@ forge build
 source .env
 
 4. **Deploy to Ethereum Classic**  
-The script deploys the contract and, if `TREASURY_ADDRESS` / `FEE_WEI` are set,
-applies them in the same broadcast. The compiler targets `evm_version = "london"`
+The script reads `FEE_CONTROLLER` and `FEE_RECIPIENT` (both required, non-zero)
+and an optional `FEE_WEI` (default `0.0005 ether`, must not be `0`) from `.env`,
+and passes them to the constructor. `FEE_CONTROLLER` sets the fee and the fee
+recipient and hands its own role over in two steps, so use a multisig;
+`FEE_RECIPIENT` receives withdrawn fees. The compiler targets `evm_version = "london"`
 (see `contracts/foundry.toml`) so the same bytecode runs on Sepolia and ETC.
 
 ```bash
