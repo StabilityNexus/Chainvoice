@@ -7,7 +7,7 @@ The following table outlines the security support status for components in this 
 | Component | Version / Environment | Supported |
 |---|---|---|
 | Frontend | `main` branch (latest production deployment on GitHub Pages) | :white_check_mark: |
-| Smart Contracts | Current deployment on Ethereum Sepolia (`0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b`) / `main` branch | :white_check_mark: |
+| Smart Contracts | Current deployments listed in [Deployments.md](Deployments.md) / `main` branch | :white_check_mark: |
 | Smart Contracts | Legacy v1 deployments (Ethereum Classic, Polygon) | :x: |
 
 > **Note:** Mainnet v1 deployments run the legacy contract ABI before the messaging key registry and hash-based invoice storage changes (see [Deployments.md](Deployments.md)). Only the latest contract code and current Sepolia deployment matching this repository's ABI receive active security consideration.

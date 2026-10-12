@@ -120,8 +120,8 @@
 - [x] 🔴 **vulnerability_report_process** — A vulnerability reporting process is documented (e.g., `SECURITY.md`).
   - *Evidence URL:* `SECURITY.md`
 
-- [x] 🟡 **vulnerability_report_private** — If private vulnerability reporting is supported, the method for private submission is documented.
-  - *Evidence URL:* `SECURITY.md` (documents GitHub Private Vulnerability Reporting once enabled by maintainers, with direct Discord maintainer contact as fallback)
+- [~] 🟡 **vulnerability_report_private** — If private vulnerability reporting is supported, the method for private submission is documented.
+  - *Evidence URL:* N/A — *Justification: `SECURITY.md` exists now, but private vulnerability reporting is not enabled on the repo yet and will be ticked once it is.*
 
 - [~] 🔴 **vulnerability_report_response** — Initial response to any vulnerability report received in the last 6 months was within 14 days.
   - *Self-certification note:* N/A — *Justification: no vulnerability reports received in the last 6 months.*
