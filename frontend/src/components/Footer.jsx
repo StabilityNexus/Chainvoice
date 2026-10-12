@@ -16,7 +16,7 @@ function Footer() {
               rel="noopener noreferrer"
             >
               <img
-                src={`${import.meta.env.BASE_URL}logo-animated.gif`}
+                src={`${import.meta.env.BASE_URL}logo-animated.webp`}
                 alt="Stability Nexus"
                 width={56}
                 height={56}
