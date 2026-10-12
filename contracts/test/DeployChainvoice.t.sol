@@ -6,7 +6,10 @@ import {Chainvoice} from "../src/Chainvoice.sol";
 import {DeployChainvoice} from "../script/Chainvoice.s.sol";
 
 contract DeployChainvoiceTest is Test {
-    address constant TREASURY = address(0x999);
+    address constant CONTROLLER = address(0x998);
+    address constant RECIPIENT = address(0x999);
+    string constant CONTROLLER_STR = "0x0000000000000000000000000000000000000998";
+    string constant RECIPIENT_STR = "0x0000000000000000000000000000000000000999";
 
     // vm.setEnv changes the environment of the whole process, which forge
     // shares between tests running in parallel, so every scenario runs here
@@ -14,36 +17,55 @@ contract DeployChainvoiceTest is Test {
     function testRun_AppliesEnvSettings() public {
         DeployChainvoice script = new DeployChainvoice();
 
-        // Unset (blank, as in .env.example): constructor defaults.
-        _setEnv("", "");
+        // FEE_WEI blank (as in .env.example): the default fee.
+        _setEnv(CONTROLLER_STR, RECIPIENT_STR, "");
         Chainvoice c = script.run();
-        assertTrue(c.owner() != address(0));
-        assertEq(c.treasuryAddress(), address(0));
+        assertEq(c.feeController(), CONTROLLER);
+        assertEq(c.feeRecipient(), RECIPIENT);
         assertEq(c.fee(), 0.0005 ether);
 
-        // Both set: applied in the deploy broadcast.
-        _setEnv("0x0000000000000000000000000000000000000999", "1000000000000000");
+        // FEE_WEI set.
+        _setEnv(CONTROLLER_STR, RECIPIENT_STR, "1000000000000000");
         c = script.run();
-        assertEq(c.treasuryAddress(), TREASURY);
         assertEq(c.fee(), 0.001 ether);
 
-        // An explicit zero fee is a fee, not "unset".
-        _setEnv("", "0");
-        c = script.run();
-        assertEq(c.fee(), 0);
-        assertEq(c.treasuryAddress(), address(0));
+        // The deployed controller can configure the contract.
+        vm.prank(CONTROLLER);
+        c.setFeeAmount(1);
+        assertEq(c.fee(), 1);
 
-        // The settings calls are onlyOwner, so they could only succeed because
-        // the broadcaster that deployed is the owner; it can keep configuring.
-        vm.prank(c.owner());
-        c.setTreasuryAddress(TREASURY);
-        assertEq(c.treasuryAddress(), TREASURY);
+        // A zero fee is rejected by the constructor, not treated as unset.
+        _setEnv(CONTROLLER_STR, RECIPIENT_STR, "0");
+        vm.expectRevert(Chainvoice.InvalidAmount.selector);
+        script.run();
+        vm.stopBroadcast();
 
-        _setEnv("", "");
+        // Zero addresses are rejected by the constructor.
+        _setEnv("0x0000000000000000000000000000000000000000", RECIPIENT_STR, "");
+        vm.expectRevert(Chainvoice.ZeroAddress.selector);
+        script.run();
+        vm.stopBroadcast();
+        _setEnv(CONTROLLER_STR, "0x0000000000000000000000000000000000000000", "");
+        vm.expectRevert(Chainvoice.ZeroAddress.selector);
+        script.run();
+        vm.stopBroadcast();
+
+        // Blank controller or recipient is not a deployable config.
+        _setEnv("", RECIPIENT_STR, "");
+        vm.expectRevert();
+        script.run();
+        vm.stopBroadcast();
+        _setEnv(CONTROLLER_STR, "", "");
+        vm.expectRevert();
+        script.run();
+        vm.stopBroadcast();
+
+        _setEnv("", "", "");
     }
 
-    function _setEnv(string memory treasury, string memory feeWei) private {
-        vm.setEnv("TREASURY_ADDRESS", treasury);
+    function _setEnv(string memory controller, string memory recipient, string memory feeWei) private {
+        vm.setEnv("FEE_CONTROLLER", controller);
+        vm.setEnv("FEE_RECIPIENT", recipient);
         vm.setEnv("FEE_WEI", feeWei);
     }
 }
