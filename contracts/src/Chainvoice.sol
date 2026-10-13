@@ -84,12 +84,16 @@ contract Chainvoice {
     event FeeUpdated(uint256 indexed previousFee, uint256 indexed newFee);
     event FeeRecipientUpdated(address indexed previousFeeRecipient, address indexed newFeeRecipient);
     event FeeControllerProposed(address indexed currentFeeController, address indexed proposedFeeController);
+    event FeeControllerProposalCancelled(address indexed currentFeeController, address indexed cancelledFeeController);
     event FeeControllerUpdated(address indexed previousFeeController, address indexed newFeeController);
 
     /// @param _fee Native fee charged per paid invoice; must be non-zero.
     /// @param _feeController Address that sets the fee and the fee recipient; must not be zero.
     /// @param _feeRecipient Address that withdrawn fees are paid to; must not be zero.
     constructor(uint256 _fee, address _feeController, address _feeRecipient) {
+        // A zero fee is rejected here only to catch an unset FEE_WEI at deploy
+        // time. The fee controller may still set the fee to 0 later via
+        // setFeeAmount(); that is a deliberate choice, not a misconfiguration.
         if (_fee == 0) revert InvalidAmount();
         if (_feeController == address(0) || _feeRecipient == address(0)) revert ZeroAddress();
         fee = _fee;
@@ -116,7 +120,17 @@ contract Chainvoice {
     }
 
     // Constants
+    /// @notice Largest batch payInvoicesBatch accepts. At 50 invoices it measures
+    ///         about 2.2M gas for native invoices from one issuer, 3.5M worst case
+    ///         (50 fresh issuers, so every payout creates an account), and 2.5M
+    ///         worst case for ERC-20 invoices.
     uint256 public constant MAX_BATCH = 50;
+    /// @notice Largest batch createInvoicesBatch accepts. Creating writes several
+    ///         fresh storage slots per invoice, about 185k gas each for native
+    ///         invoices and 205k for ERC-20. 30 invoices cost about 5.6M and 6.2M
+    ///         gas worst case, which fits Ethereum Classic's 8M block gas limit;
+    ///         40 would already exceed it with an ERC-20 token.
+    uint256 public constant MAX_CREATE_BATCH = 30;
     uint256 public constant MAX_PAGE_LIMIT = 50;
 
     // ========== Internal Utils ==========
@@ -210,7 +224,7 @@ contract Chainvoice {
         bytes32[] calldata invoiceDataHashes
     ) external {
         uint256 n = tos.length;
-        if (n == 0 || n > MAX_BATCH) revert InvalidBatchSize();
+        if (n == 0 || n > MAX_CREATE_BATCH) revert InvalidBatchSize();
         
         if (
             n != amountsDue.length ||
@@ -488,6 +502,16 @@ contract Chainvoice {
 
         pendingFeeController = newFeeController;
         emit FeeControllerProposed(feeController, newFeeController);
+    }
+
+    /// @notice Withdraw a pending proposal, for example one sent to a mistyped
+    ///         address. The current feeController keeps its role.
+    function cancelFeeControllerProposal() external onlyFeeController {
+        address pending = pendingFeeController;
+        if (pending == address(0)) revert NoPendingFeeController();
+
+        pendingFeeController = address(0);
+        emit FeeControllerProposalCancelled(feeController, pending);
     }
 
     /// @notice Complete the handover. Only the proposed address can call this.
