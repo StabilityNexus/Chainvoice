@@ -1,0 +1,52 @@
+version: 2
+
+updates:
+  # Frontend dependencies. Minor and patch updates arrive as one weekly pull
+  # request; a major version bump gets its own pull request because it usually
+  # needs code changes and testing.
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      frontend-minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Workflow actions. They are pinned to commit SHAs with the version in a
+  # trailing comment; Dependabot updates both.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 3
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # Foundry libraries under contracts/lib (forge-std, openzeppelin-contracts).
+  # The directory is the one holding .gitmodules, which is the repository root:
+  # Dependabot reads .gitmodules from `directory` and resolves every submodule
+  # path relative to it, and these paths already start with contracts/.
+  - package-ecosystem: "gitsubmodule"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 2
+    groups:
+      contract-libraries:
+        patterns:
+          - "*"
+    # OpenZeppelin v5 requires Solidity 0.8.20+, and this project pins 0.8.19
+    # with evm_version = "london", so a bump to its latest commit would not
+    # compile. Dependabot names a submodule by its path in .gitmodules.
+    ignore:
+      - dependency-name: "contracts/lib/openzeppelin-contracts"
