@@ -57,7 +57,14 @@
 
     --card-shadow: 0 0% 0% / 0.05;
 
-    --radius: 0.5rem
+    --radius: 0.5rem;
+
+    /* Chainvoice green, see brand/Brand.md */
+    --brand: 141 68% 46%;
+
+    --walletlink-accent: hsl(var(--brand));
+    --walletlink-accent-hover: hsl(var(--brand) / 0.85);
+    --walletlink-radius-sm: var(--radius);
   }
   .dark {
 
@@ -122,6 +129,42 @@
     overflow-x: hidden;
     max-width: 100vw;
   }
+}
+
+/* WalletLink styles its UI with zero-specificity :where() rules, which lose to
+   Tailwind 3's preflight (`button`, `h2`, `a` resets). Restore what preflight
+   clears, using WalletLink's own values; drop once WalletLink raises its
+   specificity. */
+.wl-connect-btn {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--walletlink-accent-fg);
+  background-color: var(--walletlink-accent);
+  padding: 12px 20px;
+}
+.wl-connect-btn:hover {
+  background-color: var(--walletlink-accent-hover);
+}
+.wl-modal-title {
+  font-size: 18px;
+  font-weight: 700;
+}
+.wl-modal-close {
+  color: var(--walletlink-muted);
+}
+.wl-modal-close:hover {
+  color: var(--walletlink-fg);
+  background-color: var(--walletlink-hover);
+}
+.wl-wallet {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--walletlink-fg);
+  padding: 12px;
+}
+.wl-wallet:hover {
+  background-color: var(--walletlink-hover);
 }
 
 @layer utilities {

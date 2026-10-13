@@ -1,4 +1,4 @@
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { WalletLinkButton } from "@stability-nexus/walletlink";
 import { motion } from "framer-motion";
 import { FiShield, FiLock, FiZap } from "react-icons/fi";
 import { SiEthereum } from "react-icons/si";
@@ -242,11 +242,7 @@ function Landing() {
 
             <div className="flex flex-col items-center space-y-6">
               <div className="flex justify-center">
-                <ConnectButton
-                  showBalance={false}
-                  accountStatus="full"
-                  chainStatus="full"
-                />
+                <WalletLinkButton label="Connect Wallet" />
               </div>
             </div>
           </motion.div>

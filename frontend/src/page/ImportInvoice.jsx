@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAccount } from "wagmi";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { WalletLinkButton } from "@stability-nexus/walletlink";
 import toast from "react-hot-toast";
 import {
   AlertTriangle,
@@ -508,7 +508,7 @@ const ImportInvoice = () => {
                     <p className="text-sm text-gray-600">
                       Connect your wallet to save this invoice and pay it.
                     </p>
-                    <ConnectButton />
+                    <WalletLinkButton label="Connect Wallet" />
                   </div>
                 ) : alreadySaved ? (
                   <div className="flex flex-col items-start gap-3">

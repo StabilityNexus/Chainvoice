@@ -1,4 +1,4 @@
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { WalletLinkButton } from "@stability-nexus/walletlink";
 import NetworkSwitcher from "./NetworkSwitcher";
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
@@ -234,31 +234,12 @@ function Navbar() {
               className="ml-4 flex items-center space-x-4"
             >
               <NetworkSwitcher />
-              <ConnectButton
-                accountStatus="address"
-                chainStatus="none"
-                showBalance={{
-                  smallScreen: false,
-                  largeScreen: true,
-                }}
-                label="Connect Wallet"
-              />
+              <WalletLinkButton label="Connect Wallet" />
             </motion.div>
           </div>
 
           {/* Mobile menu button */}
           <div className="lg:hidden flex items-center">
-            {/* <motion.div
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              className="mr-4"
-            >
-              <ConnectButton
-                accountStatus="avatar"
-                chainStatus="none"
-                showBalance={false}
-              />
-            </motion.div> */}
             <motion.button
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.9 }}
@@ -342,12 +323,9 @@ function Navbar() {
                   </Link>
                 ))}
 
-                <div className="px-4 py-2">
-                  <ConnectButton
-                    accountStatus="full"
-                    chainStatus="full"
-                    showBalance={true}
-                  />
+                <div className="px-4 py-2 flex items-center gap-4">
+                  <NetworkSwitcher />
+                  <WalletLinkButton label="Connect Wallet" />
                 </div>
               </div>
             </motion.div>
