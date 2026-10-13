@@ -184,6 +184,13 @@ contract ReentrantIssuer {
     }
 }
 
+/// A contract with no receive or fallback function, so any ETH sent to it reverts.
+contract EthRejectingRecipient {
+    function ping() external pure returns (bool) {
+        return true;
+    }
+}
+
 contract ChainvoiceTest is Test {
     Chainvoice chainvoice;
 
@@ -573,6 +580,61 @@ contract ChainvoiceTest is Test {
 
         assertEq(feeRecipient.balance, INITIAL_FEE);
         assertEq(charlie.balance, charlieBefore);
+    }
+
+    /// The contract deliberately does not check that the fee recipient can receive
+    /// ETH. If it can't, withdrawFees reverts and the fees stay accrued until the
+    /// controller points the recipient somewhere that works.
+    function testWithdrawFees_RecoversAfterRecipientRejectsEth() public {
+        EthRejectingRecipient rejecting = new EthRejectingRecipient();
+        address working = address(0x600D);
+
+        // The controller can set a recipient that cannot receive ETH.
+        vm.prank(feeController);
+        chainvoice.setFeeRecipient(address(rejecting));
+
+        // Fees accrue from a single payment and from a batch.
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("recover-1"));
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("recover-2"));
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("recover-3"));
+        vm.stopPrank();
+
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 1;
+        ids[1] = 2;
+        vm.prank(bob);
+        chainvoice.payInvoicesBatch{value: 2 ether + 2 * INITIAL_FEE}(ids);
+
+        uint256 accrued = 3 * INITIAL_FEE;
+        assertEq(chainvoice.accumulatedFees(), accrued);
+        assertEq(address(chainvoice).balance, accrued);
+
+        // Withdrawing reverts, and nothing is lost or moved.
+        vm.expectRevert(Chainvoice.WithdrawFailed.selector);
+        chainvoice.withdrawFees();
+        assertEq(chainvoice.accumulatedFees(), accrued);
+        assertEq(address(chainvoice).balance, accrued);
+        assertEq(address(rejecting).balance, 0);
+
+        // Nobody but the controller can repoint the recipient.
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
+        chainvoice.setFeeRecipient(working);
+
+        // The controller fixes it, and the retry pays everything that accrued.
+        vm.prank(feeController);
+        chainvoice.setFeeRecipient(working);
+
+        chainvoice.withdrawFees();
+
+        assertEq(working.balance, accrued);
+        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(address(chainvoice).balance, 0);
+        assertEq(address(rejecting).balance, 0);
     }
 
     function testWithdrawFees_FollowsRecipientChange() public {
