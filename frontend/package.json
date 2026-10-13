@@ -35,7 +35,7 @@
     "html2canvas": "^1.4.1",
     "idb": "^8.0.3",
     "idb-keyval": "^6.2.1",
-    "jspdf": "^3.0.0",
+    "jspdf": "^4.2.1",
     "jsqr": "^1.4.0",
     "jszip": "^3.10.1",
     "lucide-react": "^0.471.1",
