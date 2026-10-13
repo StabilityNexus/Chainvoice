@@ -105,6 +105,7 @@ function ReceivedInvoice() {
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId, chain } = useAccount();
   const { t } = useTranslation("invoiceVerification");
+  const { t: tReceivedInvoices } = useTranslation("receivedInvoices");
 
   const [anchorEl, setAnchorEl] = useState(null);
   const openExportMenu = Boolean(anchorEl);
@@ -1235,7 +1236,7 @@ function ReceivedInvoice() {
                 }}
               >
                 <LightbulbIcon sx={{ mr: 1, color: "#ff9800" }} />
-                Smart Batch Suggestions
+                {tReceivedInvoices("smartBatchSuggestions")}
               </Typography>
               {batchSuggestions.map((suggestion) => (
                 <Box

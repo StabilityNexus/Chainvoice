@@ -15,6 +15,9 @@
     "clearFilters": "Clear Filters",
     "showingResults": "Showing {{totalCount}} of {{rawCount}} invoices"
   },
+  "receivedInvoices": {
+    "smartBatchSuggestions": "Smart Batch Suggestions"
+  },
   "invoiceVerification": {
     "received": {
       "pending": "Details pending",
