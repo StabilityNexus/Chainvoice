@@ -158,10 +158,14 @@ recipient and hands its own role over in two steps, so use a multisig;
 (see `contracts/foundry.toml`) so the same bytecode runs on Sepolia and ETC.
 
 ```bash
-forge script script/Chainvoice.s.sol:DeployChainvoice   --rpc-url etc --account deployer --broadcast   --verify --verifier blockscout --verifier-url https://etc.blockscout.com/api/
+forge script script/Chainvoice.s.sol:DeployChainvoice   --rpc-url etc --account deployer --broadcast --legacy   --verify --verifier blockscout --verifier-url https://etc.blockscout.com/api/
 ```
 
-For Sepolia, use `--rpc-url sepolia --verify` (Etherscan, needs `ETHERSCAN_API_KEY`).
+`--legacy` is required on Ethereum Classic, which has no EIP-1559; without it
+`forge script` fails with `unsupported feature: eip1559`.
+
+For Sepolia, use `--rpc-url sepolia --verify` (Etherscan, needs `ETHERSCAN_API_KEY`) and
+leave `--legacy` out.
 After deploying, record the address in [Deployments.md](./Deployments.md).
 
 5. **Configure frontend**  
