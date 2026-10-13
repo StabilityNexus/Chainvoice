@@ -35,6 +35,19 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
+    "name": "MAX_CREATE_BATCH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "MAX_PAGE_LIMIT",
     "inputs": [],
     "outputs": [
@@ -65,6 +78,13 @@ export const ChainvoiceABI = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "cancelFeeControllerProposal",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -639,6 +659,25 @@ export const ChainvoiceABI = [
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "FeeControllerProposalCancelled",
+    "inputs": [
+      {
+        "name": "currentFeeController",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "cancelledFeeController",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
