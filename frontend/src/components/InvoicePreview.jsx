@@ -31,6 +31,19 @@ function getNetworkName(chainId) {
   const id = Number(chainId);
   return CHAIN_ID_TO_NAME[id] || "Unknown network";
 }
+function getNativeCurrencySymbol(chainId) {
+  const id = Number(chainId);
+
+  if (id === 56) return "BNB";
+  if (id === 97) return "tBNB";
+  if (id === 137) return "POL";
+  if (id === 80001) return "MATIC";
+  if (id === 5000 || id === 5001) return "MNT";
+  if (id === 1111 || id === 1112) return "WEMIX";
+  if (id === 61) return "ETC";
+  if (id === 5115) return "cBTC";
+  return "ETH";
+}
 
 import { ethers } from "ethers";
 import { Chip, Typography } from "@mui/material";
@@ -417,7 +430,7 @@ const InvoicePreview = ({
                 Network Fee:
               </span>
               <span className="text-xs sm:text-sm font-semibold text-gray-900">
-                {networkFee} ETH
+                {networkFee} {getNativeCurrencySymbol(invoice.paymentToken?.chainId || invoice.chainId)}
               </span>
             </div>
             <div className="border-t-2 border-gray-300 pt-2 mt-1">
@@ -440,7 +453,7 @@ const InvoicePreview = ({
                         const total = amountDueNum + networkFeeNum;
                         return `${total.toFixed(6)} ETH`;
                       })()
-                    : `${invoice.amountDue} ${invoice.paymentToken?.symbol} + ${networkFee} ETH`}
+                    : `${invoice.amountDue} ${invoice.paymentToken?.symbol} + ${networkFee} ${getNativeCurrencySymbol(invoice.paymentToken?.chainId || invoice.chainId)}`}
                 </span>
               </div>
             </div>
