@@ -321,6 +321,12 @@ function CreateInvoice() {
       // Native links do not depend on the remote token list or wallet RPC.
       if (urlTokenAddress.toLowerCase() === ethers.ZeroAddress) {
         initializedTokenLink.current = linkKey;
+        // The zero address is not an ERC-20, so a chain without a configured
+        // native currency has nothing to select and nothing worth verifying.
+        if (!nativeToken) {
+          toast.error("The native coin is not supported on this network.");
+          return;
+        }
         beginTokenRequest();
         setSelectedToken(nativeToken);
         setUseCustomToken(false);

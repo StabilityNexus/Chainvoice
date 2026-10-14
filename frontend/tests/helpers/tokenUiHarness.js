@@ -8,6 +8,12 @@ import { format } from "date-fns";
 import * as validation from "../../src/utils/invoiceValidation.js";
 import * as products from "../../src/utils/productCatalogInvoiceHelpers.js";
 
+// Read rather than `import ... with { type: "json" }`: import attributes are not
+// available on every supported Node version, and this keeps the real strings.
+export const en = JSON.parse(readFileSync(resolve("src/locales/en.json"), "utf8"));
+const translate = (namespace, key) =>
+  (namespace ? en[namespace]?.[key] : en[key]) ?? key;
+
 // Exercise component callbacks and effects in Jest's Node environment, without
 // adding a DOM dependency. UI children and unrelated services are stubbed.
 export async function tokenUiHarness(file, state) {
@@ -56,7 +62,11 @@ export async function tokenUiHarness(file, state) {
   const jsx = (type, props) => ({ type, props });
   const namespaces = {
     react: hooks,
-    "react-hot-toast": { default: Object.assign(() => {}, { error: () => {}, success: () => {} }) },
+    "react-hot-toast": { default: Object.assign(() => {}, {
+      error: (message) => state.toasts?.push(["error", message]),
+      success: (message) => state.toasts?.push(["success", message]) }) },
+    "../hooks/useTranslation": {
+      useTranslation: (namespace) => ({ t: (key) => translate(namespace, key), locale: "en" }) },
     "date-fns": { format },
     "@/utils/invoiceValidation": validation,
     "react/jsx-runtime": { jsx, jsxs: jsx, Fragment: "Fragment" },

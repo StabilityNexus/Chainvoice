@@ -18,6 +18,10 @@
   "receivedInvoices": {
     "smartBatchSuggestions": "Smart Batch Suggestions"
   },
+  "tokenPicker": {
+    "testnetNotice": "Select the native coin or use Input Custom Token for testnet ERC-20 tokens.",
+    "testnetListUnavailable": "ERC-20 token lists are not available on testnets."
+  },
   "invoiceVerification": {
     "received": {
       "pending": "Details pending",

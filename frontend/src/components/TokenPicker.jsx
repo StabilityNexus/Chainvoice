@@ -11,6 +11,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useNativeToken } from "../hooks/usePaymentToken.js";
+import { useTranslation } from "../hooks/useTranslation";
 import { ChainIdToName, useTokenList, isTestnet } from "../hooks/useTokenList";
 import { useTokenSearch } from "../hooks/useTokenSearch";
 import { CopyButton } from "./ui/copyButton";
@@ -190,6 +191,7 @@ export function TokenPicker({
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectingTokenAddress, setSelectingTokenAddress] = useState(null);
   const inputRef = useRef(null);
+  const { t } = useTranslation("tokenPicker");
   const nativeToken = useNativeToken(chainId);
   const {
     tokens,
@@ -288,7 +290,7 @@ export function TokenPicker({
         <div className="mt-2 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
           <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-amber-800">
-            Select the native coin or use Input Custom Token for testnet ERC-20 tokens.
+            {t("testnetNotice")}
           </p>
         </div>
       )}
@@ -377,7 +379,7 @@ export function TokenPicker({
                           {chainId})
                         </span>
                         <span className="text-xs text-center max-w-[280px]">
-                          ERC-20 token lists are not available on testnets.
+                          {t("testnetListUnavailable")}
                         </span>
                         <span className="text-xs text-center max-w-[280px]">
                           {tokensError}

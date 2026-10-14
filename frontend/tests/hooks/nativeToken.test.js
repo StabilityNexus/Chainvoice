@@ -3,14 +3,14 @@ import { ZeroAddress } from "ethers";
 import { mainnet, classic, polygon, bsc, base, sepolia } from "wagmi/chains";
 import { citreaTestnet } from "../../src/utils/CitreaTestnet.jsx";
 import { getNativeToken, resolveTokenDecimals } from "../../src/utils/paymentToken.js";
-import { tokenUiHarness, find, findAll } from "../helpers/tokenUiHarness.js";
+import { tokenUiHarness, find, findAll, en } from "../helpers/tokenUiHarness.js";
 
 const chains = [mainnet, classic, polygon, bsc, base, sepolia, citreaTestnet];
 const erc20 = { contract_address: "0x1111111111111111111111111111111111111111",
   symbol: "USDC", name: "USD Coin", decimals: 6 };
 function fixture(chain = sepolia) {
   return { chains, account: { chainId: chain.id, isConnected: true },
-    params: new URLSearchParams(), testnets: [sepolia.id, citreaTestnet.id],
+    params: new URLSearchParams(), testnets: [sepolia.id, citreaTestnet.id], toasts: [],
     tokenList: { tokens: [erc20], loading: false, error: null },
     Contract: jest.fn().mockImplementation(() => ({
       decimals: jest.fn().mockResolvedValue(6), symbol: jest.fn().mockResolvedValue("USDC"),
@@ -64,6 +64,22 @@ describe("TokenPicker", () => {
     expect(rows[0].props.token).toEqual(getNativeToken(chain));
     await rows[0].props.onSelect(rows[0].props.token);
     expect(onSelect).toHaveBeenCalledWith(getNativeToken(chain));
+    ui.unmount();
+  });
+  it.each([
+    ["testnetNotice", null],
+    ["testnetListUnavailable", "Please manually input the token's contract address instead."],
+  ])("localizes %s through useTranslation", async (key, listError) => {
+    const state = fixture(sepolia);
+    if (listError) state.tokenList = { tokens: [], loading: false, error: listError };
+    const ui = await tokenUiHarness("components/TokenPicker.jsx", state);
+    const tree = ui.render({ chainId: sepolia.id, onSelect: jest.fn() });
+    // The resolved string, not the bare key useTranslation falls back to.
+    const copy = en.tokenPicker[key];
+    expect(copy).toBeTruthy();
+    expect(copy).not.toBe(key);
+    expect(findAll(tree, (node) =>
+      [].concat(node.props?.children).includes(copy))).toHaveLength(1);
     ui.unmount();
   });
   it.each(["loading", "error"])("keeps native selectable during token-list %s", async (status) => {
@@ -266,6 +282,20 @@ describe("payment-request links", () => {
     const ui = await tokenUiHarness("page/CreateInvoice.jsx", state);
     ui.render(); await settle();
     expect(picker(ui.render()).props.selected).toEqual(getNativeToken(mainnet));
+    ui.unmount();
+  });
+  it("rejects a native link on a chain with no configured native currency", async () => {
+    const state = fixture(mainnet);
+    state.account = { chainId: 999, isConnected: true };
+    state.params = new URLSearchParams({ tokenAddress: ZeroAddress, chain: "999" });
+    const ui = await tokenUiHarness("page/CreateInvoice.jsx", state);
+    ui.render(); await settle();
+    // Nothing selected, and not routed to custom ERC-20 verification.
+    expect(picker(ui.render()).props.selected).toBeNull();
+    expect(customInput(ui.render())).toBeUndefined();
+    expect(state.Contract).not.toHaveBeenCalled();
+    expect(state.toasts).toContainEqual(
+      ["error", expect.stringContaining("native coin is not supported")]);
     ui.unmount();
   });
   it("honors a listed ERC-20 link and preserves a subsequent user choice", async () => {
