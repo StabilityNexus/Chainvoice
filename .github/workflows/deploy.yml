@@ -31,7 +31,7 @@ jobs:
       pages: read # reads the site's own URL and custom domain
     steps:
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Nothing in this job uses git: the publish script clones with
           # GH_TOKEN of its own. Persisting the token into .git/config
@@ -50,7 +50,7 @@ jobs:
         run: bash .github/scripts/pages-config.sh
 
       - name: Setup Node
-        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 20
 
