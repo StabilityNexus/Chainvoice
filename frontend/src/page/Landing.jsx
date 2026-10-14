@@ -233,7 +233,7 @@ function Landing() {
               <span className="text-green-400">Next-Gen</span> Invoicing?
             </h2>
 
-            <p className="text-xl text-gray-400 mb-10 max-w-3xl mx-auto leading-relaxed">
+            <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
               Join thousands of Web3-native businesses already using Chainvoice
               for secure, encrypted invoicing with support for all major ERC20
               tokens across multiple chains.
