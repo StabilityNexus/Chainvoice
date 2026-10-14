@@ -30,9 +30,11 @@ export function getBatchCreateErrorKey(error) {
   if (revertName === "NotContract" || revertName === "InvalidToken") {
     return "invalidToken";
   }
-  // A mined transaction that reverted carries no reason (e.g. out of gas).
   if (error?.code === "CALL_EXCEPTION") {
-    return "reverted";
+    // A receipt means the transaction was mined after passing simulation, so
+    // the likely cause is a too-low gas limit; without one, the contract
+    // refused the batch during simulation.
+    return error.receipt ? "reverted" : "rejected";
   }
 
   return "generic";

@@ -16,7 +16,8 @@ const cases = [
   [{ code: "CALL_EXCEPTION", revert: { name: "NotContract" } }, "invalidToken"],
   [{ code: "CALL_EXCEPTION", revert: { name: "InvalidToken" } }, "invalidToken"],
   [{ code: "CALL_EXCEPTION", revert: null, receipt: { status: 0 } }, "reverted"],
-  [{ code: "CALL_EXCEPTION", revert: { name: "SelfInvoicing" } }, "reverted"],
+  [{ code: "CALL_EXCEPTION", revert: { name: "SelfInvoicing" } }, "rejected"],
+  [{ code: "CALL_EXCEPTION", revert: null }, "rejected"],
   [new Error('transaction execution reverted (action="sendTransaction")'), "generic"],
   [undefined, "generic"],
 ];

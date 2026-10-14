@@ -26,7 +26,8 @@
       "unsupportedNetwork": "Chainvoice isn't available on this network. Switch to a supported network.",
       "batchTooLarge": "This batch has too many invoices. Split it into smaller batches.",
       "invalidToken": "The selected token isn't a valid ERC-20 token on this network.",
-      "reverted": "The transaction failed, so no invoices were created. Try again, and if it keeps failing, raise the gas limit in your wallet.",
+      "reverted": "The transaction failed on-chain, so no invoices were created. Try again; if it keeps failing, your wallet may have set the gas limit too low.",
+      "rejected": "The contract rejected this batch, so nothing was sent. Check the invoice details and try again.",
       "generic": "Couldn't create the invoices. Please try again."
     }
   },
