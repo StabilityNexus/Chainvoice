@@ -9,6 +9,8 @@ import {
   JsonRpcProvider,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
+import { usePaymentToken } from "../hooks/usePaymentToken.js";
+import { resolveTokenDecimals as resolvePaymentTokenDecimals } from "../utils/paymentToken.js";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import {
   Popover,
@@ -39,7 +41,7 @@ import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
-import { useTokenList } from "@/hooks/useTokenList";
+import { useTokenList, isTestnet } from "@/hooks/useTokenList";
 import {
   getLineAmountDetails,
   getSafeLineAmountDisplay,
@@ -89,10 +91,11 @@ function CreateInvoice() {
   const account = useAccount();
   const [searchParams] = useSearchParams();
   const urlChainParam = searchParams.get("chain");
-  const chainIdForTokens =
+  const searchParamsKey = searchParams.toString();
+  const chainIdForTokens = account?.chainId ?? (
     urlChainParam && !Number.isNaN(parseInt(urlChainParam, 10))
       ? parseInt(urlChainParam, 10)
-      : account?.chainId ?? 1;
+      : 1);
   const { tokens, loading: loadingTokens, error: tokenListError } = useTokenList(chainIdForTokens);
   const [dueDate, setDueDate] = useState(new Date());
   const [issueDate] = useState(() => new Date());
@@ -118,12 +121,15 @@ function CreateInvoice() {
   const [showProfilePrompt, setShowProfilePrompt] = useState(false);
 
   // Token selection state
-  const [selectedToken, setSelectedToken] = useState(null);
-  const [customTokenAddress, setCustomTokenAddress] = useState("");
-  const [useCustomToken, setUseCustomToken] = useState(false);
-
-  const [tokenVerificationState, setTokenVerificationState] = useState("idle");
-  const [verifiedToken, setVerifiedToken] = useState(null);
+  const {
+    nativeToken,
+    selectedToken, setSelectedToken,
+    customTokenAddress, setCustomTokenAddress,
+    useCustomToken, setUseCustomToken,
+    tokenVerificationState, setTokenVerificationState,
+    verifiedToken, setVerifiedToken,
+    beginTokenRequest,
+  } = usePaymentToken(chainIdForTokens);
 
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   // Holds inline validation error for client wallet address
@@ -192,6 +198,14 @@ function CreateInvoice() {
    * When chainIdForRpc is provided (e.g. from invoice link URL), uses public RPC so it works without a connected wallet.
    */
   const verifyToken = useCallback(async (address, chainIdForRpc) => {
+    const isCurrent = beginTokenRequest();
+    if (address.toLowerCase() === ethers.ZeroAddress && nativeToken) {
+      setSelectedToken(nativeToken);
+      setUseCustomToken(false);
+      setVerifiedToken(null);
+      setTokenVerificationState("idle");
+      return;
+    }
     setTokenVerificationState("verifying");
     setVerifiedToken(null);
 
@@ -215,6 +229,7 @@ function CreateInvoice() {
         contract.decimals().catch(() => 18),
       ]);
 
+      if (!isCurrent()) return;
       const symbolStr = typeof symbol === "string" ? symbol.trim() : "";
       if (!symbolStr || symbolStr === "UNKNOWN") {
         setTokenVerificationState("error");
@@ -223,46 +238,49 @@ function CreateInvoice() {
       setVerifiedToken({ address, symbol: symbolStr, name, decimals });
       setTokenVerificationState("success");
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Verification failed:", error);
       setTokenVerificationState("error");
     }
-  }, []);
+  }, [beginTokenRequest, nativeToken, setSelectedToken, setUseCustomToken, setVerifiedToken, setTokenVerificationState]);
 
   const resolveTokenDecimals = useCallback(
     async (tokenAddress, fallbackDecimals) => {
-      if (
-        fallbackDecimals !== undefined &&
-        fallbackDecimals !== null &&
-        !Number.isNaN(Number(fallbackDecimals))
-      ) {
-        return Number(fallbackDecimals);
-      }
+      return resolvePaymentTokenDecimals(tokenAddress, fallbackDecimals, nativeToken, async () => {
+        try {
+          let provider;
+          const rpcUrl =
+            chainIdForTokens && CHAIN_ID_TO_PUBLIC_RPC[Number(chainIdForTokens)];
 
-      try {
-        let provider;
-        const rpcUrl =
-          chainIdForTokens && CHAIN_ID_TO_PUBLIC_RPC[Number(chainIdForTokens)];
+          if (rpcUrl) {
+            provider = new JsonRpcProvider(rpcUrl);
+          } else if (typeof window !== "undefined" && window.ethereum) {
+            provider = new BrowserProvider(window.ethereum);
+          } else {
+            return null;
+          }
 
-        if (rpcUrl) {
-          provider = new JsonRpcProvider(rpcUrl);
-        } else if (typeof window !== "undefined" && window.ethereum) {
-          provider = new BrowserProvider(window.ethereum);
-        } else {
+          const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+          const decimals = await contract.decimals();
+          return Number(decimals);
+        } catch (error) {
+          console.warn("Failed to resolve token decimals:", error);
           return null;
         }
-
-        const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-        const decimals = await contract.decimals();
-        return Number(decimals);
-      } catch (error) {
-        console.warn("Failed to resolve token decimals:", error);
-        return null;
-      }
+      });
     },
-    [chainIdForTokens]
+    [chainIdForTokens, nativeToken]
   );
 
-   
+  const initializedTokenLink = useRef(null);
+  const markTokenSelection = () => {
+    initializedTokenLink.current = chainIdForTokens + ":" + searchParamsKey;
+  };
+
+  useEffect(() => {
+    initializedTokenLink.current = null;
+  }, [chainIdForTokens, searchParamsKey]);
+
   useEffect(() => {
     const urlClientAddress = searchParams.get("clientAddress");
     const urlTokenAddress = searchParams.get("tokenAddress");
@@ -293,62 +311,52 @@ function CreateInvoice() {
     }
 
     const processUrlToken = async () => {
-      if (urlTokenAddress && !loadingTokens) {
-        if (isCustomFromURL) {
-          setUseCustomToken(true);
-          setCustomTokenAddress(urlTokenAddress);
-          verifyToken(urlTokenAddress, chainIdForTokens);
-        } else {
-          const preselectedToken = tokens.find(
-            (token) =>
-              (token.contract_address || token.address).toLowerCase() === urlTokenAddress.toLowerCase()
-          );
+      const linkKey = chainIdForTokens + ":" + searchParamsKey;
+      if (
+        !ethers.isAddress(urlTokenAddress || "") ||
+        (urlChainParam && Number(urlChainParam) !== chainIdForTokens) ||
+        initializedTokenLink.current === linkKey
+      ) return;
 
-          if (preselectedToken) {
-            let decimals = preselectedToken.decimals;
+      // Native links do not depend on the remote token list or wallet RPC.
+      if (urlTokenAddress.toLowerCase() === ethers.ZeroAddress) {
+        initializedTokenLink.current = linkKey;
+        beginTokenRequest();
+        setSelectedToken(nativeToken);
+        setUseCustomToken(false);
+        return;
+      }
+      if (loadingTokens) return;
+      initializedTokenLink.current = linkKey;
 
-            // If decimals are missing/null, try to fetch them from chain
-            if (decimals === undefined || decimals === null) {
-              try {
-                if (typeof window !== "undefined" && window.ethereum) {
-                  const provider = new BrowserProvider(window.ethereum);
-                  const contract = new ethers.Contract(urlTokenAddress, ERC20_ABI, provider);
-                  decimals = await contract.decimals();
-                }
-              } catch (err) {
-                console.warn("Failed to fetch decimals for preselected token:", err);
-              }
-            }
-
-            // If we successfully resolved decimals (from list or chain)
-            if (decimals !== undefined && decimals !== null) {
-              setSelectedToken({
-                address: preselectedToken.contract_address || preselectedToken.address,
-                symbol: preselectedToken.symbol,
-                name: preselectedToken.name,
-                logo: preselectedToken.image,
-                decimals: Number(decimals) 
-              });
-              setUseCustomToken(false);
-            } else {
-              // Fallback to manual verification when decimals cannot be determined from list or wallet
-              setUseCustomToken(true);
-              setCustomTokenAddress(urlTokenAddress);
-              verifyToken(urlTokenAddress, chainIdForTokens);
-            }
-          } else {
-            // Not in list: fetch token info via public RPC (works without wallet) or wallet
-            setUseCustomToken(true);
-            setCustomTokenAddress(urlTokenAddress);
-            verifyToken(urlTokenAddress, chainIdForTokens);
-          }
+      const preselectedToken = !isCustomFromURL && tokens.find(
+        (token) =>
+          (token.contract_address || token.address).toLowerCase() === urlTokenAddress.toLowerCase()
+      );
+      if (preselectedToken) {
+        const isCurrent = beginTokenRequest();
+        const decimals = await resolveTokenDecimals(urlTokenAddress, preselectedToken.decimals);
+        if (!isCurrent()) return;
+        if (decimals !== null) {
+          setSelectedToken({
+            address: preselectedToken.contract_address || preselectedToken.address,
+            symbol: preselectedToken.symbol,
+            name: preselectedToken.name,
+            logo: preselectedToken.image,
+            decimals,
+          });
+          setUseCustomToken(false);
+          return;
         }
       }
+      setUseCustomToken(true);
+      setCustomTokenAddress(urlTokenAddress);
+      verifyToken(urlTokenAddress, chainIdForTokens);
     };
 
     processUrlToken();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams, tokens, loadingTokens, account.address, chainIdForTokens, verifyToken]);
+  }, [searchParamsKey, tokens, loadingTokens, chainIdForTokens, verifyToken, nativeToken, beginTokenRequest, resolveTokenDecimals, urlChainParam]);
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
@@ -1150,7 +1158,11 @@ function CreateInvoice() {
                 {/* Toggle Switch */}
                 <ToggleSwitch
                   enabled={useCustomToken}
-                  onChange={setUseCustomToken}
+                  onChange={(enabled) => {
+                    markTokenSelection();
+                    beginTokenRequest();
+                    setUseCustomToken(enabled);
+                  }}
                   leftLabel="Select Token"
                   rightLabel="Input Custom Token"
                 />
@@ -1162,7 +1174,9 @@ function CreateInvoice() {
                         <Label className="block text-sm font-medium text-gray-700 mb-2">
                           Choose from Available Tokens
                         </Label>
-                        {tokenListError && (
+                        {/* On testnets TokenPicker already explains that ERC-20
+                            lists are unavailable, so this would be a duplicate. */}
+                        {tokenListError && !isTestnet(chainIdForTokens) && (
                           <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800 flex items-center gap-2">
                             <AlertCircle className="w-4 h-4" />
                             <span>{tokenListError}. Using local fallback or custom input recommended.</span>
@@ -1171,12 +1185,15 @@ function CreateInvoice() {
                         <TokenPicker
                           selected={selectedToken}
                           onSelect={async (token) => {
+                            markTokenSelection();
                             const address = token.contract_address || token.address;
+                            const isCurrent = beginTokenRequest();
                             const decimals = await resolveTokenDecimals(
                               address,
                               token.decimals
                             );
 
+                            if (!isCurrent()) return false;
                             if (decimals === null) {
                               toast.error(
                                 "Failed to fetch token decimals for selected token"
@@ -1242,6 +1259,8 @@ function CreateInvoice() {
                           placeholder="0x... (Enter token contract address)"
                           value={customTokenAddress}
                           onChange={(e) => {
+                            markTokenSelection();
+                            beginTokenRequest();
                             const address = e.target.value;
                             setCustomTokenAddress(address);
                             if (!address || !ethers.isAddress(address)) {

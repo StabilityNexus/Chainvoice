@@ -10,6 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useNativeToken } from "../hooks/usePaymentToken.js";
 import { ChainIdToName, useTokenList, isTestnet } from "../hooks/useTokenList";
 import { useTokenSearch } from "../hooks/useTokenSearch";
 import { CopyButton } from "./ui/copyButton";
@@ -189,6 +190,7 @@ export function TokenPicker({
   const [isSelecting, setIsSelecting] = useState(false);
   const [selectingTokenAddress, setSelectingTokenAddress] = useState(null);
   const inputRef = useRef(null);
+  const nativeToken = useNativeToken(chainId);
   const {
     tokens,
     loading: tokensLoading,
@@ -210,7 +212,7 @@ export function TokenPicker({
   }, [open, setQuery]);
 
   const isOnTestnet = isTestnet(chainId);
-  const isInteractionDisabled = disabled || isOnTestnet || isSelecting;
+  const isInteractionDisabled = disabled || isSelecting;
 
   const handleSelect = async (token) => {
     if (isInteractionDisabled) return;
@@ -250,7 +252,7 @@ export function TokenPicker({
           className={cn(
             "h-12 px-4 justify-between bg-white hover:bg-gray-50 border border-gray-300 text-gray-900",
             "shadow-sm hover:shadow-md transition-all duration-200 hover:border-gray-400",
-            (disabled || isOnTestnet) && "opacity-50 cursor-not-allowed",
+            disabled && "opacity-50 cursor-not-allowed",
             className
           )}
         >
@@ -286,7 +288,7 @@ export function TokenPicker({
         <div className="mt-2 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
           <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
           <p className="text-sm text-amber-800">
-            Token selection is disabled on testnets. Please switch to a mainnet network to use this feature.
+            Select the native coin or use Input Custom Token for testnet ERC-20 tokens.
           </p>
         </div>
       )}
@@ -341,6 +343,19 @@ export function TokenPicker({
 
           <div className="border-t border-gray-200 pt-2">
             <div className="max-h-80 overflow-y-auto">
+              {nativeToken && (
+                <TokenItem
+                  token={nativeToken}
+                  query=""
+                  disabled={isSelecting}
+                  isSelected={
+                    (selected?.contract_address || selected?.address)?.toLowerCase() ===
+                    nativeToken.address
+                  }
+                  isLoading={isSelecting && selectingTokenAddress === nativeToken.address}
+                  onSelect={handleSelect}
+                />
+              )}
               {tokensLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <div className="flex flex-col items-center gap-3">
@@ -362,7 +377,7 @@ export function TokenPicker({
                           {chainId})
                         </span>
                         <span className="text-xs text-center max-w-[280px]">
-                          Token Selection is not supported in testnets.
+                          ERC-20 token lists are not available on testnets.
                         </span>
                         <span className="text-xs text-center max-w-[280px]">
                           {tokensError}
@@ -401,7 +416,9 @@ export function TokenPicker({
                 </div>
               ) : (
                 <div className="space-y-1">
-                  {filteredTokens.map((token) => (
+                  {filteredTokens.filter((token) =>
+                    (token.contract_address || token.address)?.toLowerCase() !== nativeToken?.address
+                  ).map((token) => (
                     <TokenItem
                       key={token.contract_address}
                       token={token}
