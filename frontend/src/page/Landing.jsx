@@ -1,4 +1,3 @@
-import { WalletLinkButton } from "@stability-nexus/walletlink";
 import { motion } from "framer-motion";
 import { FiShield, FiLock, FiZap } from "react-icons/fi";
 import { SiEthereum } from "react-icons/si";
@@ -239,12 +238,6 @@ function Landing() {
               for secure, encrypted invoicing with support for all major ERC20
               tokens across multiple chains.
             </p>
-
-            <div className="flex flex-col items-center space-y-6">
-              <div className="flex justify-center">
-                <WalletLinkButton label="Connect Wallet" />
-              </div>
-            </div>
           </motion.div>
         </div>
       </section>
