@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img alt="Stability Nexus · Chainvoice" src="https://img.shields.io/badge/Stability_Nexus-Chainvoice-228B22?style=for-the-badge&labelColor=FFC517"></a>
+  <a href="https://chainvoice.stability.nexus/"><img alt="Stability Nexus · Chainvoice" src="https://img.shields.io/badge/Stability_Nexus-Chainvoice-228B22?style=for-the-badge&labelColor=FFC517"></a>
 </p>
 
 <p align="center">
