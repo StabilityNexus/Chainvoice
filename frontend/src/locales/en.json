@@ -15,6 +15,21 @@
     "clearFilters": "Clear Filters",
     "showingResults": "Showing {{totalCount}} of {{rawCount}} invoices"
   },
+  "batchInvoice": {
+    "transaction": "Transaction",
+    "transactionInsteadOf": "Transaction instead of {{count}}",
+    "createdToast": "Created {{count}} invoices in 1 transaction instead of {{count}}",
+    "errors": {
+      "cancelled": "Transaction cancelled in your wallet.",
+      "insufficientFunds": "Your wallet doesn't have enough funds to pay the network fee.",
+      "network": "Network error. Check your connection and try again.",
+      "unsupportedNetwork": "Chainvoice isn't available on this network. Switch to a supported network.",
+      "batchTooLarge": "This batch has too many invoices. Split it into smaller batches.",
+      "invalidToken": "The selected token isn't a valid ERC-20 token on this network.",
+      "reverted": "The transaction failed, so no invoices were created. Try again, and if it keeps failing, raise the gas limit in your wallet.",
+      "generic": "Couldn't create the invoices. Please try again."
+    }
+  },
   "receivedInvoices": {
     "smartBatchSuggestions": "Smart Batch Suggestions"
   },

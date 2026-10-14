@@ -292,17 +292,15 @@ describe("invoiceValidation.validateBatchInvoiceData", () => {
     expect(result.validInvoices).toHaveLength(2);
   });
 
-  test("blocks duplicate client wallet addresses", () => {
+  test("accepts the same client wallet address twice", () => {
     const result = validateBatchInvoiceData({
+      ...validBatchBase,
       rows: [makeRow({ clientAddress: CLIENT_1 }), makeRow({ clientAddress: CLIENT_1 })],
-      paymentToken: { symbol: "USDT", decimals: 6 },
-      ownerAddress: OWNER,
     });
 
-    expect(result.isValid).toBe(false);
-    expect(result.errorMessage).toBe("Please fix the required fields");
-    expect(result.addressErrors[0]).toBe("Duplicate wallet address in batch");
-    expect(result.addressErrors[1]).toBe("Duplicate wallet address in batch");
+    expect(result.isValid).toBe(true);
+    expect(result.validInvoices).toHaveLength(2);
+    expect(result.addressErrors).toEqual({});
   });
 
   test("blocks negative line amount in any invoice row", () => {
