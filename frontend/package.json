@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@aossie-org/idb-backup": "^1.0.0",
+    "@aossie-org/social-share-button": "^1.0.4",
     "@aossie-org/thrubox-client": "1.0.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
