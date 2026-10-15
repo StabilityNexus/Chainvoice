@@ -188,8 +188,8 @@ function Navbar() {
                     <Link
                       to="/dashboard/create"
                       className={`flex items-center px-1 xl:px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
-                          ? "text-green-400 font-medium"
-                          : "text-white hover:text-green-400"
+                        ? "text-green-400 font-medium"
+                        : "text-white hover:text-green-400"
                         }`}
                     >
                       <span className="mr-2">{item.icon}</span>
@@ -199,8 +199,8 @@ function Navbar() {
                     <Link
                       to={item.path}
                       className={`flex items-center px-1 xl:px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
-                          ? "text-green-400 font-medium"
-                          : "text-white hover:text-green-400"
+                        ? "text-green-400 font-medium"
+                        : "text-white hover:text-green-400"
                         }`}
                     >
                       <span className="mr-2">{item.icon}</span>
@@ -219,8 +219,8 @@ function Navbar() {
                 <Link
                   to={item.path}
                   className={`flex items-center px-4 py-2 rounded-lg transition-colors ${isActive(item.path)
-                      ? "text-green-400 font-medium"
-                      : "text-white hover:text-green-400"
+                    ? "text-green-400 font-medium"
+                    : "text-white hover:text-green-400"
                     }`}
                 >
                   <span className="mr-2">{item.icon}</span>
@@ -316,8 +316,8 @@ function Navbar() {
                       }
                       onClick={closeMobileMenu}
                       className={`block w-full text-left px-4 py-3 rounded-lg transition-colors ${isActive(item.path)
-                          ? "bg-green-900/30 text-green-400 font-medium"
-                          : "text-white hover:bg-gray-800"
+                        ? "bg-green-900/30 text-green-400 font-medium"
+                        : "text-white hover:bg-gray-800"
                         }`}
                     >
                       <div className="flex items-center">
@@ -332,8 +332,8 @@ function Navbar() {
                     to={item.path}
                     onClick={closeMobileMenu}
                     className={`block w-full text-left px-4 py-3 rounded-lg transition-colors ${isActive(item.path)
-                        ? "bg-green-900/30 text-green-400 font-medium"
-                        : "text-white hover:bg-gray-800"
+                      ? "bg-green-900/30 text-green-400 font-medium"
+                      : "text-white hover:bg-gray-800"
                       }`}
                   >
                     <div className="flex items-center">
@@ -343,9 +343,7 @@ function Navbar() {
                   </Link>
                 ))}
 
-                <div className="px-4 py-2">
-                  <div data-social-share></div>
-                </div>
+
 
                 <div className="px-4 py-2">
                   <ConnectButton
