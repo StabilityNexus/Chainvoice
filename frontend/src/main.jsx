@@ -1,5 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import '@aossie-org/social-share-button/src/social-share-button.css'
+import '@aossie-org/social-share-button'
 import './index.css'
 import App from './App.jsx'
 
