@@ -38,6 +38,7 @@ jobs:
       github.event.workflow_run.event == 'pull_request' &&
       github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       pull-requests: read
@@ -129,6 +130,7 @@ jobs:
     needs: resolve
     if: needs.resolve.outputs.mode == 'deploy'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write # pushes the preview to gh-pages
       pull-requests: write # comments the preview URL
@@ -221,6 +223,7 @@ jobs:
     needs: resolve
     if: needs.resolve.outputs.mode == 'cleanup'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
       pull-requests: write

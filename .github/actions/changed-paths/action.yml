@@ -1,0 +1,36 @@
+name: Changed paths
+description: >-
+  Reports whether a pull request changes a file matching a pattern, so a
+  workflow can skip its jobs instead of being path-filtered. A skipped job
+  still passes a required status check; a workflow that never started leaves
+  it pending forever. Any event other than a pull request counts as a match.
+
+inputs:
+  pattern:
+    description: Extended regular expression matched against each changed file path.
+    required: true
+
+outputs:
+  matched:
+    description: "'true' if a changed file matches (or the list could not be read), otherwise 'false'."
+    value: ${{ steps.check.outputs.matched }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PATTERN: ${{ inputs.pattern }}
+        PR_NUMBER: ${{ github.event.pull_request.number }}
+      run: |
+        # Fails open: if the file list cannot be fetched, the checks run.
+        matched=true
+        if [ "$GITHUB_EVENT_NAME" = pull_request ] &&
+          files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename')" &&
+          ! grep -qE "$PATTERN" <<< "$files"; then
+          matched=false
+        fi
+        echo "matched=$matched" >> "$GITHUB_OUTPUT"
+        echo "Changes matching '$PATTERN': $matched"
