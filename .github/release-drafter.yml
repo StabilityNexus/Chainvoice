@@ -49,6 +49,12 @@ categories:
       conventional:
         types: ['chore', 'refactor', 'test', 'build', 'style']
   - title: 'Other Changes'
+  # A breaking title (feat!:, fix(api)!: ...) proposes a major version.
+  - type: version-resolver
+    semver-increment: major
+    when:
+      conventional:
+        breaking: true
 
 change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
 change-title-escapes: '\<*_&'

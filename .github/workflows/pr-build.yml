@@ -58,11 +58,7 @@ jobs:
         run: |
           # --ignore-scripts: a dependency's install hooks have no business
           # running in order to produce a static site.
-          if [ -f package-lock.json ]; then
-            npm ci --ignore-scripts
-          else
-            npm install --ignore-scripts
-          fi
+          npm ci --ignore-scripts
 
       - name: Build
         working-directory: ./frontend

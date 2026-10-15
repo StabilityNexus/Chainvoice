@@ -24,11 +24,16 @@ runs:
         GH_TOKEN: ${{ github.token }}
         PATTERN: ${{ inputs.pattern }}
         PR_NUMBER: ${{ github.event.pull_request.number }}
+        CHANGED_FILES: ${{ github.event.pull_request.changed_files }}
       run: |
-        # Fails open: if the file list cannot be fetched, the checks run.
+        # Fails open: if the file list cannot be fetched, or may be cut short
+        # by the endpoint's 3,000-file cap, the checks run. A rename counts
+        # under its old path too, so moving a file out of a directory still
+        # runs that directory's checks.
         matched=true
         if [ "$GITHUB_EVENT_NAME" = pull_request ] &&
-          files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[].filename')" &&
+          [ "${CHANGED_FILES:-0}" -lt 3000 ] &&
+          files="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER/files" --paginate --jq '.[] | .filename, (.previous_filename // empty)')" &&
           ! grep -qE "$PATTERN" <<< "$files"; then
           matched=false
         fi
