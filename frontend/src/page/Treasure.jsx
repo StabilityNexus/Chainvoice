@@ -23,15 +23,21 @@ const Treasure = () => {
   const [treasureAmount, setTreasureAmount] = useState(0);
   const [fee, setFee] = useState(0);
   const { data: walletClient } = useWalletClient();
-  const { chainId } = useAccount();
+  const { chainId, address: account } = useAccount();
   const [loading, setLoading] = useState({
     fetch: false,
     setAddress: false,
     withdraw: false,
     feeUpdate: false,
   });
-  const [treasuryAddress, setTreasuryAddress] = useState("");
-  const [newTreasuryAddress, setNewTreasuryAddress] = useState("");
+  const [feeController, setFeeController] = useState("");
+  const [feeRecipient, setFeeRecipient] = useState("");
+  const [newFeeRecipient, setNewFeeRecipient] = useState("");
+  // Fee settings are controlled by the contract's fee controller, not an owner.
+  const isController =
+    !!account &&
+    !!feeController &&
+    account.toLowerCase() === feeController.toLowerCase();
   const [newFee, setNewFee] = useState("");
 
   useEffect(() => {
@@ -53,13 +59,15 @@ const Treasure = () => {
         }
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
-        const [amt, add, feeAmt] = await Promise.all([
+        const [amt, recipient, controller, feeAmt] = await Promise.all([
           contract.accumulatedFees(),
-          contract.treasuryAddress(),
+          contract.feeRecipient(),
+          contract.feeController(),
           contract.fee(),
         ]);
         setTreasureAmount(ethers.formatUnits(amt));
-        setTreasuryAddress(add);
+        setFeeRecipient(recipient);
+        setFeeController(controller);
         setFee(ethers.formatUnits(feeAmt));
       } catch (error) {
         console.error("Error fetching treasure amount:", error);
@@ -71,8 +79,12 @@ const Treasure = () => {
     fetchTreasureAmount();
   }, [walletClient, chainId]);
 
-  const handleSetTreasuryAddress = async () => {
-    if (!ethers.isAddress(newTreasuryAddress)) {
+  const handleSetFeeRecipient = async () => {
+    if (!isController) {
+      toast.error("Only the fee controller can update the treasury address");
+      return;
+    }
+    if (!ethers.isAddress(newFeeRecipient)) {
       toast.error("Please enter a valid Ethereum address");
       return;
     }
@@ -93,10 +105,10 @@ const Treasure = () => {
       }
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
-      const tx = await contract.setTreasuryAddress(newTreasuryAddress);
+      const tx = await contract.setFeeRecipient(newFeeRecipient);
       await tx.wait();
-      setTreasuryAddress(newTreasuryAddress);
-      setNewTreasuryAddress("");
+      setFeeRecipient(newFeeRecipient);
+      setNewFeeRecipient("");
       toast.success("Treasury address updated successfully!");
     } catch (error) {
       console.error("Error setting treasury address:", error);
@@ -138,6 +150,10 @@ const Treasure = () => {
   };
 
   const handleUpdateFee = async () => {
+    if (!isController) {
+      toast.error("Only the fee controller can update the fee");
+      return;
+    }
     if (!newFee || isNaN(newFee)) {
       toast.error("Please enter a valid fee amount");
       return;
@@ -233,7 +249,11 @@ const Treasure = () => {
 
                   <div className="flex items-center p-4 bg-gray-800/40 rounded-xl border border-gray-700/50 backdrop-blur-sm">
                     <Key className="h-5 w-5 text-gray-300 mr-3" />
-                    <span className="text-gray-300">Admin Access Only</span>
+                    <span className="text-gray-300">
+                      {isController
+                        ? "Connected as fee controller"
+                        : "Fee Controller Access Only"}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -270,8 +290,8 @@ const Treasure = () => {
               <p className="text-sm font-mono text-green-400 break-all">
                 {loading.fetch ? (
                   <Loader2 className="h-4 w-4 animate-spin inline" />
-                ) : treasuryAddress ? (
-                  treasuryAddress
+                ) : feeRecipient ? (
+                  feeRecipient
                 ) : (
                   "Not configured"
                 )}
@@ -280,13 +300,13 @@ const Treasure = () => {
             <div className="space-y-3">
               <Input
                 placeholder="New treasury address (0x...)"
-                value={newTreasuryAddress}
-                onChange={(e) => setNewTreasuryAddress(e.target.value)}
+                value={newFeeRecipient}
+                onChange={(e) => setNewFeeRecipient(e.target.value)}
                 className="bg-gray-800 border-gray-700 text-white font-mono"
               />
               <Button
-                onClick={handleSetTreasuryAddress}
-                disabled={loading.setAddress || !newTreasuryAddress}
+                onClick={handleSetFeeRecipient}
+                disabled={loading.setAddress || !newFeeRecipient || !isController}
                 className="w-full bg-green-600 hover:bg-green-700 h-11"
               >
                 {loading.setAddress ? (
@@ -298,7 +318,7 @@ const Treasure = () => {
                 )}
               </Button>
               <p className="text-xs text-gray-500 mt-1">
-                Requires contract owner privileges
+                Requires the fee controller
               </p>
             </div>
           </div>
@@ -321,7 +341,7 @@ const Treasure = () => {
               />
               <Button
                 onClick={handleUpdateFee}
-                disabled={loading.feeUpdate || !newFee}
+                disabled={loading.feeUpdate || !newFee || !isController}
                 className="w-full bg-green-600 hover:bg-green-700 h-11"
               >
                 {loading.feeUpdate ? (

@@ -84,6 +84,11 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
   5115: "https://rpc.testnet.citrea.xyz",
 };
 
+// Mirrors MAX_CREATE_BATCH in Chainvoice.sol, which is the real guard: a larger
+// batch reverts with InvalidBatchSize. It is sized so a full batch fits in one
+// Ethereum Classic block (8M gas).
+const MAX_INVOICES_PER_BATCH = 30;
+
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
   const { isConnected, chainId } = useAccount();
@@ -194,6 +199,7 @@ function CreateInvoicesBatch() {
 
   // Invoice management
   const addInvoiceRow = () => {
+    if (invoiceRows.length >= MAX_INVOICES_PER_BATCH) return;
     const newIndex = invoiceRows.length;
     setInvoiceRows((prev) => [
       ...prev,
@@ -658,7 +664,7 @@ function CreateInvoicesBatch() {
         console.warn(`Expected ${invoicePayloads.length} InvoiceCreated events, got ${invoiceIds.length}`);
       }
 
-      // Deliver in bounded groups. A 50-invoice batch is 100 sequential round
+      // Deliver in bounded groups. A 30-invoice batch is 60 sequential round
       // trips otherwise, all of it after the transaction has already confirmed,
       // with the user watching a spinner. Kept small so the relay's per-IP rate
       // limit is not the next thing to fail.
@@ -1114,12 +1120,20 @@ function CreateInvoicesBatch() {
               <Button
                 type="button"
                 onClick={addInvoiceRow}
+                disabled={invoiceRows.length >= MAX_INVOICES_PER_BATCH}
                 className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
               >
                 <PlusIcon className="w-4 h-4" />
                 Add Invoice
               </Button>
             </div>
+            {invoiceRows.length >= MAX_INVOICES_PER_BATCH && (
+              <p className="text-sm text-amber-400">
+                A batch can hold at most {MAX_INVOICES_PER_BATCH} invoices so
+                the transaction fits in a block. Submit this batch, then create
+                another for the rest.
+              </p>
+            )}
 
             {invoiceRows.map((row, rowIndex) => (
               <div
