@@ -1,0 +1,28 @@
+name: Release Drafter
+
+# Keeps a draft release with the notes for everything merged since the last
+# release. Publishing it stays a manual step. Config: .github/release-drafter.yml
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  update-draft:
+    # A fork has no use for a draft of this repository's release.
+    if: github.repository_owner == 'StabilityNexus'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # creates and edits the draft release
+      pull-requests: read
+    steps:
+      - name: Update the release draft
+        uses: release-drafter/release-drafter@34d80673e067bdc0c24568d3af899c216adcfaa9 # v7.7.0

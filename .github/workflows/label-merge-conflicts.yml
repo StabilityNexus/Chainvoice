@@ -1,7 +1,9 @@
 name: Label Merge Conflicts
 
 on:
+  # Only a change to main can put open pull requests into conflict.
   push:
+    branches: [main]
   pull_request_target:
     types: [opened, reopened, synchronize]
 
@@ -11,6 +13,7 @@ permissions:
 jobs:
   label-conflicts:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       pull-requests: write
       contents: read
