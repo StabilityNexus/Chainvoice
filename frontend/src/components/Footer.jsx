@@ -8,8 +8,10 @@ function Footer() {
   return (
     <footer className="bg-[#0F1015] border-t border-gray-800/50 py-12">
       <div className="container mx-auto px-6">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center space-x-3">
+        {/* Three equal columns on desktop, so the middle stays centred however
+            wide the logo and the icon row are. */}
+        <div className="flex flex-col items-center gap-6 md:grid md:grid-cols-3">
+          <div className="flex items-center space-x-3 md:justify-self-start">
             <a
               href="https://stability.nexus/"
               target="_blank"
@@ -42,7 +44,7 @@ function Footer() {
             </button>
           </div>
 
-          <div className="flex items-center gap-9">
+          <div className="flex items-center gap-9 md:justify-self-end">
             <a
               href="https://github.com/StabilityNexus"
               aria-label="Stability Nexus on GitHub"

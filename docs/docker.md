@@ -29,13 +29,6 @@ file the non-Docker setup uses:
 cp frontend/.env.example frontend/.env
 ```
 
-Add your WalletConnect Project ID from the [Reown dashboard](https://dashboard.reown.com/)
-to that file. The app starts without it, but wallet connection will not work:
-
-```env
-VITE_WALLETCONNECT_PROJECT_ID=your_reown_project_id
-```
-
 Leave `VITE_RELAY_URL` alone — Compose overrides it for the containers.
 
 **2. Build the relay image.** Once, and again only when you want a newer
@@ -131,7 +124,7 @@ works:
 | `FRONTEND_PROD_PORT` | `8080` | Host port for the production profile |
 | `RELAY_IMAGE` | `chainvoice/thrubox-relay:main` | Relay image to run |
 
-Everything else — contract addresses, WalletConnect ID, relay timeout — comes
+Everything else — contract addresses, relay timeout — comes
 from `frontend/.env`, documented in
 [`frontend/README.md`](../frontend/README.md#environment-variables).
 
@@ -160,7 +153,7 @@ image takes them as **build arguments**, not runtime environment. That is why
 `--env-file frontend/.env` is on the command above: without it Compose
 interpolates from a project-level `.env` at the repository root, which does not
 exist here, and every build argument falls back to its default — so your
-WalletConnect ID and contract addresses would silently not reach the bundle.
+contract addresses would silently not reach the bundle.
 
 Changing any of those values means rebuilding **and** recreating the container;
 restarting is not enough, because the values are already baked into the image:
@@ -172,8 +165,9 @@ docker compose --env-file frontend/.env --profile prod up frontend-prod
 
 ## Troubleshooting
 
-**Wallet connection does nothing.** `VITE_WALLETCONNECT_PROJECT_ID` is missing
-from `frontend/.env`. Add it and restart.
+**No wallet shows up under Connect Wallet.** Wallets are discovered from browser
+extensions (EIP-6963), with no relay. Install one, such as MetaMask or Rabby,
+and reload the page.
 
 **`pull access denied for chainvoice/thrubox-relay`.** The relay image has not
 been built yet — step 2 above.

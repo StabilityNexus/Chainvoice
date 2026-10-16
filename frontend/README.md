@@ -8,7 +8,7 @@ Before running the frontend locally, make sure you have:
 
 - **Node.js 18 or newer** installed
 - **npm** installed with Node.js
-- A **WalletConnect Project ID** from Reown for Web3 wallet connections
+- An EVM wallet browser extension such as MetaMask or Rabby, to connect and test
 
 ## Local Setup
 
@@ -28,12 +28,6 @@ npm install
 
 ```bash
 cp .env.example .env
-```
-
-1. Add your WalletConnect Project ID to `.env`:
-
-```env
-VITE_WALLETCONNECT_PROJECT_ID=your_reown_project_id
 ```
 
 1. Start the development server:
@@ -71,13 +65,12 @@ container. Full guide, including the nginx-served production profile:
 
 The frontend reads Vite environment variables from `.env`.
 
-The provided `.env.example` lists the contract addresses per network alongside the WalletConnect project ID placeholder:
+The provided `.env.example` lists the contract addresses per network:
 
 ```env
 VITE_CONTRACT_ADDRESS_11155111=0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b
 VITE_CONTRACT_ADDRESS_61=
 VITE_CONTRACT_ADDRESS_137=
-VITE_WALLETCONNECT_PROJECT_ID=
 ```
 
 > ⚠️ Renaming the key registry functions changed their selectors, so only a
@@ -103,18 +96,6 @@ VITE_RELAY_TIMEOUT_MS=
 - **`VITE_RELAY_URL`** — in development this is the target the Vite dev server proxies `/relay` to, so the browser stays same-origin. In production, either an absolute `https://` URL (which requires CORS on the relay) or a path such as `/relay` that your host rewrites to it (Vercel rewrites, Netlify redirects, nginx `proxy_pass`), which avoids CORS entirely.
 - **`VITE_RELAY_API_KEY`** — only needed if the relay sets `security.api_key`. **This is not a secret:** Vite inlines every `VITE_`-prefixed variable into the built JavaScript, so any visitor can read it. Treat it as a spam speed-bump, not access control. To keep a relay key private, proxy relay calls server-side and inject it there.
 - **`VITE_RELAY_TIMEOUT_MS`** — request timeout, default `15000`. Raise it (around `60000`) on hosts that suspend idle instances: a cold start can take most of a minute, and sends are deliberately not retried, so a timeout means an undelivered invoice.
-
-To enable Web3 wallet functionality, create a free WalletConnect Project ID from the Reown dashboard:
-
-```text
-https://dashboard.reown.com/
-```
-
-Then add it to your local `.env` file:
-
-```env
-VITE_WALLETCONNECT_PROJECT_ID=your_reown_project_id
-```
 
 Do not commit `.env` files to version control.
 
@@ -158,7 +139,7 @@ Serves the production build locally for previewing.
 
 - React 18
 - Vite 6
-- RainbowKit
+- [WalletLink](https://github.com/StabilityNexus/WalletLink) (`@stability-nexus/walletlink`): wallet connection via EIP-6963, no WalletConnect relay or project ID
 - Wagmi
 - Viem
 - Ethers

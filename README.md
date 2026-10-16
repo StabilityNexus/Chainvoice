@@ -63,7 +63,7 @@ Chainvoice transforms traditional invoicing by leveraging blockchain technology 
 - **Immutable Records** - Verifiable transaction history and status tracking
 - **Treasury Management** - Built-in fee management for platform sustainability
 - **Privacy Protection** - Encrypted invoice data with access control
-- **User-Friendly Interface** - Intuitive web application with wallet integration
+- **User-Friendly Interface** - Intuitive web application with wallet integration: browser wallets connect through [WalletLink](https://github.com/StabilityNexus/WalletLink) (EIP-6963), with no WalletConnect relay or project ID
 
 ## Project Structure
 
@@ -190,8 +190,6 @@ VITE_CONTRACT_ADDRESS_11155111=0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b
 VITE_CONTRACT_ADDRESS_61=
 #Polygon Mainnet (137) — blank until redeployed, see note below
 VITE_CONTRACT_ADDRESS_137=
-#Project ID
-VITE_WALLETCONNECT_PROJECT_ID=Your Project ID can be obtained from https://dashboard.reown.com/ 
 ```
 
 > ⚠️ Renaming the key registry functions changed their selectors, so only a

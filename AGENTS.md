@@ -46,3 +46,4 @@ Any change to smart contract logic must follow `CONTRIBUTING.md`'s Smart Contrac
 
 - Frontend styling uses Tailwind utility classes bound to the semantic HSL tokens in `frontend/src/index.css` (`bg-background`, `text-primary`, etc.) — don't hardcode hex colors; see `brand/Brand.md` for the palette.
 - Fonts are Inter (body) and Montserrat (headings), registered in `frontend/tailwind.config.js`.
+- Wallet connection uses [WalletLink](https://github.com/StabilityNexus/WalletLink) (`@stability-nexus/walletlink`, config in `frontend/src/App.jsx`). Don't add RainbowKit, WalletConnect/Reown or anything that needs a project ID or a hosted relay; use wagmi hooks for account and chain state.
