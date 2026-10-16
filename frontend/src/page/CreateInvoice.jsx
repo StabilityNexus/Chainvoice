@@ -8,9 +8,14 @@ import {
   formatUnits,
   JsonRpcProvider,
 } from "ethers";
-import { useAccount, useWalletClient } from "wagmi";
+import { useAccount, useConfig, useWalletClient } from "wagmi";
 import { usePaymentToken } from "../hooks/usePaymentToken.js";
-import { resolveTokenDecimals as resolvePaymentTokenDecimals } from "../utils/paymentToken.js";
+import {
+  getChainName,
+  getLinkChainMismatch,
+  resolveTokenDecimals as resolvePaymentTokenDecimals,
+} from "../utils/paymentToken.js";
+import { useTranslation } from "../hooks/useTranslation";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import {
   Popover,
@@ -41,7 +46,7 @@ import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
-import { useTokenList, isTestnet } from "@/hooks/useTokenList";
+import { useTokenList } from "@/hooks/useTokenList";
 import {
   getLineAmountDetails,
   getSafeLineAmountDisplay,
@@ -89,6 +94,8 @@ function CreateInvoice() {
   const { data: walletClient } = useWalletClient();
   const { isConnected } = useAccount();
   const account = useAccount();
+  const { chains } = useConfig();
+  const { t } = useTranslation("createInvoice");
   const [searchParams] = useSearchParams();
   const urlChainParam = searchParams.get("chain");
   const searchParamsKey = searchParams.toString();
@@ -314,9 +321,21 @@ function CreateInvoice() {
       const linkKey = chainIdForTokens + ":" + searchParamsKey;
       if (
         !ethers.isAddress(urlTokenAddress || "") ||
-        (urlChainParam && Number(urlChainParam) !== chainIdForTokens) ||
         initializedTokenLink.current === linkKey
       ) return;
+
+      // A link for another chain cannot be honoured here, and silently using
+      // the wallet's chain would bill a different token than the one asked for.
+      const chainMismatch = getLinkChainMismatch(urlChainParam, chainIdForTokens);
+      if (chainMismatch) {
+        initializedTokenLink.current = linkKey;
+        toast.error(
+          t("linkChainMismatch", {
+            chainName: getChainName(chains, chainMismatch.chain),
+          })
+        );
+        return;
+      }
 
       // Native links do not depend on the remote token list or wallet RPC.
       if (urlTokenAddress.toLowerCase() === ethers.ZeroAddress) {
@@ -324,7 +343,7 @@ function CreateInvoice() {
         // The zero address is not an ERC-20, so a chain without a configured
         // native currency has nothing to select and nothing worth verifying.
         if (!nativeToken) {
-          toast.error("The native coin is not supported on this network.");
+          toast.error(t("nativeCoinUnsupported"));
           return;
         }
         beginTokenRequest();
@@ -362,7 +381,7 @@ function CreateInvoice() {
 
     processUrlToken();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParamsKey, tokens, loadingTokens, chainIdForTokens, verifyToken, nativeToken, beginTokenRequest, resolveTokenDecimals, urlChainParam]);
+  }, [searchParamsKey, tokens, loadingTokens, chainIdForTokens, verifyToken, nativeToken, beginTokenRequest, resolveTokenDecimals, urlChainParam, chains, t]);
 
   useEffect(() => {
     const total = itemData.reduce((sum, item) => {
@@ -1180,9 +1199,7 @@ function CreateInvoice() {
                         <Label className="block text-sm font-medium text-gray-700 mb-2">
                           Choose from Available Tokens
                         </Label>
-                        {/* On testnets TokenPicker already explains that ERC-20
-                            lists are unavailable, so this would be a duplicate. */}
-                        {tokenListError && !isTestnet(chainIdForTokens) && (
+                        {tokenListError && (
                           <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800 flex items-center gap-2">
                             <AlertCircle className="w-4 h-4" />
                             <span>{tokenListError}. Using local fallback or custom input recommended.</span>

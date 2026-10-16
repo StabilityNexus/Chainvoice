@@ -22,6 +22,10 @@
     "testnetNotice": "Select the native coin or use Input Custom Token for testnet ERC-20 tokens.",
     "testnetListUnavailable": "ERC-20 token lists are not available on testnets."
   },
+  "createInvoice": {
+    "linkChainMismatch": "This link requests a token on {{chainName}}. Switch network to use it.",
+    "nativeCoinUnsupported": "The native coin is not supported on this network."
+  },
   "invoiceVerification": {
     "received": {
       "pending": "Details pending",

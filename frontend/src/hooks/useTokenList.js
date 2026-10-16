@@ -20,14 +20,10 @@ export const ChainIdToName = {
 
 export function useTokenList(chainId) {
   const [tokens, setTokens] = useState([]);
-  const [tokenChainId, setTokenChainId] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    let cancelled = false;
-    setTokenChainId(chainId);
-    setTokens([]);
     const fetchTokens = async () => {
       // Return cached tokens if available
       if (tokenCache[chainId]) {
@@ -75,28 +71,20 @@ export function useTokenList(chainId) {
           image: token.image || token.logo || `${import.meta.env.BASE_URL}tokenImages/generic.png`,
         }));
 
-        if (cancelled) return;
-
         // Cache the tokens
         tokenCache[chainId] = transformedData;
         setTokens(transformedData);
       } catch (error) {
-        if (cancelled) return;
         console.error("Token fetch error:", error);
         setError(
           error instanceof Error ? error.message : "Failed to fetch tokens"
         );
       } finally {
-        if (!cancelled) setLoading(false);
+        setLoading(false);
       }
     };
 
     fetchTokens();
-    return () => { cancelled = true; };
   }, [chainId]);
-  return {
-    tokens: tokenChainId === chainId ? tokens : [],
-    loading: tokenChainId !== chainId || loading,
-    error: tokenChainId === chainId ? error : null,
-  };
+  return { tokens, loading, error };
 }

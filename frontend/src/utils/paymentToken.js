@@ -27,3 +27,25 @@ export async function resolveTokenDecimals(
   }
   return readDecimals();
 }
+
+/**
+ * The chain a payment link asks for, when that is not the chain in use.
+ *
+ * Returns null when the link pins no chain or pins the one already in use, so
+ * the link can be honoured. Otherwise returns the chain to name to the user:
+ * the parsed id, or the raw parameter when it is not a usable chain id.
+ */
+export function getLinkChainMismatch(urlChainParam, currentChainId) {
+  if (!urlChainParam) return null;
+  const linkChainId = Number(urlChainParam);
+  if (Number.isInteger(linkChainId)) {
+    return linkChainId === Number(currentChainId) ? null : { chain: linkChainId };
+  }
+  return { chain: urlChainParam };
+}
+
+/** The configured name of a chain, falling back to its id. */
+export function getChainName(chains, chainId) {
+  const match = chains?.find((chain) => chain.id === Number(chainId));
+  return match?.name ?? String(chainId);
+}
