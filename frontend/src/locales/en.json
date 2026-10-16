@@ -24,7 +24,8 @@
   },
   "createInvoice": {
     "linkChainMismatch": "This link requests a token on {{chainName}}. Switch network to use it.",
-    "nativeCoinUnsupported": "The native coin is not supported on this network."
+    "nativeCoinUnsupported": "The native coin is not supported on this network.",
+    "tokenDecimalsFetchFailed": "Failed to fetch token decimals for selected token"
   },
   "invoiceVerification": {
     "received": {

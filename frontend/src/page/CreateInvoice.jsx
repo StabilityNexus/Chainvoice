@@ -46,7 +46,7 @@ import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
-import { useTokenList } from "@/hooks/useTokenList";
+import { useTokenList, isTestnet } from "@/hooks/useTokenList";
 import {
   getLineAmountDetails,
   getSafeLineAmountDisplay,
@@ -1199,7 +1199,7 @@ function CreateInvoice() {
                         <Label className="block text-sm font-medium text-gray-700 mb-2">
                           Choose from Available Tokens
                         </Label>
-                        {tokenListError && (
+                        {tokenListError && !isTestnet(chainIdForTokens) && (
                           <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800 flex items-center gap-2">
                             <AlertCircle className="w-4 h-4" />
                             <span>{tokenListError}. Using local fallback or custom input recommended.</span>
@@ -1218,9 +1218,7 @@ function CreateInvoice() {
 
                             if (!isCurrent()) return false;
                             if (decimals === null) {
-                              toast.error(
-                                "Failed to fetch token decimals for selected token"
-                              );
+                              toast.error(t("tokenDecimalsFetchFailed"));
                               return false;
                             }
 
