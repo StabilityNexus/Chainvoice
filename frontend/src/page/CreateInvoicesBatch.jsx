@@ -38,6 +38,8 @@ import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
+import { useTranslation } from "@/hooks/useTranslation";
+import { getBatchCreateErrorKey } from "@/utils/batchCreateError";
 import { computeInvoiceHash } from "../services/relay/invoiceHashUtils.js";
 import { sendEncryptedInvoice } from "../services/relay/relayInvoiceMessaging.js";
 import { fetchPublicKeyFromChain } from "../services/relay/relayKeyManager.js";
@@ -97,6 +99,7 @@ function CreateInvoicesBatch() {
   const [issueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { t } = useTranslation("batchInvoice");
 
   const itemRefs = useRef({});
 
@@ -407,31 +410,6 @@ function CreateInvoicesBatch() {
     }
   };
 
-  // Enhanced error handling for batch creation
-  const getErrorMessage = (error) => {
-    if (error?.code === "ACTION_REJECTED") {
-      return "Transaction was cancelled by user";
-    }
-
-    if (error?.message?.toLowerCase().includes("insufficient")) {
-      return "Insufficient balance to complete transaction";
-    }
-
-    if (error?.message?.toLowerCase().includes("network")) {
-      return "Network error. Please check your connection and try again";
-    }
-
-    if (error?.reason) {
-      return `Transaction failed: ${error.reason}`;
-    }
-
-    if (error?.message) {
-      return error.message;
-    }
-
-    return "Failed to create invoice batch. Please try again.";
-  };
-
   const handleInvoiceChange = (rowIndex, field, value) => {
     setInvoiceRows((prev) =>
       prev.map((row, i) => (i === rowIndex ? { ...row, [field]: value } : row))
@@ -551,6 +529,7 @@ function CreateInvoicesBatch() {
       toast(`Processing ${validInvoices.length} invoices...`);
 
       const invoicePayloads = [];
+      const batchId = `batch_${Date.now()}`;
 
       // Process each invoice
       for (const [index, row] of validInvoices.entries()) {
@@ -583,7 +562,7 @@ function CreateInvoicesBatch() {
           })),
           // Add batch metadata
           batchInfo: {
-            batchId: `batch_${Date.now()}`,
+            batchId,
             batchSize: validInvoices.length,
             index: index,
             batchType: "user_created",
@@ -780,16 +759,17 @@ function CreateInvoicesBatch() {
         );
       }
 
-      toast.success(
-        `Successfully created ${validInvoices.length} invoices in batch!`
-      );
-      toast.success(`Estimated gas savings: ~${(validInvoices.length - 1) * 75}%`);
+      toast.success(t("createdToast", { count: validInvoices.length }));
 
       setTimeout(() => navigate("/dashboard/sent"), 3000);
     } catch (err) {
       console.error("Batch creation failed:", err);
-      const errorMsg = getErrorMessage(err);
-      toast.error(errorMsg);
+      const errorKey = getBatchCreateErrorKey(err);
+      if (errorKey === "cancelled") {
+        toast(t("errors.cancelled"), { icon: "✋" });
+      } else {
+        toast.error(t(`errors.${errorKey}`));
+      }
     } finally {
       setLoading(false);
     }
@@ -821,8 +801,6 @@ function CreateInvoicesBatch() {
   const validInvoices = invoiceRows.filter(
     (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
   ).length;
-
-  const gasSavingsPercent = validInvoices > 1 ? (validInvoices - 1) * 75 : 0;
 
   return (
     <>
@@ -951,10 +929,12 @@ function CreateInvoicesBatch() {
             </div>
             <div>
               <div className="text-xl sm:text-2xl font-bold">
-                ~{gasSavingsPercent}%
+                1
               </div>
               <div className="text-gray-300 text-xs sm:text-sm">
-                Gas Savings
+                {validInvoices > 1
+                  ? t("transactionInsteadOf", { count: validInvoices })
+                  : t("transaction")}
               </div>
             </div>
           </div>

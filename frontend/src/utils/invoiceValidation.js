@@ -202,7 +202,6 @@ export const validateBatchInvoiceData = ({
     clientAddress: (row.clientAddress || "").trim(),
   }));
 
-  const duplicateTracker = new Map();
   const pendingAddressErrors = {};
   const pendingTotalErrors = {};
   const pendingItemErrors = {};
@@ -250,18 +249,6 @@ export const validateBatchInvoiceData = ({
       if (error) {
         pendingFieldErrors[`${rowIndex}_${field}`] = error;
         globalHasErrors = true;
-      }
-    }
-
-    const normalizedAddress = row.clientAddress.toLowerCase();
-    if (normalizedAddress && !addressError) {
-      if (duplicateTracker.has(normalizedAddress)) {
-        const firstIndex = duplicateTracker.get(normalizedAddress);
-        pendingAddressErrors[firstIndex] = "Duplicate wallet address in batch";
-        pendingAddressErrors[rowIndex] = "Duplicate wallet address in batch";
-        globalHasErrors = true;
-      } else {
-        duplicateTracker.set(normalizedAddress, rowIndex);
       }
     }
 
