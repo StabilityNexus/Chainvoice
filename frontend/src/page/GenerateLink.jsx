@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAccount, useWalletClient } from "wagmi";
+import { usePaymentToken } from "../hooks/usePaymentToken.js";
 import {
   Copy,
   Link,
@@ -21,7 +22,6 @@ import { CopyButton } from "@/components/ui/copyButton";
 import { Badge } from "@/components/ui/badge";
 import { BrowserProvider, ethers } from "ethers";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
-import { useTokenList } from "../hooks/useTokenList";
 import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
 
@@ -33,30 +33,17 @@ const GenerateLink = () => {
   const [description] = useState("");
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
 
-  // Get tokens from the new hook
-  const { tokens } = useTokenList(chainId || 1);
-
   // Token selection state
-  const [selectedToken, setSelectedToken] = useState(null);
-  const [customTokenAddress, setCustomTokenAddress] = useState("");
-  const [useCustomToken, setUseCustomToken] = useState(false);
-  const [tokenVerificationState, setTokenVerificationState] = useState("idle");
-  const [verifiedToken, setVerifiedToken] = useState(null);
+  const {
+    nativeToken,
+    selectedToken, setSelectedToken,
+    customTokenAddress, setCustomTokenAddress,
+    useCustomToken, setUseCustomToken,
+    tokenVerificationState, setTokenVerificationState,
+    verifiedToken, setVerifiedToken,
+    beginTokenRequest,
+  } = usePaymentToken(chainId || 1);
   const [loading] = useState(false);
-
-  // Set default token when tokens are loaded
-  useEffect(() => {
-    if (tokens.length > 0 && !selectedToken && !useCustomToken) {
-      // Find ETH or use first token as default
-      const ethToken = tokens.find(
-        (token) =>
-          token.symbol.toLowerCase() === "eth" ||
-          token.contract_address ===
-            "0x0000000000000000000000000000000000000000"
-      );
-      setSelectedToken(ethToken || tokens[0]);
-    }
-  }, [tokens, selectedToken, useCustomToken]);
 
   // const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"];
 
@@ -104,8 +91,15 @@ const GenerateLink = () => {
   };
 
   const verifyToken = async (address) => {
+    const isCurrent = beginTokenRequest();
+    if (address.toLowerCase() === ethers.ZeroAddress && nativeToken) {
+      setSelectedToken(nativeToken);
+      setUseCustomToken(false);
+      setVerifiedToken(null);
+      setTokenVerificationState("idle");
+      return;
+    }
     if (!walletClient) return;
-
     setTokenVerificationState("verifying");
 
     try {
@@ -117,9 +111,11 @@ const GenerateLink = () => {
         contract.name().catch(() => "Unknown Token"),
         contract.decimals().catch(() => 18),
       ]);
+      if (!isCurrent()) return;
       setVerifiedToken({ address, symbol, name, decimals });
       setTokenVerificationState("success");
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Verification failed:", error);
       setTokenVerificationState("error");
     }
@@ -233,21 +229,8 @@ const GenerateLink = () => {
                 <ToggleSwitch
                   enabled={useCustomToken}
                   onChange={(enabled) => {
+                    beginTokenRequest();
                     setUseCustomToken(enabled);
-                    if (enabled) {
-                      setSelectedToken(null);
-                    } else {
-                      // Reset to first token when switching back
-                      if (tokens.length > 0) {
-                        const ethToken = tokens.find(
-                          (token) =>
-                            token.symbol.toLowerCase() === "eth" ||
-                            token.contract_address ===
-                              "0x0000000000000000000000000000000000000000"
-                        );
-                        setSelectedToken(ethToken || tokens[0]);
-                      }
-                    }
                   }}
                   leftLabel="Select Token"
                   rightLabel="Input Custom Token"
@@ -268,7 +251,7 @@ const GenerateLink = () => {
                               symbol: token.symbol,
                               name: token.name,
                               logo: token.image,
-                              decimals: 18,
+                              decimals: token.decimals,
                             });
                           }}
                           chainId={chainId || 1}
@@ -319,6 +302,7 @@ const GenerateLink = () => {
                           placeholder="0x... (Enter token contract address)"
                           value={customTokenAddress}
                           onChange={(e) => {
+                            beginTokenRequest();
                             const address = e.target.value;
                             setCustomTokenAddress(address);
                             if (!address || !ethers.isAddress(address)) {
