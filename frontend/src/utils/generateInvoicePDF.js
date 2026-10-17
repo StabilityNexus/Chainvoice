@@ -47,8 +47,8 @@ const loadLogoImage = async () => {
         }
       }
     }
-  } catch {
-    // Continue to the next logo-loading fallback method.
+  } catch (e) {
+    console.warn('DOM logo-loading method failed:', e);
   }
 
   try {
@@ -103,8 +103,8 @@ const loadLogoImage = async () => {
         return canvasDataUrl;
       }
     }
-  } catch {
-    // Continue to the next logo-loading fallback method.
+  } catch (e) {
+    console.warn('Image logo-loading method failed:', e);
   }
 
   try {
@@ -147,8 +147,8 @@ const loadLogoImage = async () => {
     });
     
     return logoDataUrl;
-  } catch {
-    // Logo could not be loaded using the available methods.
+  } catch (e) {
+    console.error('Logo loading error:', e);
   }
   
   return null;
