@@ -48,6 +48,25 @@ The app runs locally at:
 http://localhost:5173
 ```
 
+> Invoice sending and receiving also need a ThruBox relay on
+> `VITE_RELAY_URL` (see [Relay configuration](#relay-configuration)). Nothing
+> here starts one — [Run with Docker](#run-with-docker) does.
+
+## Run with Docker
+
+`docker compose up` starts this app together with a relay, so you do not have
+to install Node.js or run ThruBox yourself. From the repository root:
+
+```bash
+cp frontend/.env.example frontend/.env
+docker buildx build -t chainvoice/thrubox-relay:main "https://github.com/AOSSIE-Org/ThruBox-Server.git#main"
+docker compose up --build
+```
+
+Hot reload works as usual — your working copy is bind-mounted into the
+container. Full guide, including the nginx-served production profile:
+**[docs/docker.md](../docs/docker.md)**.
+
 ## Environment Variables
 
 The frontend reads Vite environment variables from `.env`.

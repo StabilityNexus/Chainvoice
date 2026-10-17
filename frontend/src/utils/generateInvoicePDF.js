@@ -1,4 +1,3 @@
-import jsPDF from "jspdf";
 import { getWagmiChainName, getWagmiChainInfo } from "./wagmiChainHelpers";
 import {
   buildInvoiceTotalText,
@@ -13,7 +12,8 @@ import {
 const loadLogoImage = async () => {
   try {
     const invoiceElement = document.getElementById("invoice-print");
-    const logoImg = invoiceElement?.querySelector('img[src="/logo.png"]') || 
+    const logoPath = `${import.meta.env.BASE_URL}logo.png`;
+    const logoImg = invoiceElement?.querySelector(`img[src="${logoPath}"]`) || 
                     invoiceElement?.querySelector('img[src*="logo"]');
     
     if (logoImg) {
@@ -52,7 +52,7 @@ const loadLogoImage = async () => {
   }
 
   try {
-    const response = await fetch('/logo.png', {
+    const response = await fetch(`${import.meta.env.BASE_URL}logo.png`, {
       method: 'GET',
       headers: {
         'Cache-Control': 'no-cache',
@@ -143,7 +143,7 @@ const loadLogoImage = async () => {
         reject(new Error('Image load failed'));
       };
       
-      img.src = "/logo.png";
+      img.src = `${import.meta.env.BASE_URL}logo.png`;
     });
     
     return logoDataUrl;
@@ -158,13 +158,14 @@ const loadLogoImage = async () => {
  * Generate PDF for invoice
  * @param {Object} invoice - Invoice object
  * @param {string|BigInt} fee - Network fee (wei)
- * @returns {Promise<jsPDF>} Generated PDF document
+ * @returns {Promise<import("jspdf").jsPDF>} Generated PDF document
  */
 export const generateInvoicePDF = async (invoice, fee = 0) => {
   if (!invoice) {
     throw new Error("Invoice is required");
   }
 
+  const { default: jsPDF } = await import("jspdf");
   const pdf = new jsPDF({
     orientation: "portrait",
     unit: "mm",

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 const tokenCache = {};
 
 // Add testnet chain IDs
-const TESTNET_CHAIN_IDS = new Set([11155111, 5]); // Sepolia, Goerli
+const TESTNET_CHAIN_IDS = new Set([11155111, 5, 5115]); // Sepolia, Goerli, Citrea Testnet
 
 // Helper function to check if a chain is testnet
 export const isTestnet = (chainId) => TESTNET_CHAIN_IDS.has(chainId);
@@ -69,7 +69,7 @@ export function useTokenList(chainId) {
           contract_address: token.contract_address || token.address,
           symbol: token.symbol,
           name: token.name,
-          image: token.image || token.logo || "/tokenImages/generic.png",
+          image: token.image || token.logo || `${import.meta.env.BASE_URL}tokenImages/generic.png`,
         }));
 
         // Cache the tokens

@@ -1,0 +1,25 @@
+# Installed inside the image instead — a host node_modules built on another
+# platform would break native dependencies.
+node_modules
+
+# Build and test output
+dist
+build
+coverage
+.vite
+
+# Local environment files. Nothing secret lives here (Vite inlines every
+# VITE_-prefixed value into the public bundle), but baking one developer's
+# configuration into an image is still the wrong default — the build stage
+# takes its values from build arguments instead.
+.env
+.env.*
+!.env.example
+
+# Noise
+.git
+.gitignore
+*.log
+npm-debug.log*
+Dockerfile
+.dockerignore

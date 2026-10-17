@@ -1,7 +1,23 @@
 export const ChainvoiceABI = [
   {
     "type": "constructor",
-    "inputs": [],
+    "inputs": [
+      {
+        "name": "_fee",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "_feeController",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "_feeRecipient",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
     "stateMutability": "nonpayable"
   },
   {
@@ -19,7 +35,33 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "acceptOwnership",
+    "name": "MAX_CREATE_BATCH",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_PAGE_LIMIT",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "acceptFeeController",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -39,6 +81,13 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
+    "name": "cancelFeeControllerProposal",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "cancelInvoice",
     "inputs": [
       {
@@ -47,13 +96,6 @@ export const ChainvoiceABI = [
         "internalType": "uint256"
       }
     ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "cancelOwnershipTransfer",
-    "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -122,6 +164,32 @@ export const ChainvoiceABI = [
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "feeController",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "feeRecipient",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -248,11 +316,21 @@ export const ChainvoiceABI = [
         "name": "user",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "offset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "page",
         "type": "tuple[]",
         "internalType": "struct Chainvoice.InvoiceDetails[]",
         "components": [
@@ -297,6 +375,11 @@ export const ChainvoiceABI = [
             "internalType": "bytes32"
           }
         ]
+      },
+      {
+        "name": "total",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
@@ -309,11 +392,21 @@ export const ChainvoiceABI = [
         "name": "user",
         "type": "address",
         "internalType": "address"
+      },
+      {
+        "name": "offset",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "outputs": [
       {
-        "name": "",
+        "name": "page",
         "type": "tuple[]",
         "internalType": "struct Chainvoice.InvoiceDetails[]",
         "components": [
@@ -358,22 +451,14 @@ export const ChainvoiceABI = [
             "internalType": "bytes32"
           }
         ]
+      },
+      {
+        "name": "total",
+        "type": "uint256",
+        "internalType": "uint256"
       }
     ],
     "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "initiateOwnershipTransfer",
-    "inputs": [
-      {
-        "name": "newOwner",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -431,19 +516,6 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "owner",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
     "name": "payInvoice",
     "inputs": [
       {
@@ -470,7 +542,7 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "pendingOwner",
+    "name": "pendingFeeController",
     "inputs": [],
     "outputs": [
       {
@@ -480,6 +552,19 @@ export const ChainvoiceABI = [
       }
     ],
     "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "proposeFeeController",
+    "inputs": [
+      {
+        "name": "newFeeController",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -557,29 +642,16 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "setTreasuryAddress",
+    "name": "setFeeRecipient",
     "inputs": [
       {
-        "name": "newTreasury",
+        "name": "newFeeRecipient",
         "type": "address",
         "internalType": "address"
       }
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
-  },
-  {
-    "type": "function",
-    "name": "treasuryAddress",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "address",
-        "internalType": "address"
-      }
-    ],
-    "stateMutability": "view"
   },
   {
     "type": "function",
@@ -587,6 +659,82 @@ export const ChainvoiceABI = [
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
+  },
+  {
+    "type": "event",
+    "name": "FeeControllerProposalCancelled",
+    "inputs": [
+      {
+        "name": "currentFeeController",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "cancelledFeeController",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FeeControllerProposed",
+    "inputs": [
+      {
+        "name": "currentFeeController",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "proposedFeeController",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FeeControllerUpdated",
+    "inputs": [
+      {
+        "name": "previousFeeController",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newFeeController",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "FeeRecipientUpdated",
+    "inputs": [
+      {
+        "name": "previousFeeRecipient",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newFeeRecipient",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
   },
   {
     "type": "event",
@@ -776,63 +924,6 @@ export const ChainvoiceABI = [
   },
   {
     "type": "event",
-    "name": "OwnershipTransferCancelled",
-    "inputs": [
-      {
-        "name": "owner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "cancelledPendingOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "OwnershipTransferInitiated",
-    "inputs": [
-      {
-        "name": "currentOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "pendingOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "OwnershipTransferred",
-    "inputs": [
-      {
-        "name": "previousOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newOwner",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
     "name": "PublicKeyRegistered",
     "inputs": [
       {
@@ -846,25 +937,6 @@ export const ChainvoiceABI = [
         "type": "bytes",
         "indexed": false,
         "internalType": "bytes"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "TreasuryAddressUpdated",
-    "inputs": [
-      {
-        "name": "previousTreasury",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newTreasury",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -921,7 +993,7 @@ export const ChainvoiceABI = [
   },
   {
     "type": "error",
-    "name": "InvalidNewOwner",
+    "name": "InvalidPageLimit",
     "inputs": []
   },
   {
@@ -966,6 +1038,11 @@ export const ChainvoiceABI = [
   },
   {
     "type": "error",
+    "name": "NoPendingFeeController",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "NotAuthorizedPayer",
     "inputs": []
   },
@@ -981,11 +1058,6 @@ export const ChainvoiceABI = [
   },
   {
     "type": "error",
-    "name": "OwnershipNotPending",
-    "inputs": []
-  },
-  {
-    "type": "error",
     "name": "Reentrancy",
     "inputs": []
   },
@@ -996,12 +1068,7 @@ export const ChainvoiceABI = [
   },
   {
     "type": "error",
-    "name": "TokenTransferFailed",
-    "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "TreasuryNotSet",
+    "name": "TokenAmountShortfall",
     "inputs": []
   },
   {

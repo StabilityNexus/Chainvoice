@@ -5,6 +5,192 @@ import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import "../src/Chainvoice.sol";
 
+contract ValidCreationToken {
+    function balanceOf(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    function allowance(address, address) external pure returns (uint256) {
+        return 0;
+    }
+}
+
+contract EmptyReturnToken {
+    fallback() external {}
+}
+
+contract RevertingBalanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        revert();
+    }
+}
+
+contract ShortBalanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        assembly {
+            mstore(0, 0)
+            return(0, 31)
+        }
+    }
+
+    function allowance(address, address) external pure returns (uint256) {
+        return 0;
+    }
+}
+
+contract EmptyAllowanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    fallback() external {}
+}
+
+contract RevertingAllowanceToken {
+    function balanceOf(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    function allowance(address, address) external pure returns (uint256) {
+        revert();
+    }
+}
+
+contract MockERC20 {
+    string public name = "Mock ERC20";
+    string public symbol = "MOCK";
+    uint8 public decimals = 18;
+    
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+    uint256 public totalSupply;
+    
+    event Transfer(address indexed from, address indexed to, uint256 value);
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+    
+    function mint(address to, uint256 amount) public {
+        balanceOf[to] += amount;
+        totalSupply += amount;
+        emit Transfer(address(0), to, amount);
+    }
+    
+    function approve(address spender, uint256 amount) public returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+        return true;
+    }
+    
+    function transferFrom(address from, address to, uint256 amount) public virtual returns (bool) {
+        if (allowance[from][msg.sender] < amount) return false;
+        if (balanceOf[from] < amount) return false;
+        
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+        emit Transfer(from, to, amount);
+        return true;
+    }
+}
+
+/// USDT-style token: transferFrom and approve return nothing.
+contract MockNoReturnERC20 {
+    mapping(address => uint256) public balanceOf;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    function mint(address to, uint256 amount) public {
+        balanceOf[to] += amount;
+    }
+
+    function approve(address spender, uint256 amount) public {
+        allowance[msg.sender][spender] = amount;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public {
+        require(allowance[from][msg.sender] >= amount, "allowance");
+        require(balanceOf[from] >= amount, "balance");
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+    }
+}
+
+/// Deflationary token: burns 1% of every transfer.
+contract MockFeeOnTransferERC20 is MockERC20 {
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        if (allowance[from][msg.sender] < amount) return false;
+        if (balanceOf[from] < amount) return false;
+        uint256 burned = amount / 100;
+        allowance[from][msg.sender] -= amount;
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount - burned;
+        totalSupply -= burned;
+        return true;
+    }
+}
+
+/// Token whose transferFrom calls back into Chainvoice, as a token with
+/// transfer hooks could. Records the error the re-entrant call reverted with.
+contract ReentrantERC20 is MockERC20 {
+    Chainvoice public target;
+    bytes public reentryCall;
+    bytes public reentryError;
+
+    function arm(Chainvoice _target, bytes calldata data) external {
+        target = _target;
+        reentryCall = data;
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public override returns (bool) {
+        if (reentryCall.length != 0) {
+            bytes memory data = reentryCall;
+            delete reentryCall;
+            (bool ok, bytes memory err) = address(target).call(data);
+            require(!ok, "re-entry succeeded");
+            reentryError = err;
+        }
+        return super.transferFrom(from, to, amount);
+    }
+}
+
+/// Invoice issuer whose receive() calls back into Chainvoice when paid,
+/// optionally forwarding native value. Records the error the re-entrant call
+/// reverted with.
+contract ReentrantIssuer {
+    Chainvoice public immutable target;
+    bytes public reentryCall;
+    uint256 public reentryValue;
+    bytes public reentryError;
+
+    constructor(Chainvoice _target) {
+        target = _target;
+    }
+
+    function createInvoice(address to, uint256 amount) external {
+        target.createInvoice(to, amount, address(0), keccak256("reentrant"));
+    }
+
+    function arm(bytes calldata data, uint256 value) external {
+        reentryCall = data;
+        reentryValue = value;
+    }
+
+    receive() external payable {
+        if (reentryCall.length == 0) return;
+        bytes memory data = reentryCall;
+        delete reentryCall;
+        (bool ok, bytes memory err) = address(target).call{value: reentryValue}(data);
+        require(!ok, "re-entry succeeded");
+        reentryError = err;
+    }
+}
+
+/// A contract with no receive or fallback function, so any ETH sent to it reverts.
+contract EthRejectingRecipient {
+    function ping() external pure returns (bool) {
+        return true;
+    }
+}
+
 contract ChainvoiceTest is Test {
     Chainvoice chainvoice;
 
@@ -14,8 +200,18 @@ contract ChainvoiceTest is Test {
 
     event PublicKeyRegistered(address indexed user, bytes publicKey);
 
+    address feeController = address(0xFEE1);
+    address feeRecipient = address(0xFEE2);
+    uint256 constant INITIAL_FEE = 0.0005 ether;
+
+    event FeeUpdated(uint256 indexed previousFee, uint256 indexed newFee);
+    event FeeRecipientUpdated(address indexed previousFeeRecipient, address indexed newFeeRecipient);
+    event FeeControllerProposed(address indexed currentFeeController, address indexed proposedFeeController);
+    event FeeControllerUpdated(address indexed previousFeeController, address indexed newFeeController);
+    event FeeControllerProposalCancelled(address indexed currentFeeController, address indexed cancelledFeeController);
+
     function setUp() public {
-        chainvoice = new Chainvoice();
+        chainvoice = new Chainvoice(INITIAL_FEE, feeController, feeRecipient);
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
         vm.deal(charlie, 100 ether);
@@ -34,12 +230,11 @@ contract ChainvoiceTest is Test {
             keccak256("encryptedData")
         );
 
-        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(
-            alice
-        );
+        (Chainvoice.InvoiceDetails[] memory sent, ) = chainvoice
+            .getSentInvoices(alice, 0, 10);
 
-        Chainvoice.InvoiceDetails[] memory received = chainvoice
-            .getReceivedInvoices(bob);
+        (Chainvoice.InvoiceDetails[] memory received, ) = chainvoice
+            .getReceivedInvoices(bob, 0, 10);
 
         assertEq(sent.length, 1);
         assertEq(received.length, 1);
@@ -122,7 +317,7 @@ contract ChainvoiceTest is Test {
     /* ------------------------------------------------------------ */
 
     function testBatchTooLarge() public {
-        uint256 batchSize = 51;
+        uint256 batchSize = chainvoice.MAX_CREATE_BATCH() + 1;
         address[] memory tos = new address[](batchSize);
         uint256[] memory amounts = new uint256[](batchSize);
         bytes32[] memory payloads = new bytes32[](batchSize);
@@ -136,6 +331,125 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         vm.expectRevert(Chainvoice.InvalidBatchSize.selector);
         chainvoice.createInvoicesBatch(tos, amounts, address(0), payloads);
+    }
+
+    uint256 constant ETC_BLOCK_GAS_LIMIT = 8_000_000;
+
+    function _batchArgs(uint256 n)
+        private
+        pure
+        returns (address[] memory tos, uint256[] memory amounts, bytes32[] memory hashes)
+    {
+        tos = new address[](n);
+        amounts = new uint256[](n);
+        hashes = new bytes32[](n);
+        for (uint256 i = 0; i < n; i++) {
+            tos[i] = address(uint160(0x1000 + i)); // distinct, never-touched recipients
+            amounts[i] = 1 ether;
+            hashes[i] = keccak256(abi.encode("cap", i));
+        }
+    }
+
+    // 21000 intrinsic gas plus calldata (4 per zero byte, 16 per other byte), which
+    // gasleft() inside the test does not include.
+    function _txOverhead(bytes memory data) private pure returns (uint256 gas) {
+        gas = 21000;
+        for (uint256 i = 0; i < data.length; i++) {
+            gas += data[i] == 0 ? 4 : 16;
+        }
+    }
+
+    function testBatchLimits() public view {
+        assertEq(chainvoice.MAX_CREATE_BATCH(), 30);
+        assertEq(chainvoice.MAX_BATCH(), 50);
+    }
+
+    function testCreateInvoicesBatch_AtMaxSucceeds() public {
+        uint256 n = chainvoice.MAX_CREATE_BATCH();
+        (address[] memory tos, uint256[] memory amounts, bytes32[] memory hashes) = _batchArgs(n);
+
+        vm.prank(alice);
+        chainvoice.createInvoicesBatch(tos, amounts, address(0), hashes);
+
+        (, uint256 total) = chainvoice.getSentInvoices(alice, 0, 1);
+        assertEq(total, n);
+    }
+
+    function testCreateInvoicesBatch_RevertAboveMax() public {
+        uint256 n = chainvoice.MAX_CREATE_BATCH() + 1;
+        (address[] memory tos, uint256[] memory amounts, bytes32[] memory hashes) = _batchArgs(n);
+
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.InvalidBatchSize.selector);
+        chainvoice.createInvoicesBatch(tos, amounts, address(0), hashes);
+    }
+
+    function testCreateInvoicesBatch_RevertIfEmpty() public {
+        (address[] memory tos, uint256[] memory amounts, bytes32[] memory hashes) = _batchArgs(0);
+
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.InvalidBatchSize.selector);
+        chainvoice.createInvoicesBatch(tos, amounts, address(0), hashes);
+    }
+
+    /// The cap exists so a full batch fits in one Ethereum Classic block. Worst
+    /// case is an ERC-20 token and recipients that have never been touched.
+    function testCreateInvoicesBatch_MaxSizeFitsEtcBlockGasLimit() public {
+        MockERC20 token = new MockERC20();
+        uint256 n = chainvoice.MAX_CREATE_BATCH();
+        (address[] memory tos, uint256[] memory amounts, bytes32[] memory hashes) = _batchArgs(n);
+        bytes memory data = abi.encodeCall(
+            Chainvoice.createInvoicesBatch,
+            (tos, amounts, address(token), hashes)
+        );
+
+        vm.prank(alice);
+        uint256 before = gasleft();
+        chainvoice.createInvoicesBatch(tos, amounts, address(token), hashes);
+        // Separate statements: the compiler may evaluate the right operand of a
+        // sum first, which would count the overhead loop itself in the total.
+        uint256 execution = before - gasleft();
+        uint256 used = execution + _txOverhead(data);
+
+        assertLt(used, ETC_BLOCK_GAS_LIMIT);
+    }
+
+    function testPayInvoicesBatch_AcceptsMaxBatch() public {
+        uint256 max = chainvoice.MAX_BATCH();
+        uint256 perBatch = chainvoice.MAX_CREATE_BATCH();
+        uint256[] memory ids = new uint256[](max);
+
+        // Created in two batches because one batch is capped at MAX_CREATE_BATCH.
+        uint256 made;
+        while (made < max) {
+            uint256 n = max - made > perBatch ? perBatch : max - made;
+            address[] memory tos = new address[](n);
+            uint256[] memory amounts = new uint256[](n);
+            bytes32[] memory hashes = new bytes32[](n);
+            for (uint256 i = 0; i < n; i++) {
+                tos[i] = bob;
+                amounts[i] = 1 ether;
+                hashes[i] = keccak256(abi.encode("pay", made + i));
+                ids[made + i] = made + i;
+            }
+            vm.prank(alice);
+            chainvoice.createInvoicesBatch(tos, amounts, address(0), hashes);
+            made += n;
+        }
+
+        uint256 fee = chainvoice.fee();
+        vm.prank(bob);
+        chainvoice.payInvoicesBatch{value: max * (1 ether + fee)}(ids);
+
+        assertEq(chainvoice.accumulatedFees(), max * fee);
+    }
+
+    function testPayInvoicesBatch_RevertAboveMaxBatch() public {
+        uint256[] memory ids = new uint256[](chainvoice.MAX_BATCH() + 1);
+
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.InvalidBatchSize.selector);
+        chainvoice.payInvoicesBatch(ids);
     }
 
     function testCreateInvoicesBatch() public {
@@ -153,8 +467,8 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoicesBatch(tos, amounts, address(0), payloads);
 
-        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(alice);
-        Chainvoice.InvoiceDetails[] memory received = chainvoice.getReceivedInvoices(bob);
+        (Chainvoice.InvoiceDetails[] memory sent, ) = chainvoice.getSentInvoices(alice, 0, 10);
+        (Chainvoice.InvoiceDetails[] memory received, ) = chainvoice.getReceivedInvoices(bob, 0, 10);
 
         assertEq(sent.length, 3);
         assertEq(received.length, 3);
@@ -196,6 +510,23 @@ contract ChainvoiceTest is Test {
         assertEq(alice.balance, aliceStart + totalPrincipal);
     }
 
+    function testPayInvoicesBatch_RevertOnDuplicateId() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("dup1"));
+
+        uint256 fee = chainvoice.fee();
+        uint256 totalFee = fee * 2;
+        uint256 totalPrincipal = 2 ether;
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 0;
+
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.AlreadySettled.selector);
+        chainvoice.payInvoicesBatch{value: totalPrincipal + totalFee}(ids);
+    }
+
     /* ------------------------------------------------------------ */
     /*                       FUZZ TESTING                           */
     /* ------------------------------------------------------------ */
@@ -209,8 +540,9 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(recipient, amount, address(0), keccak256("fuzz"));
 
-        Chainvoice.InvoiceDetails[] memory sent = chainvoice.getSentInvoices(alice);
-        Chainvoice.InvoiceDetails memory latest = sent[sent.length - 1];
+        (Chainvoice.InvoiceDetails[] memory sent, ) = chainvoice.getSentInvoices(alice, 0, 10);
+        // Pages come back newest first, so the invoice just created leads.
+        Chainvoice.InvoiceDetails memory latest = sent[0];
 
         assertEq(latest.to, recipient);
         assertEq(latest.amountDue, amount);
@@ -221,10 +553,6 @@ contract ChainvoiceTest is Test {
     /* ------------------------------------------------------------ */
 
     function testWithdrawFees() public {
-        address treasury = address(0x999);
-
-        chainvoice.setTreasuryAddress(treasury);
-
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("withdraw"));
 
@@ -237,77 +565,370 @@ contract ChainvoiceTest is Test {
         chainvoice.withdrawFees();
 
         assertEq(chainvoice.accumulatedFees(), 0);
-        assertEq(treasury.balance, fee);
+        assertEq(feeRecipient.balance, fee);
     }
 
-    /*                    OWNERSHIP MANAGEMENT                      */
+    function testWithdrawFees_AnyoneCanTriggerButRecipientIsPaid() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("withdraw2"));
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
+
+        uint256 charlieBefore = charlie.balance;
+        vm.prank(charlie);
+        chainvoice.withdrawFees();
+
+        assertEq(feeRecipient.balance, INITIAL_FEE);
+        assertEq(charlie.balance, charlieBefore);
+    }
+
+    /// The contract deliberately does not check that the fee recipient can receive
+    /// ETH. If it can't, withdrawFees reverts and the fees stay accrued until the
+    /// controller points the recipient somewhere that works.
+    function testWithdrawFees_RecoversAfterRecipientRejectsEth() public {
+        EthRejectingRecipient rejecting = new EthRejectingRecipient();
+        address working = address(0x600D);
+
+        // The controller can set a recipient that cannot receive ETH.
+        vm.prank(feeController);
+        chainvoice.setFeeRecipient(address(rejecting));
+
+        // Fees accrue from a single payment and from a batch.
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("recover-1"));
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("recover-2"));
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("recover-3"));
+        vm.stopPrank();
+
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 1;
+        ids[1] = 2;
+        vm.prank(bob);
+        chainvoice.payInvoicesBatch{value: 2 ether + 2 * INITIAL_FEE}(ids);
+
+        uint256 accrued = 3 * INITIAL_FEE;
+        assertEq(chainvoice.accumulatedFees(), accrued);
+        assertEq(address(chainvoice).balance, accrued);
+
+        // Withdrawing reverts, and nothing is lost or moved.
+        vm.expectRevert(Chainvoice.WithdrawFailed.selector);
+        chainvoice.withdrawFees();
+        assertEq(chainvoice.accumulatedFees(), accrued);
+        assertEq(address(chainvoice).balance, accrued);
+        assertEq(address(rejecting).balance, 0);
+
+        // Nobody but the controller can repoint the recipient.
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
+        chainvoice.setFeeRecipient(working);
+
+        // The controller fixes it, and the retry pays everything that accrued.
+        vm.prank(feeController);
+        chainvoice.setFeeRecipient(working);
+
+        chainvoice.withdrawFees();
+
+        assertEq(working.balance, accrued);
+        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(address(chainvoice).balance, 0);
+        assertEq(address(rejecting).balance, 0);
+    }
+
+    function testWithdrawFees_FollowsRecipientChange() public {
+        address newRecipient = address(0xBEEF);
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("withdraw3"));
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
+
+        vm.prank(feeController);
+        chainvoice.setFeeRecipient(newRecipient);
+        chainvoice.withdrawFees();
+
+        assertEq(newRecipient.balance, INITIAL_FEE);
+        assertEq(feeRecipient.balance, 0);
+    }
+
+    function testWithdrawFees_ControllerHandoverDoesNotMoveRecipient() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("withdraw4"));
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
+
+        vm.prank(feeController);
+        chainvoice.proposeFeeController(charlie);
+        vm.prank(charlie);
+        chainvoice.acceptFeeController();
+
+        chainvoice.withdrawFees();
+        assertEq(feeRecipient.balance, INITIAL_FEE);
+        assertEq(charlie.balance, 100 ether);
+    }
+
+    /*                  FEE CONTROLLER / RECIPIENT                  */
     /* ------------------------------------------------------------ */
 
-    function testInitiateOwnershipTransfer() public {
-        address newOwner = address(0xC0FFEE);
-        
-        vm.prank(alice); // alice is not the owner
-        vm.expectRevert(Chainvoice.Unauthorized.selector);
-        chainvoice.initiateOwnershipTransfer(newOwner);
-
-        vm.prank(address(this)); // this is the owner (from setUp)
-        chainvoice.initiateOwnershipTransfer(newOwner);
-        
-        assertEq(chainvoice.pendingOwner(), newOwner);
+    function testConstructor_SetsFeeControllerAndRecipient() public {
+        Chainvoice c = new Chainvoice(0.002 ether, address(0xABCD), address(0xDCBA));
+        assertEq(c.fee(), 0.002 ether);
+        assertEq(c.feeController(), address(0xABCD));
+        assertEq(c.feeRecipient(), address(0xDCBA));
+        assertEq(c.pendingFeeController(), address(0));
     }
 
-    function testInitiateOwnershipTransferInvalidAddress() public {
-        vm.expectRevert(Chainvoice.InvalidNewOwner.selector);
-        chainvoice.initiateOwnershipTransfer(address(0));
-
-        // Try to transfer to self
-        vm.expectRevert(Chainvoice.InvalidNewOwner.selector);
-        chainvoice.initiateOwnershipTransfer(address(this));
+    function testConstructor_EmitsInitialEvents() public {
+        vm.expectEmit(true, true, false, false);
+        emit FeeUpdated(0, 0.002 ether);
+        vm.expectEmit(true, true, false, false);
+        emit FeeControllerUpdated(address(0), address(0xABCD));
+        vm.expectEmit(true, true, false, false);
+        emit FeeRecipientUpdated(address(0), address(0xDCBA));
+        new Chainvoice(0.002 ether, address(0xABCD), address(0xDCBA));
     }
 
-    function testAcceptOwnership() public {
-        address newOwner = address(0xC0FFEE);
-        
-        chainvoice.initiateOwnershipTransfer(newOwner);
-        
-        vm.prank(newOwner);
-        chainvoice.acceptOwnership();
-        
-        assertEq(chainvoice.owner(), newOwner);
-        assertEq(chainvoice.pendingOwner(), address(0));
+    function testConstructor_RevertIfZeroFee() public {
+        vm.expectRevert(Chainvoice.InvalidAmount.selector);
+        new Chainvoice(0, feeController, feeRecipient);
     }
 
-    function testAcceptOwnershipNotPending() public {
-        vm.prank(address(0xDEADBEEF));
-        vm.expectRevert(Chainvoice.OwnershipNotPending.selector);
-        chainvoice.acceptOwnership();
+    function testConstructor_RevertIfZeroController() public {
+        vm.expectRevert(Chainvoice.ZeroAddress.selector);
+        new Chainvoice(INITIAL_FEE, address(0), feeRecipient);
     }
 
-    function testCancelOwnershipTransfer() public {
-        address newOwner = address(0xC0FFEE);
-        
-        chainvoice.initiateOwnershipTransfer(newOwner);
-        assertEq(chainvoice.pendingOwner(), newOwner);
-        
-        chainvoice.cancelOwnershipTransfer();
-        assertEq(chainvoice.pendingOwner(), address(0));
+    function testConstructor_RevertIfZeroRecipient() public {
+        vm.expectRevert(Chainvoice.ZeroAddress.selector);
+        new Chainvoice(INITIAL_FEE, feeController, address(0));
     }
 
-    function testCancelOwnershipTransferNoPending() public {
-        vm.expectRevert(Chainvoice.OwnershipNotPending.selector);
-        chainvoice.cancelOwnershipTransfer();
-    }
-
-    function testFeeUpdateEvent() public {
+    function testSetFeeAmount_ByController() public {
         uint256 newFee = 0.001 ether;
+        vm.expectEmit(true, true, false, false);
+        emit FeeUpdated(INITIAL_FEE, newFee);
+        vm.prank(feeController);
         chainvoice.setFeeAmount(newFee);
         assertEq(chainvoice.fee(), newFee);
     }
 
-    function testTreasuryAddressUpdateEvent() public {
-        address newTreasury = address(0xdead);
-        chainvoice.setTreasuryAddress(newTreasury);
-        assertEq(chainvoice.treasuryAddress(), newTreasury);
+    function testSetFeeAmount_NoCap() public {
+        vm.prank(feeController);
+        chainvoice.setFeeAmount(type(uint256).max);
+        assertEq(chainvoice.fee(), type(uint256).max);
+    }
+
+    function testSetFeeAmount_ControllerCanSetZero() public {
+        vm.prank(feeController);
+        chainvoice.setFeeAmount(0);
+        assertEq(chainvoice.fee(), 0);
+    }
+
+    function testSetFeeRecipient_ByController() public {
+        address newRecipient = address(0xdead);
+        vm.expectEmit(true, true, false, false);
+        emit FeeRecipientUpdated(feeRecipient, newRecipient);
+        vm.prank(feeController);
+        chainvoice.setFeeRecipient(newRecipient);
+        assertEq(chainvoice.feeRecipient(), newRecipient);
+    }
+
+    function testSetFeeRecipient_RevertIfZero() public {
+        vm.expectRevert(Chainvoice.ZeroAddress.selector);
+        vm.prank(feeController);
+        chainvoice.setFeeRecipient(address(0));
+    }
+
+    function testNonController_CannotCallControllerFunctions() public {
+        // The recipient, a random user and the deployer (this contract) all revert.
+        address[3] memory callers = [feeRecipient, alice, address(this)];
+        for (uint256 k = 0; k < callers.length; k++) {
+            vm.startPrank(callers[k]);
+            vm.expectRevert(Chainvoice.Unauthorized.selector);
+            chainvoice.setFeeAmount(1);
+            vm.expectRevert(Chainvoice.Unauthorized.selector);
+            chainvoice.setFeeRecipient(alice);
+            vm.expectRevert(Chainvoice.Unauthorized.selector);
+            chainvoice.proposeFeeController(alice);
+            vm.expectRevert(Chainvoice.Unauthorized.selector);
+            chainvoice.cancelFeeControllerProposal();
+            vm.stopPrank();
+        }
+    }
+
+    // ----- two-step controller handover -----
+
+    function testProposeFeeController_SetsPendingOnly() public {
+        vm.expectEmit(true, true, false, false);
+        emit FeeControllerProposed(feeController, alice);
+        vm.prank(feeController);
+        chainvoice.proposeFeeController(alice);
+
+        assertEq(chainvoice.pendingFeeController(), alice);
+        assertEq(chainvoice.feeController(), feeController);
+
+        // The proposed address has no powers until it accepts.
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
+        chainvoice.setFeeAmount(1);
+    }
+
+    function testProposeFeeController_RevertIfZero() public {
+        vm.expectRevert(Chainvoice.ZeroAddress.selector);
+        vm.prank(feeController);
+        chainvoice.proposeFeeController(address(0));
+    }
+
+    function testAcceptFeeController_Succeeds() public {
+        vm.prank(feeController);
+        chainvoice.proposeFeeController(alice);
+
+        vm.expectEmit(true, true, false, false);
+        emit FeeControllerUpdated(feeController, alice);
+        vm.prank(alice);
+        chainvoice.acceptFeeController();
+
+        assertEq(chainvoice.feeController(), alice);
+        assertEq(chainvoice.pendingFeeController(), address(0));
+
+        // Old controller is out, new controller is in.
+        vm.prank(feeController);
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
+        chainvoice.setFeeAmount(1);
+        vm.prank(alice);
+        chainvoice.setFeeAmount(1);
+        assertEq(chainvoice.fee(), 1);
+    }
+
+    function testAcceptFeeController_RevertIfWrongAddress() public {
+        vm.prank(feeController);
+        chainvoice.proposeFeeController(alice);
+
+        // Neither a stranger, the recipient nor the current controller can accept.
+        address[3] memory callers = [bob, feeRecipient, feeController];
+        for (uint256 k = 0; k < callers.length; k++) {
+            vm.prank(callers[k]);
+            vm.expectRevert(Chainvoice.Unauthorized.selector);
+            chainvoice.acceptFeeController();
+        }
+        assertEq(chainvoice.feeController(), feeController);
+        assertEq(chainvoice.pendingFeeController(), alice);
+    }
+
+    function testAcceptFeeController_RevertIfNothingPending() public {
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
+        chainvoice.acceptFeeController();
+
+        // Not even the current controller can "accept" when nothing is pending.
+        vm.prank(feeController);
+        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
+        chainvoice.acceptFeeController();
+    }
+
+    function testAcceptFeeController_CannotBeReplayed() public {
+        vm.prank(feeController);
+        chainvoice.proposeFeeController(alice);
+        vm.prank(alice);
+        chainvoice.acceptFeeController();
+
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
+        chainvoice.acceptFeeController();
+    }
+
+    function testProposeFeeController_ReplacesPending() public {
+        vm.startPrank(feeController);
+        chainvoice.proposeFeeController(alice);
+        chainvoice.proposeFeeController(bob);
+        vm.stopPrank();
+
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
+        chainvoice.acceptFeeController();
+
+        vm.prank(bob);
+        chainvoice.acceptFeeController();
+        assertEq(chainvoice.feeController(), bob);
+    }
+
+    // ----- cancelling a proposal -----
+
+    function testCancelFeeControllerProposal_ClearsPending() public {
+        vm.prank(feeController);
+        chainvoice.proposeFeeController(alice);
+
+        vm.expectEmit(true, true, false, false);
+        emit FeeControllerProposalCancelled(feeController, alice);
+        vm.prank(feeController);
+        chainvoice.cancelFeeControllerProposal();
+
+        assertEq(chainvoice.pendingFeeController(), address(0));
+        assertEq(chainvoice.feeController(), feeController);
+    }
+
+    function testCancelFeeControllerProposal_ProposedAddressCanNoLongerAccept() public {
+        vm.prank(feeController);
+        chainvoice.proposeFeeController(alice);
+        vm.prank(feeController);
+        chainvoice.cancelFeeControllerProposal();
+
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
+        chainvoice.acceptFeeController();
+        assertEq(chainvoice.feeController(), feeController);
+    }
+
+    function testCancelFeeControllerProposal_ControllerCanProposeAgain() public {
+        vm.startPrank(feeController);
+        chainvoice.proposeFeeController(alice);
+        chainvoice.cancelFeeControllerProposal();
+        chainvoice.proposeFeeController(bob);
+        vm.stopPrank();
+
+        vm.prank(bob);
+        chainvoice.acceptFeeController();
+        assertEq(chainvoice.feeController(), bob);
+    }
+
+    function testCancelFeeControllerProposal_RevertIfNothingPending() public {
+        vm.prank(feeController);
+        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
+        chainvoice.cancelFeeControllerProposal();
+    }
+
+    function testCancelFeeControllerProposal_RevertIfAlreadyCancelled() public {
+        vm.startPrank(feeController);
+        chainvoice.proposeFeeController(alice);
+        chainvoice.cancelFeeControllerProposal();
+        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
+        chainvoice.cancelFeeControllerProposal();
+        vm.stopPrank();
+    }
+
+    function testCancelFeeControllerProposal_RevertIfNotController() public {
+        vm.prank(feeController);
+        chainvoice.proposeFeeController(alice);
+
+        // A stranger, the recipient, the deployer and the proposed address itself
+        // all revert, and the proposal survives.
+        address[4] memory callers = [bob, feeRecipient, address(this), alice];
+        for (uint256 k = 0; k < callers.length; k++) {
+            vm.prank(callers[k]);
+            vm.expectRevert(Chainvoice.Unauthorized.selector);
+            chainvoice.cancelFeeControllerProposal();
+        }
+        assertEq(chainvoice.pendingFeeController(), alice);
+    }
+
+    function testProposeFeeController_PendingCannotActBeforeAcceptingRecipientChange() public {
+        // A pending controller cannot change the recipient before accepting.
+        vm.prank(feeController);
+        chainvoice.proposeFeeController(alice);
+        vm.prank(alice);
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
+        chainvoice.setFeeRecipient(alice);
     }
 
     /* ------------------------------------------------------------ */
@@ -451,5 +1072,960 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         vm.expectRevert(Chainvoice.InvalidInvoiceHash.selector);
         chainvoice.createInvoicesBatch(tos, amounts, address(0), hashes);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                       PAGINATION                             */
+    /* ------------------------------------------------------------ */
+
+    uint256 constant SEEDED = 25;
+
+    /// @dev Alice sends SEEDED invoices to bob, and charlie sends one to alice
+    ///      between each of them, so per-user positions differ from global ids:
+    ///      alice's i-th sent (= bob's i-th received) invoice has id 2i, and
+    ///      alice's i-th received invoice has id 2i + 1.
+    function _seedInvoices() internal {
+        for (uint256 i = 0; i < SEEDED; i++) {
+            vm.prank(alice);
+            chainvoice.createInvoice(bob, i + 1, address(0), keccak256(abi.encodePacked("sent", i)));
+            vm.prank(charlie);
+            chainvoice.createInvoice(alice, i + 1, address(0), keccak256(abi.encodePacked("recv", i)));
+        }
+    }
+
+    /// @dev Checks page holds, newest first, the invoices `from` to `from + len`
+    ///      positions back from the end of a list whose i-th invoice has id
+    ///      2i + idOffset. Element i of the page is list position
+    ///      SEEDED - 1 - from - i.
+    function _assertPage(
+        Chainvoice.InvoiceDetails[] memory page,
+        uint256 from,
+        uint256 len,
+        uint256 idOffset
+    ) internal pure {
+        assertEq(page.length, len);
+        for (uint256 i = 0; i < len; i++) {
+            uint256 position = SEEDED - 1 - from - i;
+            assertEq(page[i].id, 2 * position + idOffset);
+            assertEq(page[i].amountDue, position + 1);
+        }
+    }
+
+    function testGetSentInvoices_FirstPage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, 0, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 0, 10, 0);
+    }
+
+    function testGetSentInvoices_MiddlePage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, 10, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 10, 10, 0);
+    }
+
+    function testGetSentInvoices_LastPartialPage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, 20, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 20, 5, 0);
+    }
+
+    function testGetSentInvoices_OffsetEqualsTotal() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, SEEDED, 10);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+    }
+
+    function testGetSentInvoices_OffsetBeyondTotal() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, SEEDED + 1, 10);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+
+        (page, total) = chainvoice.getSentInvoices(alice, type(uint256).max, 50);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+    }
+
+    function testGetSentInvoices_MaxLimit() public {
+        _seedInvoices();
+        uint256 maxLimit = chainvoice.MAX_PAGE_LIMIT();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, 0, maxLimit);
+        assertEq(total, SEEDED);
+        _assertPage(page, 0, SEEDED, 0);
+    }
+
+    function testGetSentInvoices_RevertIfLimitZero() public {
+        _seedInvoices();
+        vm.expectRevert(Chainvoice.InvalidPageLimit.selector);
+        chainvoice.getSentInvoices(alice, 0, 0);
+    }
+
+    function testGetSentInvoices_RevertIfLimitAboveMax() public {
+        _seedInvoices();
+        uint256 maxLimit = chainvoice.MAX_PAGE_LIMIT();
+        vm.expectRevert(Chainvoice.InvalidPageLimit.selector);
+        chainvoice.getSentInvoices(alice, 0, maxLimit + 1);
+    }
+
+    function testGetSentInvoices_NoInvoices() public view {
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(bob, 0, 10);
+        assertEq(total, 0);
+        assertEq(page.length, 0);
+    }
+
+    function testGetSentInvoices_PagingReturnsEachInvoiceOnceNewestFirst() public {
+        _seedInvoices();
+        uint256 limit = 7;
+        uint256 seen = 0;
+        for (uint256 offset = 0; offset < SEEDED; offset += limit) {
+            (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, offset, limit);
+            assertEq(total, SEEDED);
+            uint256 expectedLen = SEEDED - offset < limit ? SEEDED - offset : limit;
+            _assertPage(page, offset, expectedLen, 0);
+            seen += page.length;
+        }
+        assertEq(seen, SEEDED);
+    }
+
+    function testGetReceivedInvoices_FirstPage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, 0, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 0, 10, 1);
+    }
+
+    function testGetReceivedInvoices_MiddlePage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, 10, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 10, 10, 1);
+    }
+
+    function testGetReceivedInvoices_LastPartialPage() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, 20, 10);
+        assertEq(total, SEEDED);
+        _assertPage(page, 20, 5, 1);
+    }
+
+    function testGetReceivedInvoices_OffsetEqualsTotal() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, SEEDED, 10);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+    }
+
+    function testGetReceivedInvoices_OffsetBeyondTotal() public {
+        _seedInvoices();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, SEEDED + 1, 10);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+
+        (page, total) = chainvoice.getReceivedInvoices(alice, type(uint256).max, 50);
+        assertEq(total, SEEDED);
+        assertEq(page.length, 0);
+    }
+
+    function testGetReceivedInvoices_MaxLimit() public {
+        _seedInvoices();
+        uint256 maxLimit = chainvoice.MAX_PAGE_LIMIT();
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, 0, maxLimit);
+        assertEq(total, SEEDED);
+        _assertPage(page, 0, SEEDED, 1);
+    }
+
+    function testGetReceivedInvoices_RevertIfLimitZero() public {
+        _seedInvoices();
+        vm.expectRevert(Chainvoice.InvalidPageLimit.selector);
+        chainvoice.getReceivedInvoices(alice, 0, 0);
+    }
+
+    function testGetReceivedInvoices_RevertIfLimitAboveMax() public {
+        _seedInvoices();
+        uint256 maxLimit = chainvoice.MAX_PAGE_LIMIT();
+        vm.expectRevert(Chainvoice.InvalidPageLimit.selector);
+        chainvoice.getReceivedInvoices(alice, 0, maxLimit + 1);
+    }
+
+    function testGetReceivedInvoices_NoInvoices() public view {
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(charlie, 0, 10);
+        assertEq(total, 0);
+        assertEq(page.length, 0);
+    }
+
+    function testGetReceivedInvoices_PagingReturnsEachInvoiceOnceNewestFirst() public {
+        _seedInvoices();
+        uint256 limit = 7;
+        uint256 seen = 0;
+        for (uint256 offset = 0; offset < SEEDED; offset += limit) {
+            (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getReceivedInvoices(alice, offset, limit);
+            assertEq(total, SEEDED);
+            uint256 expectedLen = SEEDED - offset < limit ? SEEDED - offset : limit;
+            _assertPage(page, offset, expectedLen, 1);
+            seen += page.length;
+        }
+        assertEq(seen, SEEDED);
+    }
+
+    function testFuzz_GetSentInvoicesPage(uint256 offset, uint256 limit) public {
+        _seedInvoices();
+        offset = bound(offset, 0, SEEDED + 5);
+        limit = bound(limit, 1, chainvoice.MAX_PAGE_LIMIT());
+
+        (Chainvoice.InvoiceDetails[] memory page, uint256 total) = chainvoice.getSentInvoices(alice, offset, limit);
+        assertEq(total, SEEDED);
+
+        uint256 expectedLen = offset >= SEEDED ? 0 : (SEEDED - offset < limit ? SEEDED - offset : limit);
+        _assertPage(page, offset, expectedLen, 0);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                       ERC20 OPERATIONS                       */
+    /* ------------------------------------------------------------ */
+
+    function testCreateInvoicesBatch_ValidToken() public {
+        address token = address(new ValidCreationToken());
+        address[] memory tos = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+        bytes32[] memory hashes = new bytes32[](1);
+        tos[0] = bob;
+        amounts[0] = 1 ether;
+        hashes[0] = keccak256("batch-token");
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, token, keccak256("single-token"));
+        vm.prank(alice);
+        chainvoice.createInvoicesBatch(tos, amounts, token, hashes);
+
+        (Chainvoice.InvoiceDetails[] memory sent, uint256 total) = chainvoice.getSentInvoices(alice, 0, 10);
+        assertEq(total, 2);
+        assertEq(sent.length, 2);
+        assertEq(sent[0].tokenAddress, token);
+        assertEq(sent[1].tokenAddress, token);
+    }
+
+    function testCreateInvoicesBatch_RejectsEmptyReturnToken() public {
+        _assertTokenRejectedForSingleAndBatch(address(new EmptyReturnToken()), Chainvoice.InvalidToken.selector);
+    }
+
+    function testCreateInvoicesBatch_RejectsRevertingBalanceOf() public {
+        _assertTokenRejectedForSingleAndBatch(address(new RevertingBalanceToken()), Chainvoice.InvalidToken.selector);
+    }
+
+    function testCreateInvoicesBatch_RejectsEmptyAllowance() public {
+        _assertTokenRejectedForSingleAndBatch(address(new EmptyAllowanceToken()), Chainvoice.InvalidToken.selector);
+    }
+
+    function testCreateInvoicesBatch_RejectsRevertingAllowance() public {
+        _assertTokenRejectedForSingleAndBatch(address(new RevertingAllowanceToken()), Chainvoice.InvalidToken.selector);
+    }
+
+    function testCreateInvoicesBatch_RejectsEOA() public {
+        _assertTokenRejectedForSingleAndBatch(address(0xBEEF), Chainvoice.NotContract.selector);
+    }
+
+    function testCreateInvoicesBatch_RejectsShortBalanceReturn() public {
+        _assertTokenRejectedForSingleAndBatch(address(new ShortBalanceToken()), Chainvoice.InvalidToken.selector);
+    }
+
+    function _assertTokenRejectedForSingleAndBatch(address token, bytes4 expectedError) private {
+        address[] memory tos = new address[](1);
+        uint256[] memory amounts = new uint256[](1);
+        bytes32[] memory hashes = new bytes32[](1);
+        tos[0] = bob;
+        amounts[0] = 1 ether;
+        hashes[0] = keccak256("invalid-token");
+
+        vm.expectRevert(expectedError);
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, token, hashes[0]);
+
+        vm.expectRevert(expectedError);
+        vm.prank(alice);
+        chainvoice.createInvoicesBatch(tos, amounts, token, hashes);
+
+        (Chainvoice.InvoiceDetails[] memory sent, uint256 total) = chainvoice.getSentInvoices(alice, 0, 10);
+        assertEq(total, 0);
+        assertEq(sent.length, 0);
+    }
+
+    function testCreateInvoice_ERC20() public {
+        MockERC20 token = new MockERC20();
+        
+        vm.prank(alice);
+        chainvoice.createInvoice(
+            bob,
+            100 * 10**18,
+            address(token),
+            keccak256("erc20Data")
+        );
+
+        Chainvoice.InvoiceDetails memory inv = chainvoice.getInvoice(0);
+        assertEq(inv.from, alice);
+        assertEq(inv.to, bob);
+        assertEq(inv.amountDue, 100 * 10**18);
+        assertEq(inv.tokenAddress, address(token));
+        assertFalse(inv.isPaid);
+    }
+
+    function testPayInvoice_ERC20() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 100 * 10**18);
+        
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("erc20Data"));
+
+        uint256 fee = chainvoice.fee();
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100 * 10**18);
+        chainvoice.payInvoice{value: fee}(0);
+        vm.stopPrank();
+
+        Chainvoice.InvoiceDetails memory inv = chainvoice.getInvoice(0);
+        assertTrue(inv.isPaid);
+        assertEq(token.balanceOf(bob), 0);
+        assertEq(token.balanceOf(alice), 100 * 10**18);
+        assertEq(chainvoice.accumulatedFees(), fee);
+    }
+
+    function testPayInvoice_ERC20_RevertInsufficientBalance() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 50 * 10**18); // Insufficient balance
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("erc20Data"));
+
+        uint256 fee = chainvoice.fee();
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100 * 10**18); // Sufficient allowance
+        vm.expectRevert("SafeERC20: ERC20 operation did not succeed");
+        chainvoice.payInvoice{value: fee}(0);
+        vm.stopPrank();
+
+        Chainvoice.InvoiceDetails memory inv = chainvoice.getInvoice(0);
+        assertFalse(inv.isPaid);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
+
+    function testPayInvoice_ERC20_RevertInsufficientAllowance() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 100 * 10**18);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("erc20Data"));
+
+        uint256 fee = chainvoice.fee();
+
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.InsufficientAllowance.selector);
+        chainvoice.payInvoice{value: fee}(0);
+    }
+
+    function testPayInvoice_ERC20_RevertFeeMustBeNative() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 100 * 10**18);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("erc20Data"));
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100 * 10**18);
+        vm.expectRevert(Chainvoice.FeeMustBeNative.selector);
+        chainvoice.payInvoice(0); // value: 0
+        vm.stopPrank();
+    }
+
+    function testPayInvoicesBatch_ERC20() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 300 * 10**18);
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("b1"));
+        chainvoice.createInvoice(bob, 200 * 10**18, address(token), keccak256("b2"));
+        vm.stopPrank();
+
+        uint256 fee = chainvoice.fee();
+        uint256 totalFee = fee * 2;
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 300 * 10**18);
+        chainvoice.payInvoicesBatch{value: totalFee}(ids);
+        vm.stopPrank();
+
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertTrue(chainvoice.getInvoice(1).isPaid);
+        assertEq(token.balanceOf(bob), 0);
+        assertEq(token.balanceOf(alice), 300 * 10**18);
+        assertEq(chainvoice.accumulatedFees(), totalFee);
+    }
+
+    function testPayInvoicesBatch_ERC20_RevertInsufficientBalance() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 150 * 10**18); // Insufficient for both (100 + 200 = 300)
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("b1"));
+        chainvoice.createInvoice(bob, 200 * 10**18, address(token), keccak256("b2"));
+        vm.stopPrank();
+
+        uint256 fee = chainvoice.fee();
+        uint256 totalFee = fee * 2;
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 300 * 10**18); // Sufficient allowance
+        vm.expectRevert("SafeERC20: ERC20 operation did not succeed");
+        chainvoice.payInvoicesBatch{value: totalFee}(ids);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
+
+    function testPayInvoicesBatch_ERC20_RevertInsufficientAllowance() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 300 * 10**18);
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("b1"));
+        chainvoice.createInvoice(bob, 200 * 10**18, address(token), keccak256("b2"));
+        vm.stopPrank();
+
+        uint256 fee = chainvoice.fee();
+        uint256 totalFee = fee * 2;
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        vm.startPrank(bob);
+        // No allowance given
+        vm.expectRevert(Chainvoice.InsufficientAllowance.selector);
+        chainvoice.payInvoicesBatch{value: totalFee}(ids);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
+
+    function testPayInvoicesBatch_ERC20_RevertIncorrectNativeValue() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 300 * 10**18);
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("b1"));
+        chainvoice.createInvoice(bob, 200 * 10**18, address(token), keccak256("b2"));
+        vm.stopPrank();
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 300 * 10**18);
+        // Send incorrect native fee (0 instead of totalFee)
+        vm.expectRevert(Chainvoice.IncorrectNativeValue.selector);
+        chainvoice.payInvoicesBatch{value: 0}(ids);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(chainvoice.accumulatedFees(), 0);
+
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                 NON-STANDARD ERC-20 TOKENS                   */
+    /* ------------------------------------------------------------ */
+
+    function testPayInvoice_NoReturnToken_Succeeds() public {
+        MockNoReturnERC20 token = new MockNoReturnERC20();
+        token.mint(bob, 100e6);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100e6, address(token), keccak256("usdt"));
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100e6);
+        chainvoice.payInvoice{value: fee}(0);
+        vm.stopPrank();
+
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertEq(token.balanceOf(alice), 100e6);
+        assertEq(token.balanceOf(bob), 0);
+    }
+
+    function testPayInvoicesBatch_NoReturnToken_Succeeds() public {
+        MockNoReturnERC20 token = new MockNoReturnERC20();
+        token.mint(bob, 300e6);
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 100e6, address(token), keccak256("u1"));
+        chainvoice.createInvoice(bob, 200e6, address(token), keccak256("u2"));
+        vm.stopPrank();
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 300e6);
+        chainvoice.payInvoicesBatch{value: fee * 2}(ids);
+        vm.stopPrank();
+
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertTrue(chainvoice.getInvoice(1).isPaid);
+        assertEq(token.balanceOf(alice), 300e6);
+    }
+
+    function testPayInvoice_NoReturnToken_RevertingTransferRollsBack() public {
+        MockNoReturnERC20 token = new MockNoReturnERC20();
+        token.mint(bob, 50e6); // short of the 100e6 due
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100e6, address(token), keccak256("usdt"));
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100e6);
+        vm.expectRevert("balance");
+        chainvoice.payInvoice{value: fee}(0);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
+
+    function testPayInvoice_FeeOnTransferToken_RevertShortfall() public {
+        MockFeeOnTransferERC20 token = new MockFeeOnTransferERC20();
+        token.mint(bob, 100 ether);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 100 ether, address(token), keccak256("fot"));
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 100 ether);
+        vm.expectRevert(Chainvoice.TokenAmountShortfall.selector);
+        chainvoice.payInvoice{value: fee}(0);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertEq(token.balanceOf(alice), 0);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
+
+    function testPayInvoicesBatch_FeeOnTransferToken_RevertShortfall() public {
+        MockFeeOnTransferERC20 token = new MockFeeOnTransferERC20();
+        token.mint(bob, 200 ether + 50);
+
+        vm.startPrank(alice);
+        // The first amount is too small to lose anything to the 1% burn, so the
+        // first transfer passes and the shortfall hits the second one.
+        chainvoice.createInvoice(bob, 50, address(token), keccak256("f1"));
+        chainvoice.createInvoice(bob, 200 ether, address(token), keccak256("f2"));
+        vm.stopPrank();
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 200 ether + 50);
+        vm.expectRevert(Chainvoice.TokenAmountShortfall.selector);
+        chainvoice.payInvoicesBatch{value: fee * 2}(ids);
+        vm.stopPrank();
+
+        assertFalse(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(token.balanceOf(alice), 0);
+        assertEq(chainvoice.accumulatedFees(), 0);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                      PAYMENT STATUS                          */
+    /* ------------------------------------------------------------ */
+
+    function testGetPaymentStatus_PaidInvoiceCannotBePaid() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("n"));
+
+        uint256 fee = chainvoice.fee();
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+
+        (bool canPay, , ) = chainvoice.getPaymentStatus(0, bob);
+        assertFalse(canPay);
+    }
+
+    function testGetPaymentStatus_ERC20_RequiresNativeFee() public {
+        MockERC20 token = new MockERC20();
+        address poor = address(0xD00D);
+        token.mint(poor, 100 ether);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(poor, 100 ether, address(token), keccak256("t"));
+
+        vm.prank(poor);
+        token.approve(address(chainvoice), 100 ether);
+
+        // Tokens and allowance cover the invoice, but there is no ETH for the fee.
+        (bool canPay, , ) = chainvoice.getPaymentStatus(0, poor);
+        assertFalse(canPay);
+
+        vm.deal(poor, chainvoice.fee());
+        (canPay, , ) = chainvoice.getPaymentStatus(0, poor);
+        assertTrue(canPay);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                         REENTRANCY                           */
+    /* ------------------------------------------------------------ */
+
+    function _reentrancyError() private pure returns (bytes memory) {
+        return abi.encodeWithSelector(Chainvoice.Reentrancy.selector);
+    }
+
+    function testPayInvoice_ERC20_TokenReentryReverts() public {
+        ReentrantERC20 token = new ReentrantERC20();
+        token.mint(bob, 2 ether);
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(token), keccak256("a"));
+        chainvoice.createInvoice(bob, 1 ether, address(token), keccak256("b"));
+        vm.stopPrank();
+
+        token.arm(chainvoice, abi.encodeCall(Chainvoice.payInvoice, (1)));
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 2 ether);
+        chainvoice.payInvoice{value: fee}(0);
+        vm.stopPrank();
+
+        assertEq(token.reentryError(), _reentrancyError());
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(token.balanceOf(alice), 1 ether);
+    }
+
+    function testPayInvoicesBatch_ERC20_TokenReentryReverts() public {
+        ReentrantERC20 token = new ReentrantERC20();
+        token.mint(bob, 3 ether);
+
+        vm.startPrank(alice);
+        for (uint256 i = 0; i < 3; i++) {
+            chainvoice.createInvoice(bob, 1 ether, address(token), keccak256(abi.encode(i)));
+        }
+        vm.stopPrank();
+
+        uint256[] memory reentryIds = new uint256[](1);
+        reentryIds[0] = 2;
+        token.arm(chainvoice, abi.encodeCall(Chainvoice.payInvoicesBatch, (reentryIds)));
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 3 ether);
+        chainvoice.payInvoicesBatch{value: fee * 2}(ids);
+        vm.stopPrank();
+
+        assertEq(token.reentryError(), _reentrancyError());
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertTrue(chainvoice.getInvoice(1).isPaid);
+        assertFalse(chainvoice.getInvoice(2).isPaid);
+        assertEq(token.balanceOf(alice), 2 ether);
+    }
+
+    function testPayInvoice_Native_IssuerReentryReverts() public {
+        ReentrantIssuer issuer = new ReentrantIssuer(chainvoice);
+        issuer.createInvoice(bob, 1 ether);
+        issuer.createInvoice(bob, 1 ether);
+        issuer.arm(abi.encodeCall(Chainvoice.payInvoice, (1)), 0);
+
+        uint256 fee = chainvoice.fee();
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+
+        assertEq(issuer.reentryError(), _reentrancyError());
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(address(issuer).balance, 1 ether);
+    }
+
+    function testPayInvoicesBatch_Native_IssuerReentryReverts() public {
+        ReentrantIssuer issuer = new ReentrantIssuer(chainvoice);
+        issuer.createInvoice(bob, 1 ether);
+        issuer.createInvoice(bob, 1 ether);
+
+        uint256[] memory reentryIds = new uint256[](1);
+        reentryIds[0] = 1;
+        issuer.arm(abi.encodeCall(Chainvoice.payInvoicesBatch, (reentryIds)), 0);
+
+        uint256[] memory ids = new uint256[](1);
+        ids[0] = 0;
+        uint256 fee = chainvoice.fee();
+        vm.prank(bob);
+        chainvoice.payInvoicesBatch{value: 1 ether + fee}(ids);
+
+        assertEq(issuer.reentryError(), _reentrancyError());
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(address(issuer).balance, 1 ether);
+    }
+
+    /// The re-entrant caller here is the authorized payer of the nested invoice
+    /// and forwards the exact amount, so only the reentrancy guard can stop it.
+    function testPayInvoice_Native_AuthorizedFundedReentryReverts() public {
+        ReentrantIssuer issuer = new ReentrantIssuer(chainvoice);
+        issuer.createInvoice(bob, 2 ether);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(address(issuer), 1 ether, address(0), keccak256("nested"));
+
+        uint256 fee = chainvoice.fee();
+        issuer.arm(abi.encodeCall(Chainvoice.payInvoice, (1)), 1 ether + fee);
+
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 2 ether + fee}(0);
+
+        assertEq(issuer.reentryError(), _reentrancyError());
+        assertTrue(chainvoice.getInvoice(0).isPaid);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+        assertEq(address(issuer).balance, 2 ether);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                    SETTLEMENT AND ADMIN REVERTS              */
+    /* ------------------------------------------------------------ */
+
+    function testPayInvoice_RevertIfCancelled() public {
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("data"));
+        chainvoice.cancelInvoice(0);
+        vm.stopPrank();
+
+        uint256 fee = chainvoice.fee();
+        vm.expectRevert(Chainvoice.InvoiceCancelledError.selector);
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+    }
+
+    function testPayInvoice_RevertIfAlreadyPaid() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("data"));
+
+        uint256 fee = chainvoice.fee();
+        vm.startPrank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+        vm.expectRevert(Chainvoice.InvoiceAlreadyPaid.selector);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+        vm.stopPrank();
+    }
+
+    function testCancelInvoice_RevertIfNotCreator() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("data"));
+
+        vm.expectRevert(Chainvoice.NotInvoiceCreator.selector);
+        vm.prank(bob);
+        chainvoice.cancelInvoice(0);
+    }
+
+    function testCancelInvoice_RevertIfPaid() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("data"));
+
+        uint256 fee = chainvoice.fee();
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + fee}(0);
+
+        vm.expectRevert(Chainvoice.InvoiceNotCancellable.selector);
+        vm.prank(alice);
+        chainvoice.cancelInvoice(0);
+    }
+
+    function testPayInvoicesBatch_RevertOnMixedTokens() public {
+        MockERC20 token = new MockERC20();
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("native"));
+        chainvoice.createInvoice(bob, 1 ether, address(token), keccak256("token"));
+        vm.stopPrank();
+
+        uint256[] memory ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+        uint256 fee = chainvoice.fee();
+        vm.expectRevert(Chainvoice.MixedTokenBatch.selector);
+        vm.prank(bob);
+        chainvoice.payInvoicesBatch{value: 1 ether + fee * 2}(ids);
+    }
+
+    function testWithdrawFees_RevertIfNoFees() public {
+        vm.expectRevert(Chainvoice.NoFeesAvailable.selector);
+        chainvoice.withdrawFees();
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                  FEE CHARGED ON PAYMENT PATHS                 */
+    /* ------------------------------------------------------------ */
+
+    uint256 constant NEW_FEE = 0.01 ether;
+
+    function _setNewFee() private {
+        vm.prank(feeController);
+        chainvoice.setFeeAmount(NEW_FEE);
+    }
+
+    function testPayInvoice_Native_ChargesInitialThenNewFee() public {
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("n1"));
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("n2"));
+        vm.stopPrank();
+
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
+        assertEq(chainvoice.accumulatedFees(), INITIAL_FEE);
+
+        _setNewFee();
+
+        // The old fee no longer pays.
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.IncorrectPaymentAmount.selector);
+        chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(1);
+
+        uint256 aliceBefore = alice.balance;
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + NEW_FEE}(1);
+        assertEq(alice.balance - aliceBefore, 1 ether);
+        assertEq(chainvoice.accumulatedFees(), INITIAL_FEE + NEW_FEE);
+
+        chainvoice.withdrawFees();
+        assertEq(feeRecipient.balance, INITIAL_FEE + NEW_FEE);
+    }
+
+    function testPayInvoice_ERC20_ChargesInitialThenNewNativeFee() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 200 * 10**18);
+
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("e1"));
+        chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("e2"));
+        vm.stopPrank();
+
+        vm.startPrank(bob);
+        token.approve(address(chainvoice), 200 * 10**18);
+        chainvoice.payInvoice{value: INITIAL_FEE}(0);
+        vm.stopPrank();
+        assertEq(chainvoice.accumulatedFees(), INITIAL_FEE);
+
+        _setNewFee();
+
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.FeeMustBeNative.selector);
+        chainvoice.payInvoice{value: INITIAL_FEE}(1);
+
+        vm.prank(bob);
+        chainvoice.payInvoice{value: NEW_FEE}(1);
+        assertEq(token.balanceOf(alice), 200 * 10**18);
+        assertEq(chainvoice.accumulatedFees(), INITIAL_FEE + NEW_FEE);
+    }
+
+    function testPayInvoicesBatch_Native_ChargesInitialThenNewFee() public {
+        vm.startPrank(alice);
+        for (uint256 n = 0; n < 4; n++) {
+            chainvoice.createInvoice(bob, 1 ether, address(0), keccak256(abi.encode("bn", n)));
+        }
+        vm.stopPrank();
+
+        uint256[] memory first = new uint256[](2);
+        first[0] = 0;
+        first[1] = 1;
+        vm.prank(bob);
+        chainvoice.payInvoicesBatch{value: 2 ether + 2 * INITIAL_FEE}(first);
+        assertEq(chainvoice.accumulatedFees(), 2 * INITIAL_FEE);
+
+        _setNewFee();
+
+        uint256[] memory second = new uint256[](2);
+        second[0] = 2;
+        second[1] = 3;
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.IncorrectNativeValue.selector);
+        chainvoice.payInvoicesBatch{value: 2 ether + 2 * INITIAL_FEE}(second);
+
+        vm.prank(bob);
+        chainvoice.payInvoicesBatch{value: 2 ether + 2 * NEW_FEE}(second);
+        assertEq(chainvoice.accumulatedFees(), 2 * INITIAL_FEE + 2 * NEW_FEE);
+
+        chainvoice.withdrawFees();
+        assertEq(feeRecipient.balance, 2 * INITIAL_FEE + 2 * NEW_FEE);
+    }
+
+    function testPayInvoicesBatch_ERC20_ChargesInitialThenNewFee() public {
+        MockERC20 token = new MockERC20();
+        token.mint(bob, 400 * 10**18);
+
+        vm.startPrank(alice);
+        for (uint256 n = 0; n < 4; n++) {
+            chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256(abi.encode("be", n)));
+        }
+        vm.stopPrank();
+
+        vm.prank(bob);
+        token.approve(address(chainvoice), 400 * 10**18);
+
+        uint256[] memory first = new uint256[](2);
+        first[0] = 0;
+        first[1] = 1;
+        vm.prank(bob);
+        chainvoice.payInvoicesBatch{value: 2 * INITIAL_FEE}(first);
+        assertEq(chainvoice.accumulatedFees(), 2 * INITIAL_FEE);
+
+        _setNewFee();
+
+        uint256[] memory second = new uint256[](2);
+        second[0] = 2;
+        second[1] = 3;
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.IncorrectNativeValue.selector);
+        chainvoice.payInvoicesBatch{value: 2 * INITIAL_FEE}(second);
+
+        vm.prank(bob);
+        chainvoice.payInvoicesBatch{value: 2 * NEW_FEE}(second);
+        assertEq(token.balanceOf(alice), 400 * 10**18);
+        assertEq(chainvoice.accumulatedFees(), 2 * INITIAL_FEE + 2 * NEW_FEE);
+    }
+
+    function testPayInvoice_ZeroFeeSetByController() public {
+        vm.prank(feeController);
+        chainvoice.setFeeAmount(0);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("free"));
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether}(0);
+        assertEq(chainvoice.accumulatedFees(), 0);
     }
 }

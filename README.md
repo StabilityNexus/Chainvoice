@@ -46,6 +46,7 @@ Chainvoice is a decentralized invoicing platform that enables secure, transparen
 - [Project Structure](#project-structure)
 - [Getting Started](#getting-started)
 - [Frontend Setup](#frontend-setup)
+- [Run with Docker](#run-with-docker)
 - [Smart Contract Testing](#smart-contract-testing)
 - [Deploy to Ethereum Classic](#deploy-to-ethereum-classic)
 - [Environment Variables](#environment-variables)
@@ -96,6 +97,24 @@ npm run dev
 4. **Open application**
 Navigate to `http://localhost:5173` in your browser
 
+## Run with Docker
+
+Prefer containers? One command brings up the frontend together with a
+[ThruBox](https://github.com/AOSSIE-Org/ThruBox-Server) relay, which invoice
+sending and receiving depend on — no Node.js install, and no second repository
+to clone:
+
+```bash
+cp frontend/.env.example frontend/.env
+docker buildx build -t chainvoice/thrubox-relay:main "https://github.com/AOSSIE-Org/ThruBox-Server.git#main"
+docker compose up --build
+```
+
+The app is then at `http://localhost:5173` and the relay at
+`http://localhost:3000`. See **[docs/docker.md](docs/docker.md)** for the full
+guide, including the production profile that serves the built bundle behind
+nginx.
+
 ## Smart Contract Testing
 
 > **Prerequisites:** [Foundry](https://getfoundry.sh/) must be installed
@@ -115,7 +134,7 @@ forge test -vvv
 ### Prerequisites
 - [Foundry](https://getfoundry.sh/) installed
 - Wallet funded with ETC
-- ETC RPC URL (e.g., Rivet, Ankr, Chainstack)
+- ETC RPC URL (e.g., `https://etc.etcdesktop.com`, Ankr, Chainstack)
 
 ### Deployment Steps
 
@@ -131,11 +150,23 @@ forge build
 source .env
 
 4. **Deploy to Ethereum Classic**  
-forge create contracts/src/Chainvoice.sol:Chainvoice
---rpc-url $ETC_RPC_URL
---private-key $PRIVATE_KEY
---broadcast
+The script reads `FEE_CONTROLLER` and `FEE_RECIPIENT` (both required, non-zero)
+and an optional `FEE_WEI` (default `0.0005 ether`, must not be `0`) from `.env`,
+and passes them to the constructor. `FEE_CONTROLLER` sets the fee and the fee
+recipient and hands its own role over in two steps, so use a multisig;
+`FEE_RECIPIENT` receives withdrawn fees. The compiler targets `evm_version = "london"`
+(see `contracts/foundry.toml`) so the same bytecode runs on Sepolia and ETC.
 
+```bash
+forge script script/Chainvoice.s.sol:DeployChainvoice   --rpc-url etc --account deployer --broadcast --legacy   --verify --verifier blockscout --verifier-url https://etc.blockscout.com/api/
+```
+
+`--legacy` is required on Ethereum Classic, which has no EIP-1559; without it
+`forge script` fails with `unsupported feature: eip1559`.
+
+For Sepolia, use `--rpc-url sepolia --verify` (Etherscan, needs `ETHERSCAN_API_KEY`) and
+leave `--legacy` out.
+After deploying, record the address in [Deployments.md](./Deployments.md).
 
 5. **Configure frontend**  
 cp frontend/.env.example frontend/.env  
@@ -218,7 +249,7 @@ Join our community for support, updates, and discussions:
 - **Telegram** - [t.me/StabilityNexus](https://t.me/StabilityNexus)
 - **Discord** - [discord.gg/YzDKeEfWtS](https://discord.gg/YzDKeEfWtS)
 - **X (Twitter)** - [@StabilityNexus](https://x.com/StabilityNexus)
-- **Stable ViewPoints** - [news.stability.nexus](https://viewpoints.stability.nexus/)
+- **Stable Viewpoints** - [viewpoints.stability.nexus](https://viewpoints.stability.nexus/)
 - **LinkedIn** - [linkedin.com/company/stability-nexus](https://linkedin.com/company/stability-nexus)
 - **YouTube** - [youtube.com/@StabilityNexus](https://www.youtube.com/@StabilityNexus)
 

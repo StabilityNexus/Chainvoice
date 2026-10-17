@@ -46,6 +46,7 @@ export const config = getDefaultConfig({
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
 const GenerateLink = lazy(() => import("./page/GenerateLink"));
+const ImportInvoice = lazy(() => import("./page/ImportInvoice"));
 const CreateInvoicesBatch = lazy(() => import("./page/CreateInvoicesBatch"));
 const NotFound = lazy(() => import("./page/NotFound"));
 const Settings = lazy(() => import("./page/Settings"));
@@ -81,9 +82,6 @@ function App() {
         <QueryClientProvider client={queryClient}>
           <RainbowKitProvider
             coolMode
-            // initialChain={citreaTestnet} 
-            // Keep this commented out or removed. 
-            // If undefined, RainbowKit defaults to the user's current chain (if supported).
             theme={darkTheme({
               accentColor: "#22c55e",
               accentColorForeground: "white",
@@ -93,7 +91,7 @@ function App() {
             })}
           >
             <div className="font-Montserrat h-screen">
-              <Router basename={import.meta.env.BASE_URL}>
+              <Router>
                 <Suspense fallback={<div className="flex h-screen items-center justify-center text-white">Loading...</div>}>
                   <Routes>
                     <Route path="/" element={<Applayout />}>
@@ -103,6 +101,7 @@ function App() {
                         <Route path="sent" element={<SentInvoice />} />
                         <Route path="pending" element={<ReceivedInvoice />} />
                         <Route path="generate-link" element={<GenerateLink />} />
+                        <Route path="import" element={<ImportInvoice />} />
                         <Route
                           path="batch-invoice"
                           element={<CreateInvoicesBatch />}

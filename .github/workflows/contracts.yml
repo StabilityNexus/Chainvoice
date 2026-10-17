@@ -1,0 +1,111 @@
+name: Contracts
+
+# Nothing else builds or tests contracts/, so a contract PR could merge with a
+# broken build and no red check. This gates every change under contracts/.
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'contracts/**'
+      - '.gitmodules'
+      - '.github/workflows/contracts.yml'
+      - '.github/actions/**'
+  # Not path-filtered, so forge and slither can be required checks: the
+  # `changes` job skips them instead, and a skipped job counts as passing.
+  pull_request:
+
+# Runs untrusted fork code, so it holds a read-only token and no secrets.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      contracts: ${{ steps.filter.outputs.matched }}
+    steps:
+      - name: Checkout the changed-paths action
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions
+
+      - name: Check for contract changes
+        id: filter
+        uses: ./.github/actions/changed-paths
+        with:
+          pattern: '^(contracts/|\.gitmodules$|\.github/workflows/contracts\.yml$|\.github/actions/)'
+
+  forge:
+    needs: changes
+    # !cancelled() lets it run if `changes` itself failed, rather than skip and
+    # pass the required check without testing anything.
+    if: ${{ !cancelled() && needs.changes.outputs.contracts != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: ./contracts
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: stable
+
+      - name: Build
+        run: forge build --sizes
+
+      - name: Test
+        run: forge test -vvv
+
+  slither:
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.contracts != 'false' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        working-directory: ./contracts
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+        with:
+          version: stable
+
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+
+      # Run on the runner rather than via crytic/slither-action: its Docker
+      # container has no forge, which crytic-compile needs for Foundry projects.
+      - name: Install Slither
+        run: pip install slither-analyzer==0.11.6
+
+      - name: Run Slither
+        run: slither . --config-file slither.config.json --fail-high

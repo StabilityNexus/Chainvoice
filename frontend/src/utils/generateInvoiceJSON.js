@@ -16,7 +16,7 @@ import {
  * @param {string|BigInt} fee - Network fee (wei)
  * @returns {Object} Structured invoice data
  */
-const generateJSONContent = (invoice, fee = 0) => {
+export const generateJSONContent = (invoice, fee = 0) => {
   if (!invoice) {
     throw new Error("Invoice is required");
   }

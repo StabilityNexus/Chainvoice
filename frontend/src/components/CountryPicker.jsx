@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { cn } from "@/lib/utils";
 import { ChevronDown, Search } from "lucide-react";
 import countriesData from "@/lib/countries.json";
+import ImageWithFallback from "./ImageWithFallback";
 
 const CountryPicker = ({
   value = "",
@@ -72,13 +73,10 @@ const CountryPicker = ({
           <div className="flex items-center gap-2 flex-1 min-w-0">
             {selectedCountry ? (
               <>
-                <img
+                <ImageWithFallback
                   src={getFlagUrl(selectedCountry.code)}
                   alt={selectedCountry.name}
                   className="w-5 h-4 object-cover rounded-sm flex-shrink-0"
-                  onError={(e) => {
-                    e.target.style.display = "none";
-                  }}
                 />
                 <span className="truncate text-left">{selectedCountry.name}</span>
               </>
@@ -123,13 +121,10 @@ const CountryPicker = ({
                     selectedCountry?.code === country.code && "bg-accent"
                   )}
                 >
-                  <img
+                  <ImageWithFallback
                     src={getFlagUrl(country.code)}
                     alt={country.name}
                     className="w-5 h-4 object-cover rounded-sm flex-shrink-0"
-                    onError={(e) => {
-                      e.target.style.display = "none";
-                    }}
                   />
                   <span className="text-left">{country.name}</span>
                 </button>

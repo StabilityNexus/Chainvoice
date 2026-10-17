@@ -22,6 +22,8 @@ import { Badge } from "@/components/ui/badge";
 import { BrowserProvider, ethers } from "ethers";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import { useTokenList } from "../hooks/useTokenList";
+import { PAGE_CONTAINER } from "@/utils/layout";
+import { cn } from "@/lib/utils";
 
 const GenerateLink = () => {
   const { address, isConnected, chainId } = useAccount();
@@ -65,10 +67,13 @@ const GenerateLink = () => {
   const generateLink = () => {
     const tokenToUse = useCustomToken ? verifiedToken : selectedToken;
 
+    // The app is not always at the origin root — a PR preview is served from a
+    // subdirectory — and BASE_URL is the path the bundle was built for. Built
+    // the same way as the share links in services/share.
+    const appRoot = `${window.location.origin}${import.meta.env.BASE_URL}`;
+
     if (!tokenToUse) {
-      return `${window.location.origin}/#/dashboard/create?clientAddress=${
-        address || ""
-      }`;
+      return `${appRoot}#/dashboard/create?clientAddress=${address || ""}`;
     }
 
     const params = new URLSearchParams({
@@ -85,7 +90,7 @@ const GenerateLink = () => {
       params.append("description", description);
     }
 
-    return `${window.location.origin}/#/dashboard/create?${params.toString()}`;
+    return `${appRoot}#/dashboard/create?${params.toString()}`;
   };
 
   const copyToClipboard = async () => {
@@ -130,7 +135,7 @@ const GenerateLink = () => {
         />
       </div>
 
-      <div className="w-full max-w-7xl mx-auto space-y-6 px-2 sm:px-4 md:px-6 transition-all duration-300">
+      <div className={cn(PAGE_CONTAINER, "space-y-4 transition-all duration-300")}>
         <div className="mb-6 sm:mb-8">
           <h2 className="text-xl sm:text-2xl font-bold text-white mb-2 flex items-center gap-2 sm:gap-3">
             <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-500/20 rounded-lg flex items-center justify-center">

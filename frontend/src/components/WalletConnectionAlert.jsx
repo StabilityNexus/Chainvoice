@@ -40,10 +40,12 @@ const WalletConnectionAlert = ({ show, onDismiss }) => {
                 </div>
                 {/* Optional close button */}
                 <button
+                  type="button"
                   onClick={onDismiss}
+                  aria-label="Dismiss wallet connection alert"
                   className="text-yellow-600 hover:text-yellow-800  transition-colors"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4 w-4" aria-hidden="true" />
                 </button>
               </div>
             </div>
