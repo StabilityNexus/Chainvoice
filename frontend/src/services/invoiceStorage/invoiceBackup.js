@@ -34,95 +34,117 @@ function isSerializedInteger(value) {
   );
 }
 
-function validateInvoiceRecord(record, index) {
+const PLAIN_DECIMAL_AMOUNT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
+
+function normalizeSerializedInteger(value) {
+  if (
+    typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    value >= 0
+  ) {
+    return String(value);
+  }
+
+  if (typeof value === "string" && /^(0|[1-9]\d*)$/.test(value)) {
+    return value;
+  }
+
+  if (
+    isObject(value) &&
+    value.__type === "bigint" &&
+    typeof value.value === "string" &&
+    /^(0|[1-9]\d*)$/.test(value.value)
+  ) {
+    return value.value;
+  }
+
+  return null;
+}
+
+function isAddress(value) {
+  return typeof value === "string" && ADDRESS_PATTERN.test(value);
+}
+
+export function validateInvoiceRecord(record, index = 0) {
   if (!isObject(record)) {
     throw new Error(`Invoice record ${index + 1} is not a valid object.`);
   }
 
   if (!isSerializedInteger(record.invoiceId)) {
-    throw new Error(
-      `Invoice record ${index + 1} has an invalid invoiceId.`
-    );
+    throw new Error(`Invoice record ${index + 1} has an invalid invoiceId.`);
   }
 
   if (!isSerializedInteger(record.chainId)) {
+    throw new Error(`Invoice record ${index + 1} has an invalid chainId.`);
+  }
+
+  const invoiceId = normalizeSerializedInteger(record.invoiceId);
+  const chainId = normalizeSerializedInteger(record.chainId);
+  const expectedKey = `${chainId}-${invoiceId}`;
+
+  if (record.compositeKey !== expectedKey) {
     throw new Error(
-      `Invoice record ${index + 1} has an invalid chainId.`
+      `Invoice record ${index + 1} has an invalid composite key.`
     );
   }
 
-  if (typeof record.from !== "string" || !ADDRESS_PATTERN.test(record.from)) {
+  if (!isAddress(record.from)) {
     throw new Error(
       `Invoice record ${index + 1} has an invalid sender address.`
     );
   }
 
-  if (typeof record.to !== "string" || !ADDRESS_PATTERN.test(record.to)) {
+  if (!isAddress(record.to)) {
     throw new Error(
       `Invoice record ${index + 1} has an invalid receiver address.`
     );
   }
 
   if (!isObject(record.data)) {
-  throw new Error(
-    `Invoice record ${index + 1} is missing its invoice payload.`
-  );
-}
+    throw new Error(
+      `Invoice record ${index + 1} is missing its invoice payload.`
+    );
+  }
 
-const payload = record.data;
-
-if (
-  typeof payload.amountDue !== "string" ||
-  payload.amountDue.trim() === ""
-) {
-  throw new Error(
-    `Invoice record ${index + 1} has an invalid invoice payload amount.`
-  );
-}
-
-if (
-  !isObject(payload.paymentToken) ||
-  typeof payload.paymentToken.address !== "string"
-) {
-  throw new Error(
-    `Invoice record ${index + 1} has an invalid payment token.`
-  );
-}
-
-if (!isObject(payload.user) || typeof payload.user.address !== "string") {
-  throw new Error(
-    `Invoice record ${index + 1} has an invalid sender information.`
-  );
-}
-
-if (
-  !isObject(payload.client) ||
-  typeof payload.client.address !== "string"
-) {
-  throw new Error(
-    `Invoice record ${index + 1} has an invalid client information.`
-  );
-}
-
-if (!Array.isArray(payload.items)) {
-  throw new Error(
-    `Invoice record ${index + 1} has an invalid invoice items list.`
-  );
-}
+  const payload = record.data;
 
   if (
-    record.compositeKey !== undefined &&
-    typeof record.compositeKey !== "string"
+    typeof payload.amountDue !== "string" ||
+    !PLAIN_DECIMAL_AMOUNT_PATTERN.test(payload.amountDue)
   ) {
     throw new Error(
-      `Invoice record ${index + 1} has an invalid composite key.`
+      `Invoice record ${index + 1} has an invalid invoice payload amount.`
     );
   }
 
   if (
-    record.isPaid !== undefined &&
-    typeof record.isPaid !== "boolean"
+    !isObject(payload.paymentToken) ||
+    !isAddress(payload.paymentToken.address)
   ) {
+    throw new Error(
+      `Invoice record ${index + 1} has an invalid payment token.`
+    );
+  }
+
+  if (!isObject(payload.user) || !isAddress(payload.user.address)) {
+    throw new Error(
+      `Invoice record ${index + 1} has invalid sender information.`
+    );
+  }
+
+  if (!isObject(payload.client) || !isAddress(payload.client.address)) {
+    throw new Error(
+      `Invoice record ${index + 1} has invalid client information.`
+    );
+  }
+
+  if (!Array.isArray(payload.items)) {
+    throw new Error(
+      `Invoice record ${index + 1} has an invalid invoice items list.`
+    );
+  }
+
+  if (record.isPaid !== undefined && typeof record.isPaid !== "boolean") {
     throw new Error(
       `Invoice record ${index + 1} has an invalid payment status.`
     );
@@ -138,7 +160,7 @@ if (!Array.isArray(payload.items)) {
   }
 }
 
-function validateBackup(backupData) {
+export function validateBackup(backupData) {
   if (!isObject(backupData)) {
     throw new Error(
       "Invalid backup file. The selected file is not a Chainvoice backup."
@@ -173,6 +195,18 @@ function validateBackup(backupData) {
 
   if (!isObject(backupData.schema) || !isObject(backupData.stores)) {
     throw new Error("Invalid backup structure.");
+  }
+
+  const schemaStoreNames = Object.keys(backupData.schema);
+  const storeNames = Object.keys(backupData.stores);
+
+  if (
+    schemaStoreNames.some((name) => name !== STORE_NAME) ||
+    storeNames.some((name) => name !== STORE_NAME)
+  ) {
+    throw new Error(
+      "Invalid backup. Only the invoices store is supported."
+    );
   }
 
   const invoiceSchema = backupData.schema[STORE_NAME];
