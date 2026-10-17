@@ -1,0 +1,4 @@
+# The CI scripts run on Linux runners, where a CRLF line ending makes bash fail
+# on the shebang with a message that says nothing useful. This repository is
+# worked on from Windows, so pin them.
+*.sh text eol=lf

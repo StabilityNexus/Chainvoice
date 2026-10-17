@@ -2,6 +2,18 @@
 src = "src"
 out = "out"
 libs = ["lib"]
-solc_version = '0.8.13'
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
-# forge create --rpc-url https://eth-sepolia.g.alchemy.com/v2/nnY0qPUQLYsUvb5BKJM5bh81sI6O0PQG   --private-key fba7342ef6879df2c735644c734ea69c140f423d84eb2d53fbdfd53fd5d7c586  src/Token.sol:MyToken --legacy
+remappings = ["openzeppelin-contracts/=lib/openzeppelin-contracts/"]
+solc_version = "0.8.19"
+# Pinned so one bytecode runs on both Sepolia and Ethereum Classic. Newer
+# targets emit opcodes ETC does not have (PUSH0 from shanghai, MCOPY/TSTORE
+# from cancun); london is the newest fork ETC fully matches.
+evm_version = "london"
+optimizer = true
+optimizer_runs = 200
+
+[rpc_endpoints]
+sepolia = "${SEPOLIA_RPC_URL}"
+etc = "${ETC_RPC_URL}"
+
+[etherscan]
+sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 11155111 }

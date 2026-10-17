@@ -64,6 +64,7 @@ import { toInvoiceUserDetails } from "@/utils/userProfile";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import SenderSummary from "@/components/SenderSummary";
+import { CARD, PAGE_CONTAINER, PAGE_HEADER, SECTION_GAP } from "@/utils/layout";
 
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
 import { useProductCatalog } from "@/hooks/useProductCatalog";
@@ -74,14 +75,19 @@ import {
 
 /** Public RPC URLs by chain ID for token verification when visitor has no wallet. */
 const CHAIN_ID_TO_PUBLIC_RPC = {
-  1: "https://eth.llamarpc.com",
-  61: "https://etc.blockscout.com",
-  137: "https://polygon-rpc.com",
+  1: "https://ethereum-rpc.publicnode.com",
+  61: "https://etc.etcdesktop.com",
+  137: "https://polygon-bor-rpc.publicnode.com",
   56: "https://bsc-dataseed.binance.org",
   8453: "https://mainnet.base.org",
-  11155111: "https://rpc.ankr.com/eth_sepolia",
+  11155111: "https://ethereum-sepolia-rpc.publicnode.com",
   5115: "https://rpc.testnet.citrea.xyz",
 };
+
+// Mirrors MAX_CREATE_BATCH in Chainvoice.sol, which is the real guard: a larger
+// batch reverts with InvalidBatchSize. It is sized so a full batch fits in one
+// Ethereum Classic block (8M gas).
+const MAX_INVOICES_PER_BATCH = 30;
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
@@ -193,6 +199,7 @@ function CreateInvoicesBatch() {
 
   // Invoice management
   const addInvoiceRow = () => {
+    if (invoiceRows.length >= MAX_INVOICES_PER_BATCH) return;
     const newIndex = invoiceRows.length;
     setInvoiceRows((prev) => [
       ...prev,
@@ -657,7 +664,7 @@ function CreateInvoicesBatch() {
         console.warn(`Expected ${invoicePayloads.length} InvoiceCreated events, got ${invoiceIds.length}`);
       }
 
-      // Deliver in bounded groups. A 50-invoice batch is 100 sequential round
+      // Deliver in bounded groups. A 30-invoice batch is 60 sequential round
       // trips otherwise, all of it after the transaction has already confirmed,
       // with the user watching a spinner. Kept small so the relay's per-IP rate
       // limit is not the next thing to fail.
@@ -835,9 +842,9 @@ function CreateInvoicesBatch() {
         />
       </div>
 
-      <div className="w-full max-w-7xl mx-auto px-2 sm:px-4 md:px-6">
+      <div className={PAGE_CONTAINER}>
         {/* Simple Header */}
-        <div className="mb-6 sm:mb-8">
+        <div className={PAGE_HEADER}>
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-2">
             Create Multiple Invoices
           </h2>
@@ -849,7 +856,7 @@ function CreateInvoicesBatch() {
         </div>
 
         {/* Clean Date Selection */}
-        <div className="w-full bg-white p-4 sm:p-6 rounded-lg shadow-sm mb-6 sm:mb-8 border border-gray-200 overflow-hidden">
+        <div className={cn(CARD, SECTION_GAP)}>
           <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-4 sm:gap-6">
             <div className="flex items-center space-x-3 w-full sm:w-auto">
               <div className="flex items-center justify-center gap-3">
@@ -955,7 +962,7 @@ function CreateInvoicesBatch() {
 
         <form onSubmit={handleSubmit}>
           {/* Clean Token Selection */}
-          <div className="w-full mb-6 sm:mb-8 bg-white p-4 sm:p-6 rounded-lg border border-gray-200 shadow-sm overflow-hidden">
+          <div className={cn(CARD, SECTION_GAP)}>
             <h3 className="text-lg font-semibold text-gray-800 mb-4">
               Payment Currency
             </h3>
@@ -1113,12 +1120,20 @@ function CreateInvoicesBatch() {
               <Button
                 type="button"
                 onClick={addInvoiceRow}
+                disabled={invoiceRows.length >= MAX_INVOICES_PER_BATCH}
                 className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
               >
                 <PlusIcon className="w-4 h-4" />
                 Add Invoice
               </Button>
             </div>
+            {invoiceRows.length >= MAX_INVOICES_PER_BATCH && (
+              <p className="text-sm text-amber-400">
+                A batch can hold at most {MAX_INVOICES_PER_BATCH} invoices so
+                the transaction fits in a block. Submit this batch, then create
+                another for the rest.
+              </p>
+            )}
 
             {invoiceRows.map((row, rowIndex) => (
               <div

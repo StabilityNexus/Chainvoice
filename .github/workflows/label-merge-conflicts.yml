@@ -1,20 +1,25 @@
 name: Label Merge Conflicts
 
 on:
+  # Only a change to main can put open pull requests into conflict.
   push:
+    branches: [main]
   pull_request_target:
     types: [opened, reopened, synchronize]
 
 permissions:
-  pull-requests: write
   contents: read
 
 jobs:
   label-conflicts:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+      contents: read
     steps:
       - name: Label PRs with merge conflicts
-        uses: eps1lon/actions-label-merge-conflict@v3
+        uses: eps1lon/actions-label-merge-conflict@0273be72a0bbd58fcd71d0d6c02c209b50d1e5e1 # v3.1.0
         with:
           dirtyLabel: "PR has merge conflicts"
           repoToken: "${{ secrets.GITHUB_TOKEN }}"

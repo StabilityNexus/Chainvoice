@@ -11,9 +11,7 @@ on:
     types: [completed]
 
 permissions:
-  issues: write
-  pull-requests: write
-  actions: read
+  contents: read
 
 # One report in flight per head branch. Without this, two pushes in quick
 # succession race: both runs list the comments, both see no existing report, and
@@ -28,6 +26,11 @@ jobs:
     name: Label and comment
     if: github.event.workflow_run.event == 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+      pull-requests: write
+      actions: read
     steps:
       # This job holds a write token, so it must never check out or execute the
       # PR's code. It only reads text out of the artifact and quotes it.
@@ -78,9 +81,13 @@ jobs:
               return;
             }
 
+            // CI=true makes Vite and Jest colour their output. The escape codes
+            // would land in the comment verbatim, and they split Vite's
+            // `dist/assets/` paths so the size lines were never found.
+            const ANSI = /\x1b\[[0-9;]*m/g;
             const read = (name) => {
               try {
-                return fs.readFileSync(`pr-report/${name}`, 'utf8');
+                return fs.readFileSync(`pr-report/${name}`, 'utf8').replace(ANSI, '');
               } catch {
                 return '';
               }
@@ -89,6 +96,7 @@ jobs:
             // Advisory only. A fork controls its own copy of test.yml and could
             // claim anything here; the authoritative pass/fail signal is the
             // required check's own conclusion, which this cannot influence.
+            const lintFailed = read('lint_failed').trim() === 'true';
             const testsFailed = read('tests_failed').trim() === 'true';
             const buildFailed = read('build_failed').trim() === 'true';
 
@@ -101,6 +109,7 @@ jobs:
             };
 
             const LABELS = {
+              'lint failing': { color: 'fbca04', description: 'ESLint reports errors on this PR' },
               'test case failing': { color: 'd93f0b', description: 'Automated tests are failing on this PR' },
               'build failed': { color: 'b60205', description: 'The production build is failing on this PR' },
             };
@@ -126,10 +135,50 @@ jobs:
               }
             };
 
+            await setLabel('lint failing', lintFailed);
             await setLabel('test case failing', testsFailed);
             await setLabel('build failed', buildFailed);
 
+            // Vite lists every chunk smallest first, and with ~200 lazy chunks
+            // the ones worth a reviewer's attention are buried at the bottom.
+            const buildMetrics = (log) => {
+              const toKb = (n, unit) => Number(n.replace(/,/g, '')) * ({ B: 1 / 1024, kB: 1, MB: 1024 }[unit]);
+              const assets = log
+                .split('\n')
+                .map((line) => line.match(/(dist\/\S+)\s+([\d.,]+) (B|kB|MB)\s+│ gzip:\s+([\d.,]+) (B|kB|MB)/))
+                .filter(Boolean)
+                .map(([, file, size, unit, gzip, gzipUnit]) => ({
+                  file,
+                  size: toKb(size, unit),
+                  gzip: toKb(gzip, gzipUnit),
+                }));
+              if (!assets.length) return 'Metrics not found';
+
+              const fmt = (kb) => (kb >= 1024 ? `${(kb / 1024).toFixed(2)} MB` : `${kb.toFixed(2)} kB`).padStart(10);
+              const row = (label, size, gzip) => `${label}  ${fmt(size)}  gzip ${fmt(gzip)}`;
+              const width = Math.max(...assets.map((a) => a.file.length));
+              const totals = ['.js', '.css'].map((ext) => {
+                const of = assets.filter((a) => a.file.endsWith(ext));
+                const sum = (key) => of.reduce((n, a) => n + a[key], 0);
+                const files = `${of.length} file${of.length === 1 ? '' : 's'}`;
+                return row(`Total ${ext} (${files})`.padEnd(width), sum('size'), sum('gzip'));
+              });
+              const largest = [...assets]
+                .sort((a, b) => b.size - a.size)
+                .slice(0, 15)
+                .map((a) => row(a.file.padEnd(width), a.size, a.gzip));
+              return [...totals, '', `Largest ${largest.length} of ${assets.length} files:`, ...largest].join('\n');
+            };
+
             const sections = [];
+
+            if (lintFailed) {
+              sections.push({
+                heading: '⚠️ **Lint failed!**',
+                summary: 'Lint Output',
+                text: read('lint_output.log'),
+              });
+            }
 
             if (testsFailed) {
               sections.push({
@@ -146,14 +195,10 @@ jobs:
                 text: read('build_output.log'),
               });
             } else {
-              const metrics = read('build_output.log')
-                .split('\n')
-                .filter((line) => line.includes('dist/assets/'))
-                .join('\n');
               sections.push({
                 heading: '✅ **Build successful!**',
                 summary: 'Build Size Metrics',
-                text: metrics || 'Metrics not found',
+                text: buildMetrics(read('build_output.log')),
               });
             }
 

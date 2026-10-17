@@ -3,7 +3,6 @@ frontend/node_modules/
 contracts/node_modules/
 
 # Package lock files (if you don’t want to track them)
-frontend/package-lock.json
 contracts/package-lock.json
 
 # Build outputs
@@ -44,3 +43,8 @@ contracts/.env.local
 contracts/.env.development
 contracts/.env.production
 .vite/
+
+# Unremediated security review reports — excluded from Git until findings
+# are closed out by the security-remediation skill, which publishes to
+# security-reviews/
+unremediated-security-reviews/

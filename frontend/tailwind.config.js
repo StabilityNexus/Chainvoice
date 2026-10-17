@@ -1,3 +1,5 @@
+import defaultTheme from "tailwindcss/defaultTheme";
+
 /** @type {import('tailwindcss').Config} */
 export default {
     darkMode: ["class"],
@@ -5,8 +7,8 @@ export default {
   theme: {
   	extend: {
 		fontFamily:{
-			Montserrat:["Montserrat", "serif"],
-			Inter:["Inter","serif"]
+			Montserrat:["Montserrat", ...defaultTheme.fontFamily.sans],
+			Inter:["Inter", ...defaultTheme.fontFamily.sans]
 		},
   		borderRadius: {
   			lg: 'var(--radius)',

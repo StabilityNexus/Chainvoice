@@ -48,7 +48,10 @@ $ anvil
 ### Deploy
 
 ```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+$ forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url sepolia --account deployer --broadcast
+
+# Ethereum Classic has no EIP-1559, so it needs --legacy
+$ forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url etc --account deployer --broadcast --legacy
 ```
 
 ### Cast

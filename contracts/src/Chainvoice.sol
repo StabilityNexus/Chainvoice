@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: Unlicense
-pragma solidity ^0.8.13;
+pragma solidity 0.8.19;
 
-interface IERC20 {
-    function transferFrom(address sender, address recipient, uint256 amount) external returns (bool);
-    function balanceOf(address account) external view returns (uint256);
-    function allowance(address owner, address spender) external view returns (uint256);
-}
+import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from "openzeppelin-contracts/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract Chainvoice {
+    // Tokens that return nothing from transferFrom (USDT and others) would
+    // otherwise make every payment revert while the return value is decoded.
+    using SafeERC20 for IERC20;
+
     // ========== Errors ==========
     // Existing
     error MixedTokenBatch();
@@ -34,18 +35,15 @@ contract Chainvoice {
     error IncorrectPaymentAmount();
     error NativeTransferFailed();
     error FeeMustBeNative();
-    error TokenTransferFailed();
-    error TreasuryNotSet();
+    error TokenAmountShortfall();
+    error NoPendingFeeController();
     error NoFeesAvailable();
     error WithdrawFailed();
     error InvalidPublicKey();
     error InvalidInvoiceHash();
+    error InvalidPageLimit();
 
     // ========== Storage ==========
-    error InvalidNewOwner();
-    error OwnershipNotPending();
-
-    // Storage
     struct InvoiceDetails {
         uint256 id;
         address from;
@@ -64,11 +62,16 @@ contract Chainvoice {
     // ========== Messaging Public Key Registry ==========
     mapping(address => bytes) private messagingPublicKeys;
 
-    address public owner;
-    address public treasuryAddress;
+    /// @notice Sets the fee and the fee recipient, and hands its own role to a
+    ///         successor in two steps. There is no contract owner.
+    address public feeController;
+    /// @notice Address proposed as the next feeController; zero when none is pending.
+    address public pendingFeeController;
+    /// @notice Receives withdrawn fees. May be a contract that cannot call back
+    ///         into Chainvoice, such as a vault, so it is changed in one step.
+    address public feeRecipient;
     uint256 public fee;                // native fee per invoice
     uint256 public accumulatedFees;    // native fees accrued (for withdraw)
-    address public pendingOwner;  // Two-step ownership transfer
 
     // ========== Events ==========
     event InvoiceCreated(uint256 indexed id, address indexed from, address indexed to, address tokenAddress);
@@ -78,21 +81,32 @@ contract Chainvoice {
     event InvoiceBatchPaid(address indexed payer, address indexed token, uint256 count, uint256 totalAmount, uint256[] ids);
     event PublicKeyRegistered(address indexed user, bytes publicKey);
 
-    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
-    event OwnershipTransferInitiated(address indexed currentOwner, address indexed pendingOwner);
-    event OwnershipTransferCancelled(address indexed owner, address indexed cancelledPendingOwner);
     event FeeUpdated(uint256 indexed previousFee, uint256 indexed newFee);
-    event TreasuryAddressUpdated(address indexed previousTreasury, address indexed newTreasury);
+    event FeeRecipientUpdated(address indexed previousFeeRecipient, address indexed newFeeRecipient);
+    event FeeControllerProposed(address indexed currentFeeController, address indexed proposedFeeController);
+    event FeeControllerProposalCancelled(address indexed currentFeeController, address indexed cancelledFeeController);
+    event FeeControllerUpdated(address indexed previousFeeController, address indexed newFeeController);
 
-    // Constructor
-    constructor() {
-        owner = msg.sender;
-        fee = 0.0005 ether;
+    /// @param _fee Native fee charged per paid invoice; must be non-zero.
+    /// @param _feeController Address that sets the fee and the fee recipient; must not be zero.
+    /// @param _feeRecipient Address that withdrawn fees are paid to; must not be zero.
+    constructor(uint256 _fee, address _feeController, address _feeRecipient) {
+        // A zero fee is rejected here only to catch an unset FEE_WEI at deploy
+        // time. The fee controller may still set the fee to 0 later via
+        // setFeeAmount(); that is a deliberate choice, not a misconfiguration.
+        if (_fee == 0) revert InvalidAmount();
+        if (_feeController == address(0) || _feeRecipient == address(0)) revert ZeroAddress();
+        fee = _fee;
+        feeController = _feeController;
+        feeRecipient = _feeRecipient;
+        emit FeeUpdated(0, _fee);
+        emit FeeControllerUpdated(address(0), _feeController);
+        emit FeeRecipientUpdated(address(0), _feeRecipient);
     }
 
     // ========== Modifiers ==========
-    modifier onlyOwner() {
-        if (msg.sender != owner) revert Unauthorized();
+    modifier onlyFeeController() {
+        if (msg.sender != feeController) revert Unauthorized();
         _;
     }
 
@@ -106,16 +120,46 @@ contract Chainvoice {
     }
 
     // Constants
+    /// @notice Largest batch payInvoicesBatch accepts. At 50 invoices it measures
+    ///         about 2.2M gas for native invoices from one issuer, 3.5M worst case
+    ///         (50 fresh issuers, so every payout creates an account), and 2.5M
+    ///         worst case for ERC-20 invoices.
     uint256 public constant MAX_BATCH = 50;
+    /// @notice Largest batch createInvoicesBatch accepts. Creating writes several
+    ///         fresh storage slots per invoice, about 185k gas each for native
+    ///         invoices and 205k for ERC-20. 30 invoices cost about 5.6M and 6.2M
+    ///         gas worst case, which fits Ethereum Classic's 8M block gas limit;
+    ///         40 would already exceed it with an ERC-20 token.
+    uint256 public constant MAX_CREATE_BATCH = 30;
+    uint256 public constant MAX_PAGE_LIMIT = 50;
 
     // ========== Internal Utils ==========
-    function _isERC20(address token) internal view returns (bool) {
-        if (token == address(0)) return false;
-        if (token.code.length == 0) return false;
-        (bool success, ) = token.staticcall(
-            abi.encodeWithSignature("balanceOf(address)", address(this))
+    function _validateToken(address tokenAddress) private view {
+        if (tokenAddress.code.length == 0) revert NotContract();
+
+        (bool balOk, bytes memory balData) = tokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
         );
-        return success;
+        (bool allowanceOk, bytes memory allowanceData) = tokenAddress.staticcall(
+            abi.encodeWithSelector(IERC20.allowance.selector, address(this), address(this))
+        );
+
+        if (!balOk || balData.length < 32 || !allowanceOk || allowanceData.length < 32) {
+            revert InvalidToken();
+        }
+    }
+
+    /// @dev Move `amount` of `token` from `payer` to `payee` and require the
+    ///      payee to have received all of it. A fee-on-transfer token (or one
+    ///      that switches a fee on later) would otherwise settle the invoice
+    ///      in full while the issuer is paid short.
+    function _pullToken(IERC20 token, address payer, address payee, uint256 amount) private {
+        uint256 before = token.balanceOf(payee);
+        token.safeTransferFrom(payer, payee, amount);
+        uint256 afterBal = token.balanceOf(payee);
+        // Both callers are nonReentrant, so `before` can't go stale mid-call.
+        // slither-disable-next-line reentrancy-balance
+        if (afterBal < before || afterBal - before < amount) revert TokenAmountShortfall();
     }
 
     // ========== Messaging Key Management ==========
@@ -150,16 +194,7 @@ contract Chainvoice {
         if (amountDue == 0) revert InvalidAmount();
 
         if (tokenAddress != address(0)) {
-            if (tokenAddress.code.length == 0) revert NotContract();
-            (bool balOk, bytes memory balData) = tokenAddress.staticcall(
-                abi.encodeWithSelector(IERC20.balanceOf.selector, address(this))
-            );
-            (bool allowanceOk, bytes memory allowanceData) = tokenAddress.staticcall(
-                abi.encodeWithSelector(IERC20.allowance.selector, address(this), address(this))
-            );
-            if (!balOk || balData.length < 32 || !allowanceOk || allowanceData.length < 32) {
-                revert InvalidToken();
-            }
+            _validateToken(tokenAddress);
         }
 
         uint256 invoiceId = invoices.length;
@@ -189,7 +224,7 @@ contract Chainvoice {
         bytes32[] calldata invoiceDataHashes
     ) external {
         uint256 n = tos.length;
-        if (n == 0 || n > MAX_BATCH) revert InvalidBatchSize();
+        if (n == 0 || n > MAX_CREATE_BATCH) revert InvalidBatchSize();
         
         if (
             n != amountsDue.length ||
@@ -197,11 +232,7 @@ contract Chainvoice {
         ) revert ArrayLengthMismatch();
 
         if (tokenAddress != address(0)) {
-             if (tokenAddress.code.length == 0) revert NotContract();
-            (bool ok, ) = tokenAddress.staticcall(
-                abi.encodeWithSignature("balanceOf(address)", address(this))
-            );
-            if (!ok) revert InvalidToken();
+            _validateToken(tokenAddress);
         }
 
         uint256[] memory ids = new uint256[](n);
@@ -279,12 +310,7 @@ contract Chainvoice {
             }
             accumulatedFees += fee;
 
-            bool transferSuccess = IERC20(invoice.tokenAddress).transferFrom(
-                msg.sender,
-                invoice.from,
-                invoice.amountDue
-            );
-            if (!transferSuccess) revert TokenTransferFailed();
+            _pullToken(IERC20(invoice.tokenAddress), msg.sender, invoice.from, invoice.amountDue);
         }
 
         emit InvoicePaid(
@@ -312,7 +338,9 @@ contract Chainvoice {
 
         uint256 totalAmounts = 0;
         uint256 totalNativeFee = fee * n;
-        // Validate and sum
+        // Validate and mark paid in the same pass so a duplicate id in the
+        // batch hits AlreadySettled() on its second occurrence, before any
+        // funds move.
         for (uint256 i = 0; i < n; i++) {
             uint256 id = invoiceIds[i];
             if (id >= invoices.length) revert InvalidInvoiceId();
@@ -324,11 +352,7 @@ contract Chainvoice {
             if (inv.tokenAddress != token) revert MixedTokenBatch();
 
             totalAmounts += inv.amountDue;
-        }
-
-        // Effects: mark all paid & bump fee accumulator BEFORE interactions
-        for (uint256 i = 0; i < n; i++) {
-            invoices[invoiceIds[i]].isPaid = true;
+            inv.isPaid = true;
         }
         accumulatedFees += totalNativeFee;
         // Interactions
@@ -352,8 +376,7 @@ contract Chainvoice {
 
             for (uint256 i = 0; i < n; i++) {
                 InvoiceDetails storage inv = invoices[invoiceIds[i]];
-                bool ok = erc20.transferFrom(msg.sender, inv.from, inv.amountDue);
-                if (!ok) revert TokenTransferFailed();
+                _pullToken(erc20, msg.sender, inv.from, inv.amountDue);
                 emit InvoicePaid(inv.id, inv.from, inv.to, inv.amountDue, token);
             }
         }
@@ -377,7 +400,7 @@ contract Chainvoice {
         if (invoiceId >= invoices.length) revert InvalidInvoiceId();
         InvoiceDetails memory invoice = invoices[invoiceId];
 
-        if (invoice.isCancelled) {
+        if (invoice.isCancelled || invoice.isPaid) {
             return (false, payer.balance, 0);
         }
 
@@ -391,28 +414,66 @@ contract Chainvoice {
         } else {
             uint256 bal = IERC20(invoice.tokenAddress).balanceOf(payer);
             uint256 allw = IERC20(invoice.tokenAddress).allowance(payer, address(this));
+            // The fee is charged in native currency on the token path too.
             return (
-                bal >= invoice.amountDue && allw >= invoice.amountDue,
+                bal >= invoice.amountDue && allw >= invoice.amountDue && payer.balance >= fee,
                 bal,
                 allw
             );
         }
     }
 
-    function getSentInvoices(address user) external view returns (InvoiceDetails[] memory) {
-        return _getInvoices(sentInvoices[user]);
+    /// @notice Get one page of the invoices a user has sent, newest first.
+    /// @param user The sender to look up.
+    /// @param offset How many of the newest invoices to skip.
+    /// @param limit Maximum number of invoices to return (1 to MAX_PAGE_LIMIT).
+    /// @return page Up to `limit` invoices starting at the `offset`-th newest; empty if offset >= total.
+    /// @return total The number of invoices the user has sent.
+    function getSentInvoices(
+        address user,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (InvoiceDetails[] memory page, uint256 total) {
+        return _getInvoicesPage(sentInvoices[user], offset, limit);
     }
 
-    function getReceivedInvoices(address user) external view returns (InvoiceDetails[] memory) {
-        return _getInvoices(receivedInvoices[user]);
+    /// @notice Get one page of the invoices a user has received, newest first.
+    /// @param user The recipient to look up.
+    /// @param offset How many of the newest invoices to skip.
+    /// @param limit Maximum number of invoices to return (1 to MAX_PAGE_LIMIT).
+    /// @return page Up to `limit` invoices starting at the `offset`-th newest; empty if offset >= total.
+    /// @return total The number of invoices the user has received.
+    function getReceivedInvoices(
+        address user,
+        uint256 offset,
+        uint256 limit
+    ) external view returns (InvoiceDetails[] memory page, uint256 total) {
+        return _getInvoicesPage(receivedInvoices[user], offset, limit);
     }
 
-    function _getInvoices(uint256[] storage ids) internal view returns (InvoiceDetails[] memory) {
-        InvoiceDetails[] memory result = new InvoiceDetails[](ids.length);
-        for (uint256 i = 0; i < ids.length; i++) {
-            result[i] = invoices[ids[i]];
+    /// @dev Copies one page of ids into memory newest first: element i is
+    ///      ids[total - 1 - offset - i], so offset 0 starts at the most recently
+    ///      added invoice. The bounded limit keeps the loop, and so the call's gas,
+    ///      independent of how many invoices a user has.
+    function _getInvoicesPage(
+        uint256[] storage ids,
+        uint256 offset,
+        uint256 limit
+    ) internal view returns (InvoiceDetails[] memory page, uint256 total) {
+        if (limit == 0 || limit > MAX_PAGE_LIMIT) revert InvalidPageLimit();
+
+        total = ids.length;
+        if (offset >= total) return (new InvoiceDetails[](0), total);
+
+        // offset < total here, so total - offset cannot underflow; any larger
+        // offset returned above. i < len <= total - offset keeps the index
+        // total - 1 - offset - i at or above zero.
+        uint256 remaining = total - offset;
+        uint256 len = remaining > limit ? limit : remaining;
+        page = new InvoiceDetails[](len);
+        for (uint256 i = 0; i < len; i++) {
+            page[i] = invoices[ids[total - 1 - offset - i]];
         }
-        return result;
     }
 
     function getInvoice(uint256 invoiceId) external view returns (InvoiceDetails memory) {
@@ -420,58 +481,59 @@ contract Chainvoice {
         return invoices[invoiceId];
     }
 
-    // ========== Admin - Ownership ==========
-    /// @dev Initiates a two-step ownership transfer process
-    /// @param newOwner Address of the new owner (must not be zero address)
-    function initiateOwnershipTransfer(address newOwner) external onlyOwner {
-        if (newOwner == address(0)) revert InvalidNewOwner();
-        if (newOwner == owner) revert InvalidNewOwner();
-        
-        pendingOwner = newOwner;
-        emit OwnershipTransferInitiated(owner, newOwner);
-    }
-
-    /// @dev Completes the ownership transfer process
-    /// @dev Only the pending owner can call this function
-    function acceptOwnership() external {
-        if (msg.sender != pendingOwner) revert OwnershipNotPending();
-        
-        address previousOwner = owner;
-        owner = msg.sender;
-        pendingOwner = address(0);
-        
-        emit OwnershipTransferred(previousOwner, msg.sender);
-    }
-
-    /// @dev Cancels the pending ownership transfer
-    function cancelOwnershipTransfer() external onlyOwner {
-        if (pendingOwner == address(0)) revert OwnershipNotPending();
-
-        emit OwnershipTransferCancelled(msg.sender, pendingOwner);
-        pendingOwner = address(0);
-    }
-
-    // ========== Admin - Fee Management ==========
-    function setFeeAmount(uint256 _fee) external onlyOwner {
+    // ========== Fee Management ==========
+    function setFeeAmount(uint256 _fee) external onlyFeeController {
         emit FeeUpdated(fee, _fee);
         fee = _fee;
     }
 
-    function setTreasuryAddress(address newTreasury) external onlyOwner {
-        if (newTreasury == address(0)) revert ZeroAddress();
+    function setFeeRecipient(address newFeeRecipient) external onlyFeeController {
+        if (newFeeRecipient == address(0)) revert ZeroAddress();
 
-        emit TreasuryAddressUpdated(treasuryAddress, newTreasury);
-        treasuryAddress = newTreasury;
+        emit FeeRecipientUpdated(feeRecipient, newFeeRecipient);
+        feeRecipient = newFeeRecipient;
+    }
+
+    // ========== Fee Controller Handover (two-step) ==========
+    /// @notice Propose a new feeController. Nothing changes until that address
+    ///         calls acceptFeeController(); proposing again replaces the pending address.
+    function proposeFeeController(address newFeeController) external onlyFeeController {
+        if (newFeeController == address(0)) revert ZeroAddress();
+
+        pendingFeeController = newFeeController;
+        emit FeeControllerProposed(feeController, newFeeController);
+    }
+
+    /// @notice Withdraw a pending proposal, for example one sent to a mistyped
+    ///         address. The current feeController keeps its role.
+    function cancelFeeControllerProposal() external onlyFeeController {
+        address pending = pendingFeeController;
+        if (pending == address(0)) revert NoPendingFeeController();
+
+        pendingFeeController = address(0);
+        emit FeeControllerProposalCancelled(feeController, pending);
+    }
+
+    /// @notice Complete the handover. Only the proposed address can call this.
+    function acceptFeeController() external {
+        address pending = pendingFeeController;
+        if (pending == address(0)) revert NoPendingFeeController();
+        if (msg.sender != pending) revert Unauthorized();
+
+        emit FeeControllerUpdated(feeController, pending);
+        feeController = pending;
+        pendingFeeController = address(0);
     }
 
     function withdrawFees() external {
-        if (treasuryAddress == address(0)) revert TreasuryNotSet();
         if (accumulatedFees == 0) revert NoFeesAvailable();
 
         uint256 amount = accumulatedFees;
         accumulatedFees = 0;
 
-        (bool success, ) = payable(treasuryAddress).call{value: amount}("");
+        // Destination is always feeRecipient, so a permissionless trigger is safe.
+        // slither-disable-next-line arbitrary-send-eth
+        (bool success, ) = payable(feeRecipient).call{value: amount}("");
         if (!success) revert WithdrawFailed();
     }
 }

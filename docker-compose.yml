@@ -1,0 +1,107 @@
+# Chainvoice local development stack.
+#
+#   docker compose up --build          frontend + relay, hot reload, :5173
+#   docker compose --env-file frontend/.env --profile prod up frontend-prod --build
+#                                      production bundle behind nginx, :8080
+#
+# See docs/docker.md for the full guide. Requires Docker Compose v2.24 or newer
+# (for the optional env_file below).
+#
+# No service sets a restart policy on purpose: this is a development stack, and
+# `unless-stopped` would bring it back up every time the Docker daemon starts,
+# including on boot.
+name: chainvoice
+
+services:
+  # ThruBox relay — the transport every invoice send and receive goes through.
+  # Nothing in this repository started one before, so a contributor had to clone
+  # AOSSIE-Org/ThruBox-Server separately before invoicing worked at all.
+  #
+  # The image is built from ThruBox's own Dockerfile, straight from its public
+  # repository — nothing is vendored here, so there is no copy to drift out of
+  # sync with upstream. Build it once:
+  #
+  #   docker buildx build -t chainvoice/thrubox-relay:main "https://github.com/AOSSIE-Org/ThruBox-Server.git#main"
+  #
+  # It is a separate command because a git URL as build.context, which the spec
+  # allows, fails at build time on Windows: Compose evaluates it as a local path
+  # ("failed to evaluate path ... CreateFile D:\...\https:"), on Docker 29.6.1
+  # / Compose v5.1.4. buildx accepts the same URL, and one instruction that
+  # works on every platform beats two that diverge. ThruBox publishes no image
+  # of its own yet either — the docker block in its .goreleaser.yaml is
+  # commented out — so once it does, this becomes a plain registry pull. See
+  # docs/docker.md.
+  relay:
+    image: ${RELAY_IMAGE:-chainvoice/thrubox-relay:main}
+    ports:
+      - "${RELAY_PORT:-3000}:3000"
+    environment:
+      RELAY_STORAGE_PATH: /data/relay.db
+    volumes:
+      # Named volume so relayed messages survive `docker compose down`. Use
+      # `down -v` to start from an empty relay.
+      - relay-data:/data
+
+  # Vite dev server with hot reload.
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    env_file:
+      # Your own VITE_WALLETCONNECT_PROJECT_ID and contract addresses. Optional
+      # so `docker compose up` still starts before you have copied the file,
+      # though wallet connection needs it — see docs/docker.md.
+      - path: ./frontend/.env
+        required: false
+    environment:
+      # In development the browser always talks to <origin>/relay and the Vite
+      # dev server proxies it (resolveBaseUrl in
+      # frontend/src/services/relay/relayClient.js ignores VITE_RELAY_URL when
+      # import.meta.env.DEV is set). So this value is only ever the proxy's
+      # target, resolved by Docker's DNS inside the compose network — the
+      # browser never sees it, and never makes a cross-origin request.
+      VITE_RELAY_URL: http://relay:3000
+      # Bind mounts do not deliver inotify events reliably on Windows or macOS
+      # hosts, so let the watcher poll instead. Drop it if you are on Linux and
+      # would rather not pay for the polling.
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      # Your working copy, live-reloaded.
+      - ./frontend:/app
+      # Anonymous volume masking the bind mount, so the Linux dependency tree
+      # installed in the image is not shadowed by a host node_modules built for
+      # another platform.
+      - /app/node_modules
+    depends_on:
+      - relay
+
+  # Production bundle served by nginx, which also proxies /relay so the browser
+  # stays same-origin. Started only with `--profile prod`, and worth naming
+  # explicitly on the command line — the frontend service above belongs to no
+  # profile, so it comes up alongside this one otherwise.
+  #
+  # Build-time values come from your shell or from an --env-file; see
+  # docs/docker.md. VITE_RELAY_URL is deliberately not configurable here: it
+  # has to stay /relay to match the nginx location block.
+  frontend-prod:
+    profiles: ["prod"]
+    build:
+      context: ./frontend
+      target: prod
+      args:
+        VITE_RELAY_URL: /relay
+        VITE_RELAY_API_KEY: ${VITE_RELAY_API_KEY:-}
+        VITE_RELAY_TIMEOUT_MS: ${VITE_RELAY_TIMEOUT_MS:-}
+        VITE_WALLETCONNECT_PROJECT_ID: ${VITE_WALLETCONNECT_PROJECT_ID:-}
+        VITE_CONTRACT_ADDRESS_11155111: ${VITE_CONTRACT_ADDRESS_11155111:-0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b}
+        VITE_CONTRACT_ADDRESS_61: ${VITE_CONTRACT_ADDRESS_61:-}
+        VITE_CONTRACT_ADDRESS_137: ${VITE_CONTRACT_ADDRESS_137:-}
+    ports:
+      - "${FRONTEND_PROD_PORT:-8080}:80"
+    depends_on:
+      - relay
+
+volumes:
+  relay-data:

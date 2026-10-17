@@ -1,4 +1,8 @@
 import Paper from "@mui/material/Paper";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -22,7 +26,23 @@ import { useRelayKeys } from "@/hooks/useRelayKeys";
 
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import toast from "react-hot-toast";
-import { resolveInvoiceDecimals, formatInvoiceDate } from "@/utils/invoiceAmounts";
+import { formatInvoiceDate } from "@/utils/invoiceAmounts";
+import {
+  buildChainInvoice,
+  createTokenMetadataReader,
+  isInvoicePayable,
+  sumBaseUnits,
+} from "@/utils/chainInvoice";
+import { useTranslation } from "@/hooks/useTranslation";
+import InvoiceVerificationChip from "@/components/InvoiceVerificationChip";
+import {
+  INVOICE_PAGE_SIZES,
+  DEFAULT_INVOICE_PAGE_SIZE,
+  getTotalPages,
+  formatPageLabel,
+  fetchInvoicePage,
+  filterSelectionToPage,
+} from "@/utils/invoicePagination";
 import CancelIcon from "@mui/icons-material/Cancel";
 
 import {
@@ -59,34 +79,40 @@ import LightbulbIcon from "@mui/icons-material/Lightbulb";
 import LayersIcon from "@mui/icons-material/Layers";
 import CloseIcon from "@mui/icons-material/Close";
 import ErrorIcon from "@mui/icons-material/Error";
-import WarningIcon from "@mui/icons-material/Warning";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
+import TableSortLabel from "@mui/material/TableSortLabel";
+import { useInvoiceFilterSort } from "@/hooks/useInvoiceFilterSort";
+import InvoiceFilterBar from "@/components/InvoiceFilterBar";
+import { PAGE_CONTAINER } from "@/utils/layout";
+import { cn } from "@/lib/utils";
 
 const columns = [
-  { id: "select", label: "", minWidth: 50 },
-  { id: "fname", label: "Client", minWidth: 120 },
-  { id: "to", label: "Sender", minWidth: 150 },
-  { id: "amountDue", label: "Amount", minWidth: 100, align: "right" },
-  { id: "status", label: "Status", minWidth: 100 },
-  { id: "date", label: "Date", minWidth: 100 },
-  { id: "actions", label: "Actions", minWidth: 150 },
+  { id: "select", label: "", minWidth: 50, sortable: false },
+  { id: "fname", label: "Client", minWidth: 120, sortable: true },
+  { id: "to", label: "Sender", minWidth: 150, sortable: false },
+  { id: "amountDue", label: "Amount", minWidth: 100, align: "right", sortable: true },
+  { id: "status", label: "Status", minWidth: 100, sortable: true },
+  { id: "date", label: "Date", minWidth: 100, sortable: true },
+  { id: "actions", label: "Actions", minWidth: 150, sortable: false },
 ];
 
 
 
 function ReceivedInvoice() {
   const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_INVOICE_PAGE_SIZE);
   const { data: walletClient } = useWalletClient();
-  const { address, isConnected, chainId } = useAccount();
+  const { address, isConnected, chainId, chain } = useAccount();
+  const { t } = useTranslation("invoiceVerification");
+  const { t: tReceivedInvoices } = useTranslation("receivedInvoices");
 
   const [anchorEl, setAnchorEl] = useState(null);
   const openExportMenu = Boolean(anchorEl);
-  const [batchExportAnchorEl, setBatchExportAnchorEl] = useState(null);
-  const openBatchExportMenu = Boolean(batchExportAnchorEl);
   const [loading, setLoading] = useState(true);
+  // Only the current page is held; totalInvoices is the on-chain count.
   const [receivedInvoices, setReceivedInvoice] = useState([]);
+  const [totalInvoices, setTotalInvoices] = useState(0);
   const [fee, setFee] = useState(0);
   const [error, setError] = useState(null);
 
@@ -113,11 +139,51 @@ function ReceivedInvoice() {
   const [batchLoading, setBatchLoading] = useState(false);
   const [batchSuggestions, setBatchSuggestions] = useState([]);
 
+  // Identifies the list on screen, so a payment handler can tell whether the
+  // user paged (or switched wallet/network) while its transaction was pending.
+  const pageContextKey = `${address}-${chainId}-${page}-${rowsPerPage}`;
+  const pageContextRef = useRef(pageContextKey);
+  useEffect(() => {
+    pageContextRef.current = pageContextKey;
+  }, [pageContextKey]);
+
+  // Bulk export dialog
+  const [bulkExportOpen, setBulkExportOpen] = useState(false);
+  const [bulkExportFormat, setBulkExportFormat] = useState("csv");
+  const [bulkExportMode, setBulkExportMode] = useState("single");
+
   // Drawer state
   const [drawerState, setDrawerState] = useState({
     open: false,
     selectedInvoice: null,
   });
+
+  const {
+    filteredAndSortedInvoices,
+    availableTokens,
+    filters,
+    setFilter,
+    handleSort,
+    clearFilters,
+    hasActiveFilters,
+  } = useInvoiceFilterSort(receivedInvoices, { isSent: false });
+
+  useEffect(() => {
+    setSelectedInvoices((prev) => {
+      const visibleIds = new Set(filteredAndSortedInvoices.map((inv) => inv.id));
+      const pruned = new Set([...prev].filter((id) => visibleIds.has(id)));
+      if (pruned.size === prev.size) return prev;
+      return pruned;
+    });
+  }, [filteredAndSortedInvoices]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filters.status, filters.fromDate, filters.toDate, filters.token, filters.minAmount, filters.maxAmount]);
+
+  useEffect(() => {
+    setPage(0);
+  }, [filters.sortBy, filters.sortDir]);
 
   const { tokens } = useTokenList(chainId || 1);
 
@@ -193,20 +259,6 @@ function ReceivedInvoice() {
   };
 
   // Helper functions
-  const getTokenInfo = (tokenAddress) => {
-    if (!tokens || tokens.length === 0) return null;
-    return tokens.find(
-      (token) =>
-        token.contract_address?.toLowerCase() === tokenAddress?.toLowerCase() ||
-        token.address?.toLowerCase() === tokenAddress?.toLowerCase()
-    );
-  };
-
-  const getTokenSymbol = (tokenAddress, fallbackSymbol = "TOKEN") => {
-    const tokenInfo = getTokenInfo(tokenAddress);
-    return tokenInfo?.symbol || fallbackSymbol;
-  };
-
   const detectBatchFromMetadata = (invoice) => {
     if (invoice.batchInfo) {
       return {
@@ -222,7 +274,7 @@ function ReceivedInvoice() {
   const findBatchSuggestions = (invoices) => {
     const suggestions = [];
     const groups = invoices
-      .filter((inv) => !inv.isPaid && !inv.isCancelled)
+      .filter(isInvoicePayable)
       .reduce((acc, inv) => {
         // Undated on-chain-only invoices would otherwise all share the
         // "Invalid Date" key and be suggested as one bogus batch.
@@ -238,9 +290,9 @@ function ReceivedInvoice() {
 
     Object.entries(groups).forEach(([key, invoices]) => {
       if (invoices.length >= 2) {
-        const totalAmount = invoices.reduce(
-          (sum, inv) => sum + parseFloat(inv.amountDue),
-          0
+        const totalAmount = ethers.formatUnits(
+          sumBaseUnits(invoices),
+          invoices[0].paymentToken.decimals
         );
         suggestions.push({
           id: key,
@@ -258,13 +310,15 @@ function ReceivedInvoice() {
   };
 
   // UNIFORM BALANCE CHECK
-  const checkBalance = async (tokenAddress, amount, symbol, signer) => {
+  const checkBalance = async (
+    { tokenAddress, amount, decimals, symbol },
+    signer
+  ) => {
     const userAddress = await signer.getAddress();
 
     if (tokenAddress === ethers.ZeroAddress) {
       const balance = await signer.provider.getBalance(userAddress);
-      const totalRequired =
-        ethers.parseUnits(amount.toString(), 18) + BigInt(fee);
+      const totalRequired = amount + BigInt(fee);
 
       if (balance < totalRequired) {
         const requiredEth = ethers.formatEther(totalRequired);
@@ -276,13 +330,12 @@ function ReceivedInvoice() {
     } else {
       const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
       const balance = await tokenContract.balanceOf(userAddress);
-      const decimals = await tokenContract.decimals();
-      const requiredAmount = ethers.parseUnits(amount.toString(), decimals);
 
-      if (balance < requiredAmount) {
+      if (balance < amount) {
+        const requiredFormatted = ethers.formatUnits(amount, decimals);
         const availableFormatted = ethers.formatUnits(balance, decimals);
         throw new Error(
-          `Insufficient ${symbol} balance. Required: ${amount} ${symbol}, Available: ${availableFormatted} ${symbol}`
+          `Insufficient ${symbol} balance. Required: ${requiredFormatted} ${symbol}, Available: ${availableFormatted} ${symbol}`
         );
       }
 
@@ -297,29 +350,27 @@ function ReceivedInvoice() {
     }
   };
 
-  const getGroupedInvoices = () => {
+  const getGroupedInvoices = (invoices) => {
     const grouped = new Map();
-    receivedInvoices.forEach((invoice) => {
-      if (!selectedInvoices.has(invoice.id)) return;
-
-      const tokenAddress = invoice.paymentToken?.address || ethers.ZeroAddress;
-      const tokenKey = `${tokenAddress}_${invoice.paymentToken?.symbol || "ETH"}`;
+    invoices.forEach((invoice) => {
+      const { address: tokenAddress, symbol, logo, decimals } =
+        invoice.paymentToken;
+      const tokenKey = tokenAddress.toLowerCase();
 
       if (!grouped.has(tokenKey)) {
         grouped.set(tokenKey, {
           tokenAddress,
-          symbol: invoice.paymentToken?.symbol || "ETH",
-          logo: invoice.paymentToken?.logo,
-          decimals: invoice.paymentToken?.decimals || 18,
+          symbol,
+          logo,
+          decimals,
           invoices: [],
-          totalAmount: 0,
         });
       }
-
-      const group = grouped.get(tokenKey);
-      group.invoices.push(invoice);
-      group.totalAmount += parseFloat(invoice.amountDue);
+      grouped.get(tokenKey).invoices.push(invoice);
     });
+    for (const group of grouped.values()) {
+      group.totalBaseUnits = sumBaseUnits(group.invoices);
+    }
     return grouped;
   };
 
@@ -332,10 +383,14 @@ function ReceivedInvoice() {
     return () => clearTimeout(timer);
   }, [showPaymentError]);
 
-  const handleSelectInvoice = (invoiceId) => {
-    const invoice = receivedInvoices.find((inv) => inv.id === invoiceId);
-    if (invoice?.isPaid || invoice?.isCancelled) return;
+  // One selection drives both actions: export takes every selected invoice,
+  // batch payment only the ones that can still be paid.
+  const selectedOnPage = receivedInvoices.filter((invoice) =>
+    selectedInvoices.has(invoice.id)
+  );
+  const payableSelected = selectedOnPage.filter(isInvoicePayable);
 
+  const handleSelectInvoice = (invoiceId) => {
     setSelectedInvoices((prev) => {
       const newSet = new Set(prev);
       if (newSet.has(invoiceId)) {
@@ -348,14 +403,31 @@ function ReceivedInvoice() {
   };
 
   const handleSelectAll = () => {
-    const unpaidInvoices = receivedInvoices.filter(
-      (inv) => !inv.isPaid && !inv.isCancelled
-    );
-    setSelectedInvoices(new Set(unpaidInvoices.map((inv) => inv.id)));
+    const payableInvoices = filteredAndSortedInvoices.filter(isInvoicePayable);
+    setSelectedInvoices(new Set(payableInvoices.map((inv) => inv.id)));
   };
 
   const handleClearAll = () => {
     setSelectedInvoices(new Set());
+  };
+
+  const handleToggleAllVisible = (checked) => {
+    setSelectedInvoices(
+      checked
+        ? new Set(filteredAndSortedInvoices.map((invoice) => invoice.id))
+        : new Set()
+    );
+  };
+
+  const handleBulkExportSubmit = async () => {
+    if (!selectedOnPage.length) {
+      toast.error("Select at least one invoice");
+      return;
+    }
+
+    await handleBulkExport(selectedOnPage, bulkExportFormat, bulkExportMode);
+
+    setBulkExportOpen(false);
   };
 
   const selectBatchSuggestion = (suggestion) => {
@@ -364,29 +436,9 @@ function ReceivedInvoice() {
     toast.success(`Selected ${invoiceIds.length} invoices for batch payment`);
   };
 
-  const payEntireBatch = async (batchId) => {
-    const batchInvoices = receivedInvoices.filter(
-      (inv) =>
-        inv.batchInfo?.batchId === batchId && !inv.isPaid && !inv.isCancelled
-    );
-
-    if (batchInvoices.length === 0) {
-      toast.error("No unpaid invoices found in this batch");
-      return;
-    }
-
-    setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
-    toast(
-      `Selected ${batchInvoices.length} invoices from batch #${batchId}`
-    );
-
-    setTimeout(() => {
-      handleBatchPayment();
-    }, 1000);
-  };
-
   // UNIFORM INDIVIDUAL PAYMENT
-  const payInvoice = async (invoiceId, amountDue, tokenAddress) => {
+  const payInvoice = async (invoice) => {
+    const invoiceId = invoice.id;
     if (!walletClient) {
       setPaymentError(
         "Wallet not connected. Please connect your wallet and try again."
@@ -394,6 +446,10 @@ function ReceivedInvoice() {
       setShowPaymentError(true);
       return;
     }
+
+    // Captured before the transaction so the result can be matched against
+    // the list that is on screen when it resolves.
+    const contextKey = pageContextRef.current;
 
     setPaymentLoading((prev) => ({ ...prev, [invoiceId]: true }));
     setPaymentError("");
@@ -412,18 +468,28 @@ function ReceivedInvoice() {
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-      const invoice = receivedInvoices.find((inv) => inv.id === invoiceId);
-      if (invoice?.isCancelled) {
+      if (invoice.isCancelled) {
         throw new Error("Cannot pay a cancelled invoice");
+      }
+      if (!isInvoicePayable(invoice)) {
+        throw new Error(t("payBlocked"));
       }
 
       const fee = await contract.fee();
+      const {
+        address: tokenAddress,
+        symbol: tokenSymbol,
+        decimals,
+      } = invoice.paymentToken;
+      const amountDue = BigInt(invoice.amountDueBaseUnits);
       const isNativeToken = tokenAddress === ethers.ZeroAddress;
-      const tokenSymbol = getTokenSymbol(tokenAddress, "Token");
 
       // BALANCE CHECK (same as batch)
       try {
-        await checkBalance(tokenAddress, amountDue, tokenSymbol, signer);
+        await checkBalance(
+          { tokenAddress, amount: amountDue, decimals, symbol: tokenSymbol },
+          signer
+        );
         toast.success("Balance check passed! Processing payment...");
       } catch (balanceError) {
         setPaymentError(balanceError.message);
@@ -433,33 +499,16 @@ function ReceivedInvoice() {
 
       if (!isNativeToken) {
         const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
-        const contractAddress = import.meta.env[
-          `VITE_CONTRACT_ADDRESS_${chainId}`
-        ];
-
-        if (!contractAddress) {
-          throw new Error("Unsupported network");
-        }
         const currentAllowance = await tokenContract.allowance(
           await signer.getAddress(),
           contractAddress
         );
 
-        const decimals = await tokenContract.decimals();
-        const amountDueInWei = ethers.parseUnits(String(amountDue), decimals);
-
-        if (currentAllowance < amountDueInWei) {
+        if (currentAllowance < amountDue) {
           toast(`Requesting approval for ${tokenSymbol}...`);
-          const contractAddress = import.meta.env[
-            `VITE_CONTRACT_ADDRESS_${chainId}`
-          ];
-
-          if (!contractAddress) {
-            throw new Error("Unsupported network");
-          }
           const approveTx = await tokenContract.approve(
             contractAddress,
-            amountDueInWei
+            amountDue
           );
           toast("Approval transaction submitted. Please wait...");
           await approveTx.wait();
@@ -476,8 +525,7 @@ function ReceivedInvoice() {
         await tx.wait();
         toast.success(`Payment successful! Paid with ${tokenSymbol}`);
       } else {
-        const amountDueInWei = ethers.parseUnits(String(amountDue), 18);
-        const total = amountDueInWei + BigInt(fee);
+        const total = amountDue + BigInt(fee);
 
         toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
@@ -490,10 +538,16 @@ function ReceivedInvoice() {
         toast.success("Payment successful! Paid with ETH");
       }
 
-      const updatedInvoices = receivedInvoices.map((inv) =>
-        inv.id === invoiceId ? { ...inv, isPaid: true } : inv
-      );
-      setReceivedInvoice(updatedInvoices);
+      // The optimistic row patch only applies if the page it started on is
+      // still the one on screen; the refetch always runs.
+      if (pageContextRef.current === contextKey) {
+        setReceivedInvoice((prev) =>
+          prev.map((inv) =>
+            inv.id === invoiceId ? { ...inv, isPaid: true } : inv
+          )
+        );
+      }
+      setRefreshTrigger((p) => p + 1);
     } catch (error) {
       console.error("Payment failed:", error);
       const errorMsg = getDetailedErrorMessage(error);
@@ -507,7 +561,27 @@ function ReceivedInvoice() {
 
   // UNIFORM BATCH PAYMENT
   const handleBatchPayment = async () => {
-    if (!walletClient || selectedInvoices.size === 0) return;
+    if (!walletClient || payableSelected.length === 0) return;
+    if (loading) {
+      toast.error("Invoices are still loading. Please try again in a moment.");
+      return;
+    }
+
+    // Only invoices on the loaded page can be paid; otherwise a selection
+    // from an earlier page reports success having paid nothing.
+    if (selectedOnPage.length !== selectedInvoices.size) {
+      setSelectedInvoices(
+        filterSelectionToPage(selectedInvoices, receivedInvoices)
+      );
+      toast.error(
+        "Selected invoices are no longer on this page. Please reselect."
+      );
+      return;
+    }
+
+    // Paid, cancelled and mismatched invoices can stay selected for export;
+    // the contract would revert the whole batch for any one of them.
+    const grouped = getGroupedInvoices(payableSelected);
 
     setBatchLoading(true);
     setPaymentError("");
@@ -526,17 +600,18 @@ function ReceivedInvoice() {
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-      const grouped = getGroupedInvoices();
-
       // BALANCE CHECK (same as individual)
       toast("Checking balances...");
 
       for (const [, group] of grouped.entries()) {
         try {
           await checkBalance(
-            group.tokenAddress,
-            group.totalAmount,
-            group.symbol,
+            {
+              tokenAddress: group.tokenAddress,
+              amount: group.totalBaseUnits,
+              decimals: group.decimals,
+              symbol: group.symbol,
+            },
             signer
           );
         } catch (error) {
@@ -554,22 +629,13 @@ function ReceivedInvoice() {
 
       // Process payments
       for (const [, group] of grouped.entries()) {
-        const { tokenAddress, symbol, decimals, invoices } = group;
+        const { tokenAddress, symbol, totalBaseUnits, invoices } = group;
         const invoiceIds = invoices.map((inv) => BigInt(inv.id));
 
         if (invoiceIds.length > 50) {
           throw new Error(
             `Batch size limit exceeded for ${symbol}. Max 50 invoices per batch.`
           );
-        }
-
-        let totalAmount = BigInt(0);
-        for (const invoice of invoices) {
-          const amount = ethers.parseUnits(
-            invoice.amountDue.toString(),
-            decimals
-          );
-          totalAmount += amount;
         }
 
         const feePerInvoice = await contract.fee();
@@ -591,11 +657,11 @@ function ReceivedInvoice() {
             contractAddress
           );
 
-          if (currentAllowance < totalAmount) {
+          if (currentAllowance < totalBaseUnits) {
             toast(`Approving ${symbol} for spending...`);
             const approveTx = await tokenContract.approve(
               contractAddress,
-              totalAmount
+              totalBaseUnits
             );
             await approveTx.wait();
             toast.success(`${symbol} approved successfully!`);
@@ -610,20 +676,13 @@ function ReceivedInvoice() {
           );
         } else {
           const tx = await contract.payInvoicesBatch(invoiceIds, {
-            value: totalAmount + totalFee,
+            value: totalBaseUnits + totalFee,
           });
           await tx.wait();
           toast.success(
             `Successfully paid ${invoices.length} invoices with ETH!`
           );
         }
-
-        const updatedInvoices = receivedInvoices.map((inv) =>
-          invoiceIds.some((id) => id === BigInt(inv.id))
-            ? { ...inv, isPaid: true }
-            : inv
-        );
-        setReceivedInvoice(updatedInvoices);
       }
 
       setSelectedInvoices(new Set());
@@ -638,6 +697,9 @@ function ReceivedInvoice() {
       );
     } finally {
       setBatchLoading(false);
+      // Earlier groups may have been paid before a later one failed, so the
+      // page is refetched either way.
+      setRefreshTrigger((p) => p + 1);
     }
   };
 
@@ -646,9 +708,28 @@ function ReceivedInvoice() {
     setShowWalletAlert(!isConnected);
   }, [isConnected]);
 
+  // A new wallet or network invalidates the loaded page outright. Declared
+  // before the fetch effect so nothing downstream can read invoices belonging
+  // to the previous address or chain.
+  useEffect(() => {
+    setReceivedInvoice([]);
+    setTotalInvoices(0);
+    setPage(0);
+  }, [address, chainId]);
+
+  // Selection and batch actions only see the loaded page, so neither a
+  // selection nor a suggestion may outlive the page it was built from.
+  useEffect(() => {
+    setSelectedInvoices(new Set());
+    setBatchSuggestions([]);
+    setBulkExportOpen(false);
+  }, [page, rowsPerPage, address, chainId]);
+
   // Fetch invoices
   useEffect(() => {
     if (!walletClient || !address) return;
+
+    let cancelled = false;
 
     const fetchReceivedInvoices = async () => {
       try {
@@ -669,11 +750,27 @@ function ReceivedInvoice() {
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
 
-        const res = await contract.getReceivedInvoices(address);
+        const { invoices: res, total } = await fetchInvoicePage(
+          contract.getReceivedInvoices,
+          address,
+          page,
+          rowsPerPage
+        );
+        if (cancelled) return;
+        setTotalInvoices(total);
 
-        if (!res || !Array.isArray(res) || res.length === 0) {
+        // Past the last page (e.g. a stale page number): jump to the last one,
+        // which re-runs this effect.
+        const lastPage = getTotalPages(total, rowsPerPage) - 1;
+        if (page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
+
+        if (res.length === 0) {
           setReceivedInvoice([]);
-          setLoading(false);
+          setBatchSuggestions([]);
+          setSelectedInvoices(new Set());
           return;
         }
 
@@ -688,6 +785,13 @@ function ReceivedInvoice() {
           }
         }
 
+        const readToken = createTokenMetadataReader({
+          runner: provider,
+          tokens,
+          nativeCurrency: chain?.nativeCurrency,
+          fallbackLogo: `${import.meta.env.BASE_URL}tokenImages/generic.png`,
+        });
+
         for (const invoice of res) {
           try {
             const id = invoice[0].toString();
@@ -695,117 +799,49 @@ function ReceivedInvoice() {
             const to = invoice[2].toLowerCase();
             const isPaid = invoice[5];
             const isCancelled = invoice[6];
-            const invoiceDataHash = invoice[7];
 
             const currentUserAddress = address.toLowerCase();
             if (currentUserAddress !== from && currentUserAddress !== to) {
               continue;
             }
 
-            const localInv = localInvoiceMap.get(id);
-            let parsed;
-
             // The payload lives only in IndexedDB, delivered over the relay.
-            // Recompute its hash and compare against the chain: a payload that
-            // does not match the sender's on-chain commitment is not trusted,
-            // and we fall back to the on-chain facts instead of showing it.
-            const payloadTrusted =
-              localInv?.data && verifyInvoiceHash(localInv.data, invoiceDataHash);
-
-            if (payloadTrusted) {
-              parsed = { ...localInv.data };
-
-              // Update local status if it changed
-              if (localInv.isPaid !== isPaid || localInv.isCancelled !== isCancelled) {
-                await updateInvoiceStatus(chainId, id, { isPaid, isCancelled });
-              }
-            } else {
-              if (localInv?.data) {
-                console.warn(
-                  `Invoice ${id}: stored payload does not match the on-chain hash; showing on-chain data only`
-                );
-              }
-              // Either nothing has arrived over the relay yet, or what did
-              // arrive failed verification. Build a stub from on-chain data so
-              // the invoice is still visible and payable.
-              parsed = {
-                amountDue: invoice[3].toString(),
-                user: { address: from },
-                client: { address: to },
-                paymentToken: { address: invoice[4] },
-                issueDate: null,
-                dueDate: null,
-                _onChainOnly: true,
-                _hashMismatch: Boolean(localInv?.data),
-              };
+            // buildChainInvoice shows it only if it matches the on-chain record;
+            // otherwise the invoice is shown from on-chain facts alone.
+            const localInv = localInvoiceMap.get(id);
+            const parsed = buildChainInvoice(
+              invoice,
+              localInv?.data,
+              await readToken(invoice[4])
+            );
+            if (!parsed) {
+              // Showing a base-unit figure as if it were a token amount, or
+              // paying from one, is worse than omitting the invoice.
+              console.warn(`Invoice ${id}: cannot read token decimals, skipping`);
+              continue;
+            }
+            if (parsed._hashMismatch || parsed._payloadMismatch) {
+              console.warn(
+                `Invoice ${id}: stored payload does not match the on-chain record` +
+                  (parsed._payloadMismatch ? ` (${parsed._payloadMismatch})` : "") +
+                  "; showing on-chain data only"
+              );
             }
 
-            parsed["id"] = BigInt(id);
-            parsed["isPaid"] = isPaid;
-            parsed["isCancelled"] = isCancelled;
+            // Update local status if it changed
+            if (
+              !parsed._onChainOnly &&
+              (localInv.isPaid !== isPaid || localInv.isCancelled !== isCancelled)
+            ) {
+              await updateInvoiceStatus(chainId, id, { isPaid, isCancelled });
+            }
+
+            // The PDF export reads the network from here; the payload has none.
+            parsed.chainId = chainId;
 
             const batchInfo = detectBatchFromMetadata(parsed);
             if (batchInfo) {
               parsed.batchInfo = batchInfo;
-            }
-            if (parsed.paymentToken?.address) {
-              const tokenInfo = getTokenInfo(parsed.paymentToken.address);
-              if (tokenInfo) {
-                parsed.paymentToken = {
-                  ...parsed.paymentToken,
-                  logo: tokenInfo.image || tokenInfo.logo,
-                  decimals: tokenInfo.decimals || parsed.paymentToken.decimals,
-                  name: tokenInfo.name || parsed.paymentToken.name,
-                  symbol: tokenInfo.symbol || parsed.paymentToken.symbol,
-                };
-              } else {
-                // Fallback: try to fetch token info from blockchain if not in our list
-                try {
-                  const tokenContract = new ethers.Contract(
-                    parsed.paymentToken.address,
-                    ERC20_ABI,
-                    provider
-                  );
-
-                  const [symbol, name, decimals] = await Promise.all([
-                    tokenContract
-                      .symbol()
-                      .catch(() => parsed.paymentToken.symbol || "UNKNOWN"),
-                    tokenContract
-                      .name()
-                      .catch(() => parsed.paymentToken.name || "Unknown Token"),
-                    tokenContract
-                      .decimals()
-                      .catch(() => parsed.paymentToken.decimals || 18),
-                  ]);
-
-                  parsed.paymentToken = {
-                    ...parsed.paymentToken,
-                    symbol,
-                    name,
-                    decimals: Number(decimals),
-                    logo: "/tokenImages/generic.png",
-                  };
-                } catch {
-                  parsed.paymentToken.logo =
-                    parsed.paymentToken.logo || "/tokenImages/generic.png";
-                }
-              }
-            }
-
-            // On-chain amounts are raw token units; the relay payload carries
-            // an already-formatted decimal string, so only stubs need scaling.
-            if (parsed._onChainOnly) {
-              const decimals = resolveInvoiceDecimals(parsed.paymentToken);
-              if (decimals === null) {
-                // Showing a base-unit figure as if it were a token amount, or
-                // feeding it to parseUnits, is worse than omitting the invoice.
-                console.warn(
-                  `Invoice ${parsed.id}: cannot resolve token decimals, skipping`
-                );
-                continue;
-              }
-              parsed.amountDue = ethers.formatUnits(parsed.amountDue, decimals);
             }
 
             decryptedInvoices.push(parsed);
@@ -814,25 +850,36 @@ function ReceivedInvoice() {
           }
         }
 
+        if (cancelled) return;
         setReceivedInvoice(decryptedInvoices);
+        // A refetch of the same page may no longer carry every selected invoice.
+        setSelectedInvoices((prev) =>
+          filterSelectionToPage(prev, decryptedInvoices)
+        );
         const suggestions = findBatchSuggestions(decryptedInvoices);
         setBatchSuggestions(suggestions);
         const fee = await contract.fee();
+        if (cancelled) return;
         setFee(fee);
       } catch (error) {
+        if (cancelled) return;
         console.error("Fetch error:", error);
         setError(
           "Unable to load invoices. The connected network is not supported or the contract is not deployed on this network. Please switch to a supported network and try again."
         );
 
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
 
     fetchReceivedInvoices();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [walletClient, address, tokens, chainId, refreshTrigger]);
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [walletClient, address, tokens, chainId, refreshTrigger, page, rowsPerPage]);
 
   // Relay ingestion runs independently of the display fetch above. Keeping it
   // out of the refreshTrigger cycle matters: if storing a message re-ran this
@@ -863,8 +910,8 @@ function ReceivedInvoice() {
      * only unseen invoices should wake the UI.
      *
      * The envelope is checked against the on-chain commitment before it is
-     * stored. Anyone can encrypt to this recipient — the public key is in the
-     * registry — so without that check a stranger could post an envelope
+     * stored. Anyone can encrypt to this recipient â€” the public key is in the
+     * registry â€” so without that check a stranger could post an envelope
      * claiming any invoice id, have it stored first, and permanently shadow
      * the real payload: the record would exist, so the genuine delivery would
      * be skipped as a duplicate and the invoice would sit unverifiable for good.
@@ -989,14 +1036,6 @@ function ReceivedInvoice() {
     setAnchorEl(null);
   };
 
-  const handleBatchExportClick = (event) => {
-    setBatchExportAnchorEl(event.currentTarget);
-  };
-
-  const handleBatchExportClose = () => {
-    setBatchExportAnchorEl(null);
-  };
-
   const handlePrint = async () => {
     if (!drawerState.selectedInvoice) {
       toast.error("No invoice selected");
@@ -1015,7 +1054,11 @@ function ReceivedInvoice() {
     }
   };
 
-  const { handleExportCSV, handleExportJSON } = useInvoiceExport(
+  const {
+    handleExportCSV,
+    handleExportJSON,
+    handleBulkExport,
+  } = useInvoiceExport(
     drawerState.selectedInvoice,
     fee,
     handleExportClose
@@ -1030,11 +1073,12 @@ function ReceivedInvoice() {
 
   const formatDate = formatInvoiceDate;
 
-  const unpaidInvoices = receivedInvoices.filter(
-    (inv) => !inv.isPaid && !inv.isCancelled
-  );
-  const selectedCount = selectedInvoices.size;
-  const grouped = getGroupedInvoices();
+  const unpaidInvoices = filteredAndSortedInvoices.filter(isInvoicePayable);
+  const selectedCount = payableSelected.length;
+  const grouped = getGroupedInvoices(payableSelected);
+  const visibleSelectedCount = filteredAndSortedInvoices.filter((invoice) =>
+    selectedInvoices.has(invoice.id)
+  ).length;
 
   return (
     <>
@@ -1045,8 +1089,8 @@ function ReceivedInvoice() {
           onDismiss={() => setShowWalletAlert(false)}
         />
       </div>
-      <div className=" md:p-6 ">
-        <div className="max-w-8xl mx-auto">
+      <div className={cn(PAGE_CONTAINER, "py-3 sm:py-4")}>
+        <div className="w-full">
           <div className="flex justify-between items-center mb-2">
             <div>
               <h2 className="text-2xl font-bold text-white">
@@ -1056,6 +1100,15 @@ function ReceivedInvoice() {
                 Manage and pay your incoming invoices
               </p>
             </div>
+            <Button
+              startIcon={<DownloadIcon />}
+              onClick={() => setBulkExportOpen(true)}
+              variant="contained"
+              disabled={selectedOnPage.length === 0}
+              sx={{ whiteSpace: "nowrap" }}
+            >
+              Export Selected ({selectedOnPage.length})
+            </Button>
           </div>
 
           {/* Without a registered public key, senders have nothing to encrypt
@@ -1088,7 +1141,7 @@ function ReceivedInvoice() {
             </Alert>
           )}
 
-          {/* Registered on-chain, but this tab holds no private key — the key
+          {/* Registered on-chain, but this tab holds no private key â€” the key
               is derived from a signature and never stored beyond the session,
               so nothing can be decrypted until the user re-derives it. */}
           {isConnected && !isUnsupportedNetwork && isRegistered && !keys && (
@@ -1115,7 +1168,7 @@ function ReceivedInvoice() {
               }
             >
               Sign to unlock your inbox. Incoming invoice details stay encrypted
-              until you do — this signature is free and costs no gas.
+              until you do â€” this signature is free and costs no gas.
             </Alert>
           )}
 
@@ -1183,7 +1236,7 @@ function ReceivedInvoice() {
                 }}
               >
                 <LightbulbIcon sx={{ mr: 1, color: "#ff9800" }} />
-                💡 Smart Batch Suggestions
+                {tReceivedInvoices("smartBatchSuggestions")}
               </Typography>
               {batchSuggestions.map((suggestion) => (
                 <Box
@@ -1213,7 +1266,7 @@ function ReceivedInvoice() {
                   </Box>
                   <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                     <Typography variant="body2" sx={{ color: "#64748b" }}>
-                      {suggestion.totalAmount.toFixed(4)}{" "}
+                      {suggestion.totalAmount}{" "}
                       {suggestion.token?.symbol || "ETH"}
                     </Typography>
                     <Button
@@ -1271,7 +1324,7 @@ function ReceivedInvoice() {
                     disabled={unpaidInvoices.length === 0}
                     sx={{ minWidth: { xs: 0, sm: 120 }, flex: { xs: 1, sm: "unset" }, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
                   >
-                    {unpaidInvoices.length > 0 ? `Select All (${unpaidInvoices.length})` : "Select All"}
+                    {unpaidInvoices.length > 0 ? `Select All Unpaid (${unpaidInvoices.length})` : "Select All Unpaid"}
                   </Button>
                   <Button
                     startIcon={<ClearAllIcon />}
@@ -1283,47 +1336,6 @@ function ReceivedInvoice() {
                   >
                     Clear
                   </Button>
-                  <Button
-                    startIcon={<DownloadIcon />}
-                    onClick={handleBatchExportClick}
-                    variant="outlined"
-                    size="small"
-                    disabled={selectedCount === 0}
-                    aria-haspopup="true"
-                    aria-expanded={openBatchExportMenu}
-                    sx={{ minWidth: { xs: 0, sm: 140 }, flex: { xs: 1, sm: "unset" }, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
-                  >
-                    Export Selected
-                  </Button>
-                  <Menu
-                    anchorEl={batchExportAnchorEl}
-                    open={openBatchExportMenu}
-                    onClose={handleBatchExportClose}
-                    anchorOrigin={{
-                      vertical: "bottom",
-                      horizontal: "right",
-                    }}
-                    transformOrigin={{
-                      vertical: "top",
-                      horizontal: "right",
-                    }}
-                    PaperProps={{
-                      sx: { mt: 1, width: 200 }
-                    }}
-                  >
-                    <MenuItem onClick={() => { handleExportCSV(); handleBatchExportClose(); }}>
-                      <ListItemIcon>
-                        <TableChartIcon fontSize="small" sx={{ color: "#16a34a" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as CSV</ListItemText>
-                    </MenuItem>
-                    <MenuItem onClick={() => { handleExportJSON(); handleBatchExportClose(); }}>
-                      <ListItemIcon>
-                        <DataObjectIcon fontSize="small" sx={{ color: "#3b82f6" }} />
-                      </ListItemIcon>
-                      <ListItemText>Export as JSON</ListItemText>
-                    </MenuItem>
-                  </Menu>
                 </Box>
               </Box>
 
@@ -1368,7 +1380,7 @@ function ReceivedInvoice() {
                               alt={group.symbol}
                               style={{ width: 24, height: 24 }}
                               onError={(e) => {
-                                e.target.src = "/tokenImages/generic.png";
+                                e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                               }}
                             />
                           ) : (
@@ -1388,7 +1400,8 @@ function ReceivedInvoice() {
                         <Typography
                           sx={{ color: "success.main", fontWeight: "bold", mt: { xs: 1, sm: 0 } }}
                         >
-                          {group.totalAmount.toFixed(6)} {group.symbol}
+                          {ethers.formatUnits(group.totalBaseUnits, group.decimals)}{" "}
+                          {group.symbol}
                         </Typography>
                       </Box>
                     ))}
@@ -1427,6 +1440,16 @@ function ReceivedInvoice() {
             </Paper>
           )}
 
+          <InvoiceFilterBar
+            filters={filters}
+            setFilter={setFilter}
+            availableTokens={availableTokens}
+            clearFilters={clearFilters}
+            hasActiveFilters={hasActiveFilters}
+            totalCount={filteredAndSortedInvoices.length}
+            rawCount={receivedInvoices.length}
+          />
+
           <Paper
             sx={{
               width: "100%",
@@ -1461,7 +1484,7 @@ function ReceivedInvoice() {
                   <p className="text-red-700 font-medium">{error}</p>
                 </div>
               </div>
-            ) : receivedInvoices.length === 0 ? (
+            ) : totalInvoices === 0 ? (
               <div className="p-6 text-center">
                 <div className="bg-blue-50 p-8 rounded-lg">
                   <DescriptionIcon
@@ -1486,6 +1509,9 @@ function ReceivedInvoice() {
                           <TableCell
                             key={column.id}
                             align={column.align}
+                            sortDirection={
+                              filters.sortBy === column.id ? filters.sortDir : false
+                            }
                             sx={{
                               minWidth: column.minWidth,
                               fontWeight: 600,
@@ -1498,24 +1524,46 @@ function ReceivedInvoice() {
                                 control={
                                   <Checkbox
                                     indeterminate={
-                                      selectedCount > 0 &&
-                                      selectedCount < unpaidInvoices.length
+                                      visibleSelectedCount > 0 &&
+                                      visibleSelectedCount <
+                                        filteredAndSortedInvoices.length
                                     }
                                     checked={
-                                      selectedCount === unpaidInvoices.length &&
-                                      unpaidInvoices.length > 0
+                                      filteredAndSortedInvoices.length > 0 &&
+                                      visibleSelectedCount ===
+                                        filteredAndSortedInvoices.length
                                     }
-                                    onChange={(e) => {
-                                      if (e.target.checked) {
-                                        handleSelectAll();
-                                      } else {
-                                        handleClearAll();
-                                      }
+                                    onChange={(e) =>
+                                      handleToggleAllVisible(e.target.checked)
+                                    }
+                                    inputProps={{
+                                      "aria-label": "Select all invoices on this page",
                                     }}
                                   />
                                 }
                                 label=""
                               />
+
+                            ) : column.sortable ? (
+                              <TableSortLabel
+                                active={filters.sortBy === column.id}
+                                direction={
+                                  filters.sortBy === column.id
+                                    ? filters.sortDir
+                                    : "asc"
+                                }
+                                onClick={() => handleSort(column.id)}
+                                sx={{
+                                  color: "#64748b !important",
+                                  "&.Mui-active": { color: "#0369a1 !important" },
+                                  "& .MuiTableSortLabel-icon": {
+                                    color: "#0369a1 !important",
+                                  },
+                                }}
+                              >
+                                {column.label}
+                              </TableSortLabel>
+
                             ) : (
                               column.label
                             )}
@@ -1524,11 +1572,29 @@ function ReceivedInvoice() {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {receivedInvoices
-                        .slice(
-                          page * rowsPerPage,
-                          page * rowsPerPage + rowsPerPage
-                        )
+                      {/* Kept inside the table so pagination stays reachable. */}
+                      {filteredAndSortedInvoices.length === 0 && (
+                        <TableRow>
+                          <TableCell
+                            colSpan={columns.length}
+                            align="center"
+                            sx={{ py: 6 }}
+                          >
+                            <p className="text-gray-600 mb-3">
+                              No invoices match your selected filter criteria.
+                            </p>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={clearFilters}
+                              sx={{ borderRadius: "8px" }}
+                            >
+                              Clear Filters
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {filteredAndSortedInvoices
                         .map((invoice) => (
                           <TableRow
                             key={invoice.id}
@@ -1545,8 +1611,10 @@ function ReceivedInvoice() {
                               <Checkbox
                                 checked={selectedInvoices.has(invoice.id)}
                                 onChange={() => handleSelectInvoice(invoice.id)}
-                                disabled={invoice.isPaid || invoice.isCancelled}
                                 color="success"
+                                inputProps={{
+                                  "aria-label": `Select invoice ${invoice.id}`,
+                                }}
                               />
                             </TableCell>
 
@@ -1609,7 +1677,7 @@ function ReceivedInvoice() {
                                     alt={invoice.paymentToken.symbol}
                                     className="w-5 h-5 mr-2"
                                     onError={(e) => {
-                                      e.target.src = "/tokenImages/generic.png";
+                                      e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                                     }}
                                   />
                                 ) : (
@@ -1650,36 +1718,10 @@ function ReceivedInvoice() {
                                   icon={<UnpaidIcon />}
                                 />
                               )}
-                              {invoice._onChainOnly && (
-                                <Tooltip
-                                  title={
-                                    invoice._hashMismatch
-                                      ? "The details delivered for this invoice do not match the hash the sender recorded on-chain, so they are not shown. Only the on-chain amount and addresses can be trusted."
-                                      : "Full details have not arrived yet. The amount and addresses shown come from the blockchain."
-                                  }
-                                >
-                                  <Chip
-                                    icon={
-                                      invoice._hashMismatch ? (
-                                        <ErrorIcon />
-                                      ) : (
-                                        <WarningIcon />
-                                      )
-                                    }
-                                    label={
-                                      invoice._hashMismatch
-                                        ? "Unverified"
-                                        : "Details pending"
-                                    }
-                                    color={
-                                      invoice._hashMismatch ? "error" : "default"
-                                    }
-                                    size="small"
-                                    variant="outlined"
-                                    sx={{ mt: 0.5 }}
-                                  />
-                                </Tooltip>
-                              )}
+                              <InvoiceVerificationChip
+                                invoice={invoice}
+                                variant="received"
+                              />
                             </TableCell>
                             <TableCell>
                               <span className="text-sm text-gray-600">
@@ -1705,44 +1747,11 @@ function ReceivedInvoice() {
                                   </IconButton>
                                 </Tooltip>
 
-                                {invoice.batchInfo &&
-                                  !invoice.isPaid &&
-                                  !invoice.isCancelled && (
-                                    <Tooltip title="Pay Entire Batch">
-                                      <IconButton
-                                        size="small"
-                                        onClick={() =>
-                                          payEntireBatch(
-                                            invoice.batchInfo.batchId
-                                          )
-                                        }
-                                        sx={{
-                                          backgroundColor: "#f3e8ff",
-                                          "&:hover": {
-                                            backgroundColor: "#e9d5ff",
-                                          },
-                                        }}
-                                      >
-                                        <LayersIcon
-                                          fontSize="small"
-                                          sx={{ color: "#9333ea" }}
-                                        />
-                                      </IconButton>
-                                    </Tooltip>
-                                  )}
-
-                                {!invoice.isPaid && !invoice.isCancelled && (
+                                {isInvoicePayable(invoice) && (
                                   <Button
                                     variant="contained"
                                     size="small"
-                                    onClick={() =>
-                                      payInvoice(
-                                        invoice.id,
-                                        invoice.amountDue,
-                                        invoice.paymentToken?.address ??
-                                        ethers.ZeroAddress
-                                      )
-                                    }
+                                    onClick={() => payInvoice(invoice)}
                                     disabled={paymentLoading[invoice.id]}
                                     sx={{
                                       bgcolor: paymentLoading[invoice.id]
@@ -1798,13 +1807,18 @@ function ReceivedInvoice() {
                   </Table>
                 </TableContainer>
                 <TablePagination
-                  rowsPerPageOptions={[10, 25, 100]}
+                  rowsPerPageOptions={INVOICE_PAGE_SIZES}
                   component="div"
-                  count={receivedInvoices.length}
+                  count={totalInvoices}
                   rowsPerPage={rowsPerPage}
                   page={page}
                   onPageChange={handleChangePage}
                   onRowsPerPageChange={handleChangeRowsPerPage}
+                  labelDisplayedRows={(info) =>
+                    formatPageLabel(info, rowsPerPage)
+                  }
+                  showFirstButton
+                  showLastButton
                   sx={{
                     borderTop: "1px solid #f1f5f9",
                     "& .MuiTablePagination-actions svg": {
@@ -1819,6 +1833,71 @@ function ReceivedInvoice() {
             )}
           </Paper>
         </div>
+
+        {/* Bulk Invoice Export Dialog */}
+        <Dialog
+          open={bulkExportOpen}
+          onClose={() => setBulkExportOpen(false)}
+          fullWidth
+          maxWidth="sm"
+        >
+          <DialogTitle>Export Selected Invoices</DialogTitle>
+          <DialogContent dividers>
+            <Typography sx={{ mb: 2 }}>
+              {selectedOnPage.length} invoice
+              {selectedOnPage.length !== 1 ? "s" : ""} selected.
+            </Typography>
+
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Export format
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap", mb: 3 }}>
+              {[
+                ["csv", "CSV", <TableChartIcon key="csv-icon" />],
+                ["json", "JSON", <DataObjectIcon key="json-icon" />],
+                ["pdf", "PDF", <PictureAsPdfIcon key="pdf-icon" />],
+              ].map(([value, label, icon]) => (
+                <Button
+                  key={value}
+                  variant={bulkExportFormat === value ? "contained" : "outlined"}
+                  startIcon={icon}
+                  onClick={() => setBulkExportFormat(value)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </Box>
+
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Export mode
+            </Typography>
+            <Box sx={{ display: "flex", gap: 1, flexWrap: "wrap" }}>
+              <Button
+                variant={bulkExportMode === "single" ? "contained" : "outlined"}
+                onClick={() => setBulkExportMode("single")}
+              >
+                Single File
+              </Button>
+              <Button
+                variant={bulkExportMode === "separate" ? "contained" : "outlined"}
+                onClick={() => setBulkExportMode("separate")}
+              >
+                Separate Files (ZIP)
+              </Button>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setBulkExportOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleBulkExportSubmit}
+              variant="contained"
+              startIcon={<DownloadIcon />}
+              disabled={selectedOnPage.length === 0}
+            >
+              Export
+            </Button>
+          </DialogActions>
+        </Dialog>
 
         {/* Invoice Detail Drawer */}
         <SwipeableDrawer
@@ -1842,7 +1921,7 @@ function ReceivedInvoice() {
                     <div className="flex items-center space-x-4">
                       <div className="bg-white p-3.5 rounded-xl border-2 border-gray-200 shadow-lg flex-shrink-0">
                         <img
-                          src="/logo.png"
+                          src={`${import.meta.env.BASE_URL}logo.png`}
                           alt="Chainvoice"
                           className="h-16 w-16 object-contain"
                           onError={(e) => {
@@ -2013,7 +2092,7 @@ function ReceivedInvoice() {
                         alt={drawerState.selectedInvoice.paymentToken.symbol}
                         className="w-6 h-6 mr-2"
                         onError={(e) => {
-                          e.target.src = "/tokenImages/generic.png";
+                          e.target.src = `${import.meta.env.BASE_URL}tokenImages/generic.png`;
                         }}
                       />
                     ) : (
@@ -2049,8 +2128,7 @@ function ReceivedInvoice() {
                     <div className="mt-2 text-xs text-gray-600">
                       <p>
                         Decimals:{" "}
-                        {drawerState.selectedInvoice.paymentToken.decimals ||
-                          18}
+                        {drawerState.selectedInvoice.paymentToken.decimals}
                       </p>
                       <p>Chain: Sepolia Testnet</p>
                     </div>
