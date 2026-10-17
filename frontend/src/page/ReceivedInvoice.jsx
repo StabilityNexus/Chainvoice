@@ -475,7 +475,7 @@ function ReceivedInvoice() {
         throw new Error(t("payBlocked"));
       }
 
-      const fee = await contract.fee();
+      const fee = await contract.devFee();
       const {
         address: tokenAddress,
         symbol: tokenSymbol,
@@ -638,7 +638,7 @@ function ReceivedInvoice() {
           );
         }
 
-        const feePerInvoice = await contract.fee();
+        const feePerInvoice = await contract.devFee();
         const totalFee = feePerInvoice * BigInt(invoiceIds.length);
         const isNativeToken = tokenAddress === ethers.ZeroAddress;
 
@@ -858,7 +858,7 @@ function ReceivedInvoice() {
         );
         const suggestions = findBatchSuggestions(decryptedInvoices);
         setBatchSuggestions(suggestions);
-        const fee = await contract.fee();
+        const fee = await contract.devFee();
         if (cancelled) return;
         setFee(fee);
       } catch (error) {
