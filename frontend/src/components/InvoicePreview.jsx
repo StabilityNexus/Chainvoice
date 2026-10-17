@@ -34,12 +34,14 @@ function getNetworkName(chainId) {
   return CHAIN_ID_TO_NAME[id] || "Unknown network";
 }
 
+
 import { ethers } from "ethers";
 import { Chip, Typography } from "@mui/material";
 import PaidIcon from "@mui/icons-material/CheckCircle";
 import UnpaidIcon from "@mui/icons-material/Pending";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
+import { getWagmiChainInfo } from "../utils/wagmiChainHelpers";
 import ImageWithFallback from "./ImageWithFallback";
 
 const InvoicePreview = ({
@@ -58,7 +60,20 @@ const InvoicePreview = ({
   };
 
   const networkFee = formatFee(fee);
+  const chainId =
+    invoice.paymentToken?.chainId ?? invoice.chainId;
 
+  const chainInfo = getWagmiChainInfo(chainId);
+  const nativeSymbol = chainInfo?.nativeCurrency?.symbol || "ETH";
+
+  const tokenSymbol = invoice.paymentToken?.address
+    ? invoice.paymentToken?.symbol || "Unknown Token"
+    : nativeSymbol;
+
+  const tokenAddress = invoice.paymentToken?.address;
+
+  const isNative =
+    !tokenAddress || tokenAddress === ethers.ZeroAddress;
   return (
     <div className="flex flex-col h-full">
       <div
@@ -170,8 +185,7 @@ const InvoicePreview = ({
                   className="text-red-700 mt-0.5 text-xs"
                 >
                   {cancelledMessage ||
-                    `This invoice was cancelled by ${
-                      invoice.user?.fname || "The sender"
+                    `This invoice was cancelled by ${invoice.user?.fname || "The sender"
                     } ${invoice.user?.lname || ""}. You no longer need to make payment for this invoice.`}
                 </Typography>
               </div>
@@ -253,9 +267,9 @@ const InvoicePreview = ({
             )}
             <div className="flex-1">
               <p className="font-semibold text-sm sm:text-base text-gray-900">
-                {invoice.paymentToken?.name || "Ether"}
+                {invoice.paymentToken?.name || tokenSymbol}
                 <span className="text-gray-600 ml-1.5 font-normal text-xs sm:text-sm">
-                  ({invoice.paymentToken?.symbol || "ETH"})
+                  ({tokenSymbol})
                 </span>
               </p>
               <p className="text-xs text-gray-500 font-mono mt-0.5">
@@ -367,9 +381,8 @@ const InvoicePreview = ({
                   return (
                     <tr
                       key={index}
-                      className={`hover:bg-gray-50 transition-colors ${
-                        index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                      }`}
+                      className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                        }`}
                     >
                       <td className="px-4 py-3 text-xs sm:text-sm font-medium text-gray-900">
                         {item.description}
@@ -387,7 +400,7 @@ const InvoicePreview = ({
                         {item.tax || "0%"}
                       </td>
                       <td className="px-4 py-3 text-xs sm:text-sm font-semibold text-right text-gray-900 whitespace-nowrap">
-                        {item.amount} {invoice.paymentToken?.symbol}
+                        {item.amount} {tokenSymbol}
                       </td>
                     </tr>
                   );
@@ -405,7 +418,7 @@ const InvoicePreview = ({
                 Subtotal:
               </span>
               <span className="text-xs sm:text-sm font-semibold text-gray-900">
-                {invoice.amountDue} {invoice.paymentToken?.symbol}
+                {invoice.amountDue} {tokenSymbol}
               </span>
             </div>
             <div className="flex justify-between items-center py-1">
@@ -413,7 +426,7 @@ const InvoicePreview = ({
                 Network Fee:
               </span>
               <span className="text-xs sm:text-sm font-semibold text-gray-900">
-                {networkFee} ETH
+                {networkFee} {nativeSymbol}
               </span>
             </div>
             <div className="border-t-2 border-gray-300 pt-2 mt-1">
@@ -422,21 +435,13 @@ const InvoicePreview = ({
                   Total Amount:
                 </span>
                 <span className="text-base sm:text-lg font-bold text-gray-900">
-                  {invoice.paymentToken?.symbol === "ETH"
-                    ? (() => {
-                        // Normalize and validate numeric inputs
-                        let amountDueNum = 0;
-                        let networkFeeNum = 0;
-                        if (invoice.amountDue !== undefined && invoice.amountDue !== null && !isNaN(Number(invoice.amountDue))) {
-                          amountDueNum = Number(invoice.amountDue);
-                        }
-                        if (networkFee !== undefined && networkFee !== null && !isNaN(Number(networkFee))) {
-                          networkFeeNum = Number(networkFee);
-                        }
-                        const total = amountDueNum + networkFeeNum;
-                        return `${total.toFixed(6)} ETH`;
-                      })()
-                    : `${invoice.amountDue} ${invoice.paymentToken?.symbol} + ${networkFee} ETH`}
+                  {isNative
+                    ? `${ethers.formatUnits(
+                      ethers.parseUnits(String(invoice.amountDue || "0"), 18) +
+                      ethers.parseUnits(String(networkFee || "0"), 18),
+                      18
+                    )} ${nativeSymbol}`
+                    : `${invoice.amountDue} ${tokenSymbol} + ${networkFee} ${nativeSymbol}`}
                 </span>
               </div>
             </div>
