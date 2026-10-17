@@ -288,7 +288,7 @@ function SentInvoice() {
 
         if (cancelled) return;
         setSentInvoices(decryptedInvoices);
-        const fee = await contract.fee();
+        const fee = await contract.devFee();
         if (cancelled) return;
         setFee(fee);
       } catch (error) {
