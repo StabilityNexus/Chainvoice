@@ -1,3 +1,4 @@
+import InvoiceBackupSettings from "../components/InvoiceBackupSettings";
 import ProductCatalogImport from "../components/ProductCatalogImport";
 import UserProfileSettings from "../components/UserProfileSettings";
 import { PAGE_CONTAINER, PAGE_HEADER } from "@/utils/layout";
@@ -10,6 +11,7 @@ import { cn } from "@/lib/utils";
 const SETTINGS_SECTIONS = [
   { id: "your-information", Content: UserProfileSettings },
   { id: "product-catalog", Content: ProductCatalogImport },
+  { id: "invoice-backup", Content: InvoiceBackupSettings },
 ];
 
 function Settings() {
