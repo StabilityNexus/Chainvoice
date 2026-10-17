@@ -48,8 +48,8 @@ const loadLogoImage = async () => {
       }
     }
   } catch {
-  // Continue to the next logo-loading fallback method.
-}
+    // Continue to the next logo-loading fallback method.
+  }
 
   try {
     const response = await fetch(`${import.meta.env.BASE_URL}logo.png`, {
@@ -104,8 +104,8 @@ const loadLogoImage = async () => {
       }
     }
   } catch {
-  // Continue to the next logo-loading fallback method.
-}
+    // Continue to the next logo-loading fallback method.
+  }
 
   try {
     const img = new window.Image();
@@ -148,8 +148,8 @@ const loadLogoImage = async () => {
     
     return logoDataUrl;
   } catch {
-  // Continue to the next logo-loading fallback method.
-}
+    // Logo could not be loaded using the available methods.
+  }
   
   return null;
 };
@@ -208,9 +208,9 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
         console.error('Error adding logo image to PDF:', imgError);
       }
     }
-  } catch {
-  // Continue to the next logo-loading fallback method.
-}
+  } catch (e) {
+    console.error('Logo loading error:', e);
+  }
 
   if (!logoAdded) {
     pdf.setFillColor(...greenColor);

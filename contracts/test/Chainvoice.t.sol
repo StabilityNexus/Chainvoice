@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Unlicense */
 pragma solidity ^0.8.13;
 
+import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
 import "../src/Chainvoice.sol";
@@ -515,7 +516,7 @@ contract ChainvoiceTest is Test {
         bytes memory pubKey = new bytes(65);
         pubKey[0] = 0x04;
         for (uint256 i = 1; i < 65; i++) {
-            pubKey[i] = bytes1(uint8(i));
+            pubKey[i] = bytes1(SafeCast.toUint8(i));
         }
 
         vm.prank(alice);
@@ -531,7 +532,7 @@ contract ChainvoiceTest is Test {
         bytes memory pubKey = new bytes(65);
         pubKey[0] = 0x04;
         for (uint256 i = 1; i < 65; i++) {
-            pubKey[i] = bytes1(uint8(i + 100));
+            pubKey[i] = bytes1(SafeCast.toUint8(i + 100));
         }
 
         vm.expectEmit(true, false, false, true);
@@ -544,11 +545,11 @@ contract ChainvoiceTest is Test {
     function testUpdatePublicKey() public {
         bytes memory key1 = new bytes(65);
         key1[0] = 0x04;
-        for (uint256 i = 1; i < 65; i++) key1[i] = bytes1(uint8(i));
+        for (uint256 i = 1; i < 65; i++) key1[i] = bytes1(SafeCast.toUint8(i));
 
         bytes memory key2 = new bytes(65);
         key2[0] = 0x04;
-        for (uint256 i = 1; i < 65; i++) key2[i] = bytes1(uint8(i + 50));
+        for (uint256 i = 1; i < 65; i++) key2[i] = bytes1(SafeCast.toUint8(i + 50));
 
         vm.startPrank(alice);
         chainvoice.registerPublicKey(key1);
@@ -564,7 +565,7 @@ contract ChainvoiceTest is Test {
         assertEq(keccak256(stored2), keccak256(key2));
     }
 
-    function testGetPublicKey_Unregistered() public {
+    function testGetPublicKey_Unregistered() public view {
         bytes memory stored = chainvoice.getPublicKey(address(0xDEAD));
         assertEq(stored.length, 0);
     }
@@ -572,11 +573,11 @@ contract ChainvoiceTest is Test {
     function testMultipleUsersRegisterKeys() public {
         bytes memory aliceKey = new bytes(65);
         aliceKey[0] = 0x04;
-        for (uint256 i = 1; i < 65; i++) aliceKey[i] = bytes1(uint8(i));
+        for (uint256 i = 1; i < 65; i++) aliceKey[i] = bytes1(SafeCast.toUint8(i));
 
         bytes memory bobKey = new bytes(65);
         bobKey[0] = 0x04;
-        for (uint256 i = 1; i < 65; i++) bobKey[i] = bytes1(uint8(i + 50));
+        for (uint256 i = 1; i < 65; i++) bobKey[i] = bytes1(SafeCast.toUint8(i + 50));
 
         vm.prank(alice);
         chainvoice.registerPublicKey(aliceKey);
@@ -605,7 +606,7 @@ contract ChainvoiceTest is Test {
     function testRegisterPublicKey_RevertIfInvalidPrefix() public {
         bytes memory badPrefixKey = new bytes(65);
         badPrefixKey[0] = 0x03; // wrong prefix, should be 0x04
-        for (uint256 i = 1; i < 65; i++) badPrefixKey[i] = bytes1(uint8(i));
+        for (uint256 i = 1; i < 65; i++) badPrefixKey[i] = bytes1(SafeCast.toUint8(i));
 
         vm.prank(alice);
         vm.expectRevert(Chainvoice.InvalidPublicKey.selector);
