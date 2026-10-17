@@ -66,8 +66,9 @@ const InvoicePreview = ({
   const chainInfo = getWagmiChainInfo(chainId);
   const nativeSymbol = chainInfo?.nativeCurrency?.symbol || "ETH";
 
-  const tokenSymbol =
-    invoice.paymentToken?.symbol || nativeSymbol;
+  const tokenSymbol = invoice.paymentToken?.address
+    ? invoice.paymentToken?.symbol || "Unknown Token"
+    : nativeSymbol;
 
   const tokenAddress = invoice.paymentToken?.address;
 
@@ -266,9 +267,9 @@ const InvoicePreview = ({
             )}
             <div className="flex-1">
               <p className="font-semibold text-sm sm:text-base text-gray-900">
-                (tokenSymbol)
+                {invoice.paymentToken?.name || tokenSymbol}
                 <span className="text-gray-600 ml-1.5 font-normal text-xs sm:text-sm">
-                  ({invoice.paymentToken?.symbol || "ETH"})
+                  ({tokenSymbol})
                 </span>
               </p>
               <p className="text-xs text-gray-500 font-mono mt-0.5">
@@ -435,10 +436,11 @@ const InvoicePreview = ({
                 </span>
                 <span className="text-base sm:text-lg font-bold text-gray-900">
                   {isNative
-                    ? `${(
-                      (Number(invoice.amountDue) || 0) +
-                      (Number(networkFee) || 0)
-                    ).toFixed(6)} ${nativeSymbol}`
+                    ? `${ethers.formatUnits(
+                      ethers.parseUnits(String(invoice.amountDue || "0"), 18) +
+                      ethers.parseUnits(String(networkFee || "0"), 18),
+                      18
+                    )} ${nativeSymbol}`
                     : `${invoice.amountDue} ${tokenSymbol} + ${networkFee} ${nativeSymbol}`}
                 </span>
               </div>

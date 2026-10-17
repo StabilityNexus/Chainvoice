@@ -14,6 +14,7 @@ import { lazy, Suspense } from "react";
 import Landing from "./page/Landing";
 import Applayout from "./page/Applayout";
 import { citreaTestnet } from "./utils/CitreaTestnet";
+import { defineChain } from "viem";
 
 const Home = lazy(() => import("./page/Home"));
 const Feature = lazy(() => import("./page/Feature"));
@@ -33,8 +34,59 @@ const mainnet = {
     },
   },
 };
+const wemix = defineChain({
+  id: 1111,
+  name: "WEMIX Mainnet",
+  nativeCurrency: {
+    name: "WEMIX",
+    symbol: "WEMIX",
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://api.wemix.com/"],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "WEMIX Explorer",
+      url: "https://explorer.wemix.com/",
+    },
+  },
+});
 
-const AllChains = [mainnet, classic, base, bsc, polygon, sepolia, citreaTestnet];
+const wemixTestnet = defineChain({
+  id: 1112,
+  name: "WEMIX Testnet",
+  nativeCurrency: {
+    name: "Testnet WEMIX",
+    symbol: "tWEMIX",
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: {
+      http: ["https://api.test.wemix.com/"],
+    },
+  },
+  blockExplorers: {
+    default: {
+      name: "WEMIX Testnet Explorer",
+      url: "https://explorer.test.wemix.com/",
+    },
+  },
+  testnet: true,
+});
+const AllChains = [
+  mainnet,
+  classic,
+  base,
+  bsc,
+  polygon,
+  sepolia,
+  citreaTestnet,
+  wemix,
+  wemixTestnet,
+];
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const config = getDefaultConfig({
