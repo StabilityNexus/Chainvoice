@@ -5,6 +5,7 @@ import {
   downloadJSON,
   readFileAsJSON,
 } from "@aossie-org/idb-backup";
+
 import {
   DB_NAME,
   STORE_NAME,
@@ -12,6 +13,33 @@ import {
 } from "./invoiceDB.js";
 
 const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+const PLAIN_DECIMAL_AMOUNT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
+
+const OPTIONAL_TEXT_FIELDS = [
+  "name",
+  "fname",
+  "lname",
+  "firstName",
+  "lastName",
+  "email",
+  "addressLine",
+  "addressLine1",
+  "addressLine2",
+  "addressLine3",
+  "address1",
+  "address2",
+  "street",
+  "streetAddress",
+  "country",
+  "city",
+  "postalcode",
+  "postalCode",
+  "postal_code",
+  "zip",
+  "zipCode",
+  "state",
+  "province",
+];
 
 function isObject(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -33,8 +61,6 @@ function isSerializedInteger(value) {
     /^(0|[1-9]\d*)$/.test(value.value)
   );
 }
-
-const PLAIN_DECIMAL_AMOUNT_PATTERN = /^(?:0|[1-9]\d*)(?:\.\d+)?$/;
 
 function normalizeSerializedInteger(value) {
   if (
@@ -63,6 +89,40 @@ function normalizeSerializedInteger(value) {
 
 function isAddress(value) {
   return typeof value === "string" && ADDRESS_PATTERN.test(value);
+}
+
+function validateOptionalTextFields(details, owner, index) {
+  for (const field of OPTIONAL_TEXT_FIELDS) {
+    if (
+      details[field] !== undefined &&
+      typeof details[field] !== "string"
+    ) {
+      throw new Error(
+        `Invoice record ${index + 1} has invalid ${owner}.${field}; expected a string.`
+      );
+    }
+  }
+}
+
+function validateInvoiceItems(items, index) {
+  items.forEach((item, itemIndex) => {
+    if (!isObject(item)) {
+      throw new Error(
+        `Invoice record ${index + 1} has an invalid item ${itemIndex + 1}.`
+      );
+    }
+
+    for (const [field, value] of Object.entries(item)) {
+      if (
+        typeof value !== "string" &&
+        (typeof value !== "number" || !Number.isFinite(value))
+      ) {
+        throw new Error(
+          `Invoice record ${index + 1}, item ${itemIndex + 1}, has an invalid "${field}" field; expected a string or finite number.`
+        );
+      }
+    }
+  });
 }
 
 export function validateInvoiceRecord(record, index = 0) {
@@ -138,11 +198,16 @@ export function validateInvoiceRecord(record, index = 0) {
     );
   }
 
+  validateOptionalTextFields(payload.user, "user", index);
+  validateOptionalTextFields(payload.client, "client", index);
+
   if (!Array.isArray(payload.items)) {
     throw new Error(
       `Invoice record ${index + 1} has an invalid invoice items list.`
     );
   }
+
+  validateInvoiceItems(payload.items, index);
 
   if (record.isPaid !== undefined && typeof record.isPaid !== "boolean") {
     throw new Error(
@@ -242,9 +307,6 @@ export function validateBackup(backupData) {
  * Export all locally cached invoices as a downloadable JSON backup.
  */
 export async function exportInvoiceBackup() {
-  // Force Chainvoice to initialize its versioned IndexedDB and indexes before
-  // idb-backup opens the database. Without this, exporting on a fresh browser
-  // can create/open an empty version-1 database.
   await getAllInvoices();
 
   const backup = await exportDB({
@@ -255,6 +317,7 @@ export async function exportInvoiceBackup() {
   validateBackup(backup);
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+
   downloadJSON(backup, `chainvoice-backup-${timestamp}.json`);
 
   return backup;
@@ -262,7 +325,6 @@ export async function exportInvoiceBackup() {
 
 /**
  * Validate and merge invoice data from a Chainvoice backup.
- *
  * @param {File} file
  */
 export async function importInvoiceBackup(file) {
@@ -279,9 +341,9 @@ export async function importInvoiceBackup(file) {
   }
 
   const backupData = await readFileAsJSON(file);
+
   validateBackup(backupData);
 
-  // Ensure Chainvoice's current DB schema and indexes exist before merging.
   await getAllInvoices();
 
   await importDB({
@@ -290,7 +352,6 @@ export async function importInvoiceBackup(file) {
     strategy: "merge",
   });
 
-  // Allows any mounted invoice views to refresh immediately.
   window.dispatchEvent(new Event("chainvoice:invoice-storage-updated"));
 
   return backupData;
