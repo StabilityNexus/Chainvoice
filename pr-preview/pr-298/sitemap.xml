@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The app uses hash-based routing, so every page shares the root URL. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://chainvoice.stability.nexus/</loc>
+  </url>
+</urlset>
