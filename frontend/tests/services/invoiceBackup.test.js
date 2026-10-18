@@ -85,7 +85,9 @@ describe("validateInvoiceRecord", () => {
             data: { ...makeRecord().data, amountDue: "not-a-number" },
         });
 
-        expect(() => validateInvoiceRecord(record)).toThrow(/invalid invoice payload amount/i);
+        expect(() =>
+            validateInvoiceRecord(record)
+        ).toThrow(/invalid invoice payload amount/i);
     });
 
     test("rejects an invalid sender address", () => {
@@ -108,7 +110,9 @@ describe("validateInvoiceRecord", () => {
             },
         });
 
-        expect(() => validateInvoiceRecord(record)).toThrow(/invalid payment token/i);
+        expect(() =>
+            validateInvoiceRecord(record)
+        ).toThrow(/invalid payment token/i);
     });
 
     test("rejects an invalid sender payload address", () => {
@@ -119,7 +123,9 @@ describe("validateInvoiceRecord", () => {
             },
         });
 
-        expect(() => validateInvoiceRecord(record)).toThrow(/invalid sender information/i);
+        expect(() =>
+            validateInvoiceRecord(record)
+        ).toThrow(/invalid sender information/i);
     });
 
     test("rejects an invalid client payload address", () => {
@@ -130,7 +136,52 @@ describe("validateInvoiceRecord", () => {
             },
         });
 
-        expect(() => validateInvoiceRecord(record)).toThrow(/invalid client information/i);
+        expect(() =>
+            validateInvoiceRecord(record)
+        ).toThrow(/invalid client information/i);
+    });
+
+    test("rejects non-string optional user fields", () => {
+        const record = makeRecord({
+            data: {
+                ...makeRecord().data,
+                user: { address: ADDRESS_A, fname: 123 },
+            },
+        });
+
+        expect(() => validateInvoiceRecord(record)).toThrow(/fname/i);
+    });
+
+    test("rejects non-string optional client fields", () => {
+        const record = makeRecord({
+            data: {
+                ...makeRecord().data,
+                client: { address: ADDRESS_B, email: 123 },
+            },
+        });
+
+        expect(() => validateInvoiceRecord(record)).toThrow(/email/i);
+    });
+
+    test("rejects invoice items that are not objects", () => {
+        const record = makeRecord({
+            data: { ...makeRecord().data, items: ["invalid item"] },
+        });
+
+        expect(() =>
+            validateInvoiceRecord(record)
+        ).toThrow(/invalid item/i);
+    });
+
+    test("rejects invoice items containing invalid field values", () => {
+        const record = makeRecord({
+            data: {
+                ...makeRecord().data,
+                items: [{ name: { invalid: true }, qty: 1 }],
+            },
+        });
+
+        expect(() => validateInvoiceRecord(record)).toThrow(/name/i);
     });
 });
 
