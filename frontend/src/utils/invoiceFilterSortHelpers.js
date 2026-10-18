@@ -1,4 +1,31 @@
 /**
+ * Whether a due date is behind us, comparing calendar days in local time.
+ *
+ * A due date names a day, not a moment: an invoice due on the 20th is still
+ * on time until that day ends, and becomes overdue at local midnight that
+ * starts the 21st. Comparing the stored instant (local midnight at the *start*
+ * of the due day) with the current time made it overdue the moment its due day
+ * began.
+ *
+ * @param {string|number|Date|null|undefined} dueDate
+ * @param {number} [now] - epoch milliseconds, injectable for tests
+ * @returns {boolean} false for a missing or invalid date
+ */
+export function isPastDueDate(dueDate, now = Date.now()) {
+  if (!dueDate) return false;
+  const due = new Date(dueDate);
+  if (isNaN(due.getTime())) return false;
+  // Local midnight starting the day after the due day. The Date constructor
+  // rolls the day over and follows daylight-saving changes.
+  const firstOverdueMoment = new Date(
+    due.getFullYear(),
+    due.getMonth(),
+    due.getDate() + 1
+  ).getTime();
+  return now >= firstOverdueMoment;
+}
+
+/**
  * Pure helper function for filtering and sorting invoice arrays.
  */
 export function filterAndSortInvoices(
@@ -25,9 +52,7 @@ export function filterAndSortInvoices(
       if (inv.isPaid || inv.isCancelled) return false;
     } else if (status === "overdue") {
       if (inv.isPaid || inv.isCancelled) return false;
-      if (!inv.dueDate) return false;
-      const dueTs = new Date(inv.dueDate).getTime();
-      if (isNaN(dueTs) || dueTs >= Date.now()) return false;
+      if (!isPastDueDate(inv.dueDate)) return false;
     } else if (status === "cancelled") {
       if (!inv.isCancelled) return false;
     }
@@ -142,9 +167,8 @@ export function filterAndSortInvoices(
         const getStatusRank = (inv) => {
           if (inv.isCancelled) return 4;
           if (inv.isPaid) return 3;
-          if (inv.dueDate && !inv.isPaid && !inv.isCancelled) {
-            const dueTs = new Date(inv.dueDate).getTime();
-            if (!isNaN(dueTs) && dueTs < Date.now()) return 2;
+          if (!inv.isPaid && !inv.isCancelled && isPastDueDate(inv.dueDate)) {
+            return 2;
           }
           return 1;
         };
