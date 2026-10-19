@@ -18,6 +18,7 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
+import { getPaymentErrorMessage } from "@/utils/paymentErrors";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
 import { getReceivedInvoices as getLocalReceivedInvoices, getInvoiceById, storeInvoice, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
 import { verifyInvoiceHash } from "@/services/relay/invoiceHashUtils.js";
@@ -215,65 +216,11 @@ function ReceivedInvoice() {
   };
 
   // UNIFORM ERROR HANDLER
+  // The contract's custom errors reach the page as a CALL_EXCEPTION with no
+  // reason, so the message comes from decoding the revert data (see paymentErrors).
   const getDetailedErrorMessage = (error) => {
-    if (error.code === "CALL_EXCEPTION") {
-      if (error.reason === "missing revert data" || !error.reason) {
-        return "Transaction failed. This may be due to insufficient balance, contract issues, or network problems. Please check your balance and try again.";
-      }
-      return `Transaction failed: ${error.reason}`;
-    }
-
-    if (error.code === "ACTION_REJECTED" || error.code === 4001) {
-      return "Transaction was cancelled by user";
-    }
-
-    if (
-      error.message?.includes("insufficient balance") ||
-      error.message?.includes("insufficient funds")
-    ) {
-      return "Insufficient balance to complete this transaction";
-    }
-
-    if (
-      error.message?.includes("User rejected") ||
-      error.message?.includes("User denied")
-    ) {
-      return "Transaction was rejected in wallet";
-    }
-
-    if (error.message?.includes("network") || error.code === "NETWORK_ERROR") {
-      return "Network error. Please check your connection and try again";
-    }
-
-    if (error.message?.includes("gas")) {
-      return "Transaction failed due to gas estimation error. Please try again";
-    }
-
-    if (
-      error.message?.includes("cancelled") ||
-      error.message?.includes("cancel")
-    ) {
-      return "Cannot pay a cancelled invoice";
-    }
-
-    if (error.reason && error.reason !== "missing revert data") {
-      return `Transaction failed: ${error.reason}`;
-    }
-
-    if (error.message) {
-      const cleanMessage = error.message
-        .replace(
-          /\(action="[^"]*", data=[^,]*, reason=[^,]*, transaction=\{[^}]*\}, invocation=[^,]*, revert=[^,]*, code=[^,]*, version=[^)]*\)/g,
-          ""
-        )
-        .replace(/missing revert data/g, "transaction execution failed")
-        .trim();
-      return (
-        cleanMessage || "Payment failed. Please try again or contact support"
-      );
-    }
-
-    return "Payment failed. Please try again or contact support";
+    const { key, params } = getPaymentErrorMessage(error);
+    return tReceivedInvoices(`errors.${key}`, params);
   };
 
   // Helper functions
