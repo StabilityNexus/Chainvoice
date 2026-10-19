@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { FiShield, FiLock, FiZap } from "react-icons/fi";
 import { SiEthereum } from "react-icons/si";
-import TokenCarousel from "@/components/TokenCrousel";
+import TokenCarousel from "@/components/TokenCarousel";
 import Footer from "@/components/Footer";
 
 function Landing() {

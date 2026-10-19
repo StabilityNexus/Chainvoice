@@ -105,6 +105,7 @@ function ReceivedInvoice() {
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId, chain } = useAccount();
   const { t } = useTranslation("invoiceVerification");
+  const { t: tReceivedInvoices } = useTranslation("receivedInvoices");
 
   const [anchorEl, setAnchorEl] = useState(null);
   const openExportMenu = Boolean(anchorEl);
@@ -118,6 +119,24 @@ function ReceivedInvoice() {
   const [paymentLoading, setPaymentLoading] = useState({});
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleStorageUpdate = () => {
+      setRefreshTrigger((previous) => previous + 1);
+    };
+
+    window.addEventListener(
+      "chainvoice:invoice-storage-updated",
+      handleStorageUpdate
+    );
+
+    return () => {
+      window.removeEventListener(
+        "chainvoice:invoice-storage-updated",
+        handleStorageUpdate
+      );
+    };
+  }, []);
   const {
     keys,
     isRegistered,
@@ -433,26 +452,6 @@ function ReceivedInvoice() {
     const invoiceIds = suggestion.invoices.map((inv) => inv.id);
     setSelectedInvoices(new Set(invoiceIds));
     toast.success(`Selected ${invoiceIds.length} invoices for batch payment`);
-  };
-
-  const payEntireBatch = async (batchId) => {
-    const batchInvoices = receivedInvoices.filter(
-      (inv) => inv.batchInfo?.batchId === batchId && isInvoicePayable(inv)
-    );
-
-    if (batchInvoices.length === 0) {
-      toast.error("No unpaid invoices found in this batch");
-      return;
-    }
-
-    setSelectedInvoices(new Set(batchInvoices.map((inv) => inv.id)));
-    toast(
-      `Selected ${batchInvoices.length} invoices from batch #${batchId}`
-    );
-
-    setTimeout(() => {
-      handleBatchPayment();
-    }, 1000);
   };
 
   // UNIFORM INDIVIDUAL PAYMENT
@@ -1255,7 +1254,7 @@ function ReceivedInvoice() {
                 }}
               >
                 <LightbulbIcon sx={{ mr: 1, color: "#ff9800" }} />
-                ðŸ’¡ Smart Batch Suggestions
+                {tReceivedInvoices("smartBatchSuggestions")}
               </Typography>
               {batchSuggestions.map((suggestion) => (
                 <Box
@@ -1765,31 +1764,6 @@ function ReceivedInvoice() {
                                     />
                                   </IconButton>
                                 </Tooltip>
-
-                                {invoice.batchInfo &&
-                                  isInvoicePayable(invoice) && (
-                                    <Tooltip title="Pay Entire Batch">
-                                      <IconButton
-                                        size="small"
-                                        onClick={() =>
-                                          payEntireBatch(
-                                            invoice.batchInfo.batchId
-                                          )
-                                        }
-                                        sx={{
-                                          backgroundColor: "#f3e8ff",
-                                          "&:hover": {
-                                            backgroundColor: "#e9d5ff",
-                                          },
-                                        }}
-                                      >
-                                        <LayersIcon
-                                          fontSize="small"
-                                          sx={{ color: "#9333ea" }}
-                                        />
-                                      </IconButton>
-                                    </Tooltip>
-                                  )}
 
                                 {isInvoicePayable(invoice) && (
                                   <Button

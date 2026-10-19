@@ -107,7 +107,7 @@ function Navbar() {
       ],
     },
     {
-      name: "Treasure",
+      name: "Treasury",
       icon: <AccountBalanceWalletIcon className="text-current" />,
       path: "/treasure",
     },
