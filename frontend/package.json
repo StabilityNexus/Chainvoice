@@ -18,7 +18,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
     "@mui/icons-material": "^6.4.6",
-    "@mui/material": "^6.4.6",
+    "@mui/material": "^9.5.0",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.1",
     "@radix-ui/react-popover": "^1.1.5",
