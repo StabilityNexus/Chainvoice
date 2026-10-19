@@ -263,6 +263,11 @@ export function useRelayKeys() {
   useEffect(() => {
     if (address && walletClient && chainId) {
       checkRegistration().catch(() => {});
+    } else {
+      // No read can start, so drop any pending one and stop "checking";
+      // otherwise a read left stale by a disconnect would keep it set.
+      registryRequestRef.current += 1;
+      setIsCheckingRegistration(false);
     }
   }, [address, walletClient, chainId, checkRegistration]);
 
