@@ -30,14 +30,14 @@ const Treasure = () => {
     withdraw: false,
     feeUpdate: false,
   });
-  const [feeController, setFeeController] = useState("");
-  const [feeRecipient, setFeeRecipient] = useState("");
-  const [newFeeRecipient, setNewFeeRecipient] = useState("");
-  // Fee settings are controlled by the contract's fee controller, not an owner.
-  const isController =
+  const [dev, setDev] = useState("");
+  const [devFeeReceiver, setDevFeeReceiver] = useState("");
+  const [newDevFeeReceiver, setNewDevFeeReceiver] = useState("");
+  // Fee settings are controlled by the contract's dev address, not an owner.
+  const isDev =
     !!account &&
-    !!feeController &&
-    account.toLowerCase() === feeController.toLowerCase();
+    !!dev &&
+    account.toLowerCase() === dev.toLowerCase();
   const [newFee, setNewFee] = useState("");
 
   useEffect(() => {
@@ -59,15 +59,15 @@ const Treasure = () => {
         }
 
         const contract = new Contract(contractAddress, ChainvoiceABI, signer);
-        const [amt, recipient, controller, feeAmt] = await Promise.all([
-          contract.accumulatedFees(),
-          contract.feeRecipient(),
-          contract.feeController(),
-          contract.fee(),
+        const [amt, receiver, devAddress, feeAmt] = await Promise.all([
+          contract.accumulatedDevFees(),
+          contract.devFeeReceiver(),
+          contract.dev(),
+          contract.devFee(),
         ]);
         setTreasureAmount(ethers.formatUnits(amt));
-        setFeeRecipient(recipient);
-        setFeeController(controller);
+        setDevFeeReceiver(receiver);
+        setDev(devAddress);
         setFee(ethers.formatUnits(feeAmt));
       } catch (error) {
         console.error("Error fetching treasure amount:", error);
@@ -79,12 +79,12 @@ const Treasure = () => {
     fetchTreasureAmount();
   }, [walletClient, chainId]);
 
-  const handleSetFeeRecipient = async () => {
-    if (!isController) {
-      toast.error("Only the fee controller can update the treasury address");
+  const handleSetDevFeeReceiver = async () => {
+    if (!isDev) {
+      toast.error("Only the dev address can update the fee receiver");
       return;
     }
-    if (!ethers.isAddress(newFeeRecipient)) {
+    if (!ethers.isAddress(newDevFeeReceiver)) {
       toast.error("Please enter a valid Ethereum address");
       return;
     }
@@ -105,14 +105,14 @@ const Treasure = () => {
       }
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
-      const tx = await contract.setFeeRecipient(newFeeRecipient);
+      const tx = await contract.setDevFeeReceiver(newDevFeeReceiver);
       await tx.wait();
-      setFeeRecipient(newFeeRecipient);
-      setNewFeeRecipient("");
-      toast.success("Treasury address updated successfully!");
+      setDevFeeReceiver(newDevFeeReceiver);
+      setNewDevFeeReceiver("");
+      toast.success("Fee receiver updated successfully!");
     } catch (error) {
-      console.error("Error setting treasury address:", error);
-      toast.error(error.message || "Failed to update treasury address");
+      console.error("Error setting fee receiver:", error);
+      toast.error(error.message || "Failed to update fee receiver");
     } finally {
       setLoading((prev) => ({ ...prev, setAddress: false }));
     }
@@ -138,7 +138,7 @@ const Treasure = () => {
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
       const tx = await contract.withdrawFees();
       await tx.wait();
-      const newAmt = await contract.accumulatedFees();
+      const newAmt = await contract.accumulatedDevFees();
       setTreasureAmount(ethers.formatUnits(newAmt));
       toast.success("Funds withdrawn successfully!");
     } catch (error) {
@@ -150,8 +150,8 @@ const Treasure = () => {
   };
 
   const handleUpdateFee = async () => {
-    if (!isController) {
-      toast.error("Only the fee controller can update the fee");
+    if (!isDev) {
+      toast.error("Only the dev address can update the fee");
       return;
     }
     if (!newFee || isNaN(newFee)) {
@@ -175,11 +175,11 @@ const Treasure = () => {
       }
 
       const contract = new Contract(contractAddress, ChainvoiceABI, signer);
-      const tx = await contract.setFeeAmount(
+      const tx = await contract.setDevFee(
         ethers.parseUnits(newFee, "ether")
       );
       await tx.wait();
-      const updatedFee = await contract.fee();
+      const updatedFee = await contract.devFee();
       setFee(ethers.formatUnits(updatedFee));
       setNewFee("");
       toast.success("Fee updated successfully!");
@@ -250,9 +250,9 @@ const Treasure = () => {
                   <div className="flex items-center p-4 bg-gray-800/40 rounded-xl border border-gray-700/50 backdrop-blur-sm">
                     <Key className="h-5 w-5 text-gray-300 mr-3" />
                     <span className="text-gray-300">
-                      {isController
-                        ? "Connected as fee controller"
-                        : "Fee Controller Access Only"}
+                      {isDev
+                        ? "Connected as dev"
+                        : "Dev Access Only"}
                     </span>
                   </div>
                 </div>
@@ -278,20 +278,20 @@ const Treasure = () => {
             Manage platform funds and configuration settings
           </p>
 
-          {/* Treasury Address Section */}
+          {/* Fee Receiver Section */}
           <div className="mb-8">
             <div className="flex items-center mb-3">
               <Key className="h-5 w-5 text-gray-300 mr-2" />
               <h3 className="text-lg font-medium text-white">
-                Treasury Address
+                Fee Receiver
               </h3>
             </div>
             <div className="bg-gray-800/40 p-4 rounded-xl border border-gray-700/50 mb-4">
               <p className="text-sm font-mono text-green-400 break-all">
                 {loading.fetch ? (
                   <Loader2 className="h-4 w-4 animate-spin inline" />
-                ) : feeRecipient ? (
-                  feeRecipient
+                ) : devFeeReceiver ? (
+                  devFeeReceiver
                 ) : (
                   "Not configured"
                 )}
@@ -299,14 +299,14 @@ const Treasure = () => {
             </div>
             <div className="space-y-3">
               <Input
-                placeholder="New treasury address (0x...)"
-                value={newFeeRecipient}
-                onChange={(e) => setNewFeeRecipient(e.target.value)}
+                placeholder="New fee receiver address (0x...)"
+                value={newDevFeeReceiver}
+                onChange={(e) => setNewDevFeeReceiver(e.target.value)}
                 className="bg-gray-800 border-gray-700 text-white font-mono"
               />
               <Button
-                onClick={handleSetFeeRecipient}
-                disabled={loading.setAddress || !newFeeRecipient || !isController}
+                onClick={handleSetDevFeeReceiver}
+                disabled={loading.setAddress || !newDevFeeReceiver || !isDev}
                 className="w-full bg-green-600 hover:bg-green-700 h-11"
               >
                 {loading.setAddress ? (
@@ -318,7 +318,7 @@ const Treasure = () => {
                 )}
               </Button>
               <p className="text-xs text-gray-500 mt-1">
-                Requires the fee controller
+                Requires the dev address
               </p>
             </div>
           </div>
@@ -341,7 +341,7 @@ const Treasure = () => {
               />
               <Button
                 onClick={handleUpdateFee}
-                disabled={loading.feeUpdate || !newFee || !isController}
+                disabled={loading.feeUpdate || !newFee || !isDev}
                 className="w-full bg-green-600 hover:bg-green-700 h-11"
               >
                 {loading.feeUpdate ? (
@@ -379,7 +379,7 @@ const Treasure = () => {
               )}
             </Button>
             <p className="text-xs text-gray-500 mt-2">
-              Funds will be sent to the current treasury address
+              Funds will be sent to the current fee receiver
             </p>
           </div>
         </motion.div>

@@ -186,9 +186,21 @@ contract ReentrantIssuer {
 }
 
 /// A contract with no receive or fallback function, so any ETH sent to it reverts.
-contract EthRejectingRecipient {
+contract EthRejectingReceiver {
     function ping() external pure returns (bool) {
         return true;
+    }
+}
+
+/// Stands in for a vault such as Raindrop: its receive() writes storage, which
+/// needs more than the 2,300 gas a transfer() or send() would forward.
+contract VaultLikeReceiver {
+    uint256 public deposits;
+    uint256 public total;
+
+    receive() external payable {
+        deposits += 1;
+        total += msg.value;
     }
 }
 
@@ -201,18 +213,18 @@ contract ChainvoiceTest is Test {
 
     event PublicKeyRegistered(address indexed user, bytes publicKey);
 
-    address feeController = address(0xFEE1);
-    address feeRecipient = address(0xFEE2);
+    address dev = address(0xFEE1);
+    address devFeeReceiver = address(0xFEE2);
     uint256 constant INITIAL_FEE = 0.0005 ether;
 
-    event FeeUpdated(uint256 indexed previousFee, uint256 indexed newFee);
-    event FeeRecipientUpdated(address indexed previousFeeRecipient, address indexed newFeeRecipient);
-    event FeeControllerProposed(address indexed currentFeeController, address indexed proposedFeeController);
-    event FeeControllerUpdated(address indexed previousFeeController, address indexed newFeeController);
-    event FeeControllerProposalCancelled(address indexed currentFeeController, address indexed cancelledFeeController);
+    event DevFeeUpdated(uint256 indexed previousFee, uint256 indexed newFee);
+    event DevFeeReceiverUpdated(address indexed previousDevFeeReceiver, address indexed newDevFeeReceiver);
+    event DevProposed(address indexed currentDev, address indexed proposedDev);
+    event DevUpdated(address indexed previousDev, address indexed newDev);
+    event DevProposalCancelled(address indexed currentDev, address indexed cancelledDev);
 
     function setUp() public {
-        chainvoice = new Chainvoice(INITIAL_FEE, feeController, feeRecipient);
+        chainvoice = new Chainvoice(INITIAL_FEE, dev, devFeeReceiver);
         vm.deal(alice, 100 ether);
         vm.deal(bob, 100 ether);
         vm.deal(charlie, 100 ether);
@@ -258,7 +270,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("encrypted"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         uint256 bobStartBal = bob.balance;
         uint256 aliceStartBal = alice.balance;
 
@@ -268,7 +280,7 @@ contract ChainvoiceTest is Test {
         Chainvoice.InvoiceDetails memory inv = chainvoice.getInvoice(0);
 
         assertTrue(inv.isPaid);
-        assertEq(chainvoice.accumulatedFees(), fee);
+        assertEq(chainvoice.accumulatedDevFees(), fee);
 
         assertEq(bob.balance, bobStartBal - (1 ether + fee));
         assertEq(alice.balance, aliceStartBal + 1 ether);
@@ -298,7 +310,7 @@ contract ChainvoiceTest is Test {
     function testPayInvoice_RevertIfWrongPayer() public {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("data"));
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.expectRevert(Chainvoice.NotAuthorizedPayer.selector);
         vm.prank(alice);
         chainvoice.payInvoice{value: 1 ether + fee}(0);
@@ -438,11 +450,11 @@ contract ChainvoiceTest is Test {
             made += n;
         }
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.prank(bob);
         chainvoice.payInvoicesBatch{value: max * (1 ether + fee)}(ids);
 
-        assertEq(chainvoice.accumulatedFees(), max * fee);
+        assertEq(chainvoice.accumulatedDevFees(), max * fee);
     }
 
     function testPayInvoicesBatch_RevertAboveMaxBatch() public {
@@ -486,7 +498,7 @@ contract ChainvoiceTest is Test {
         chainvoice.createInvoice(bob, 2 ether, address(0), keccak256("pay2"));
         vm.stopPrank();
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         uint256 totalFee = fee * 2;
         uint256 totalPrincipal = 3 ether;
 
@@ -506,7 +518,7 @@ contract ChainvoiceTest is Test {
         assertTrue(inv0.isPaid);
         assertTrue(inv1.isPaid);
 
-        assertEq(chainvoice.accumulatedFees(), totalFee);
+        assertEq(chainvoice.accumulatedDevFees(), totalFee);
         assertEq(bob.balance, bobStart - (totalPrincipal + totalFee));
         assertEq(alice.balance, aliceStart + totalPrincipal);
     }
@@ -515,7 +527,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("dup1"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         uint256 totalFee = fee * 2;
         uint256 totalPrincipal = 2 ether;
 
@@ -557,19 +569,19 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("withdraw"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether + fee}(0);
 
-        assertEq(chainvoice.accumulatedFees(), fee);
+        assertEq(chainvoice.accumulatedDevFees(), fee);
 
         chainvoice.withdrawFees();
 
-        assertEq(chainvoice.accumulatedFees(), 0);
-        assertEq(feeRecipient.balance, fee);
+        assertEq(chainvoice.accumulatedDevFees(), 0);
+        assertEq(devFeeReceiver.balance, fee);
     }
 
-    function testWithdrawFees_AnyoneCanTriggerButRecipientIsPaid() public {
+    function testWithdrawFees_AnyoneCanTriggerButReceiverIsPaid() public {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("withdraw2"));
         vm.prank(bob);
@@ -579,20 +591,20 @@ contract ChainvoiceTest is Test {
         vm.prank(charlie);
         chainvoice.withdrawFees();
 
-        assertEq(feeRecipient.balance, INITIAL_FEE);
+        assertEq(devFeeReceiver.balance, INITIAL_FEE);
         assertEq(charlie.balance, charlieBefore);
     }
 
-    /// The contract deliberately does not check that the fee recipient can receive
+    /// The contract deliberately does not check that the devFeeReceiver can receive
     /// ETH. If it can't, withdrawFees reverts and the fees stay accrued until the
-    /// controller points the recipient somewhere that works.
-    function testWithdrawFees_RecoversAfterRecipientRejectsEth() public {
-        EthRejectingRecipient rejecting = new EthRejectingRecipient();
+    /// dev points the receiver somewhere that works.
+    function testWithdrawFees_RecoversAfterReceiverRejectsEth() public {
+        EthRejectingReceiver rejecting = new EthRejectingReceiver();
         address working = address(0x600D);
 
-        // The controller can set a recipient that cannot receive ETH.
-        vm.prank(feeController);
-        chainvoice.setFeeRecipient(address(rejecting));
+        // The dev can set a receiver that cannot receive ETH.
+        vm.prank(dev);
+        chainvoice.setDevFeeReceiver(address(rejecting));
 
         // Fees accrue from a single payment and from a batch.
         vm.startPrank(alice);
@@ -611,325 +623,417 @@ contract ChainvoiceTest is Test {
         chainvoice.payInvoicesBatch{value: 2 ether + 2 * INITIAL_FEE}(ids);
 
         uint256 accrued = 3 * INITIAL_FEE;
-        assertEq(chainvoice.accumulatedFees(), accrued);
+        assertEq(chainvoice.accumulatedDevFees(), accrued);
         assertEq(address(chainvoice).balance, accrued);
 
         // Withdrawing reverts, and nothing is lost or moved.
         vm.expectRevert(Chainvoice.WithdrawFailed.selector);
         chainvoice.withdrawFees();
-        assertEq(chainvoice.accumulatedFees(), accrued);
+        assertEq(chainvoice.accumulatedDevFees(), accrued);
         assertEq(address(chainvoice).balance, accrued);
         assertEq(address(rejecting).balance, 0);
 
-        // Nobody but the controller can repoint the recipient.
+        // Nobody but the dev can repoint the receiver.
         vm.prank(alice);
         vm.expectRevert(Chainvoice.Unauthorized.selector);
-        chainvoice.setFeeRecipient(working);
+        chainvoice.setDevFeeReceiver(working);
 
-        // The controller fixes it, and the retry pays everything that accrued.
-        vm.prank(feeController);
-        chainvoice.setFeeRecipient(working);
+        // The dev fixes it, and the retry pays everything that accrued.
+        vm.prank(dev);
+        chainvoice.setDevFeeReceiver(working);
 
         chainvoice.withdrawFees();
 
         assertEq(working.balance, accrued);
-        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(chainvoice.accumulatedDevFees(), 0);
         assertEq(address(chainvoice).balance, 0);
         assertEq(address(rejecting).balance, 0);
     }
 
-    function testWithdrawFees_FollowsRecipientChange() public {
-        address newRecipient = address(0xBEEF);
+    function testWithdrawFees_FollowsReceiverChange() public {
+        address newReceiver = address(0xBEEF);
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("withdraw3"));
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
 
-        vm.prank(feeController);
-        chainvoice.setFeeRecipient(newRecipient);
+        vm.prank(dev);
+        chainvoice.setDevFeeReceiver(newReceiver);
         chainvoice.withdrawFees();
 
-        assertEq(newRecipient.balance, INITIAL_FEE);
-        assertEq(feeRecipient.balance, 0);
+        assertEq(newReceiver.balance, INITIAL_FEE);
+        assertEq(devFeeReceiver.balance, 0);
     }
 
-    function testWithdrawFees_ControllerHandoverDoesNotMoveRecipient() public {
+    function testWithdrawFees_DevHandoverDoesNotMoveReceiver() public {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("withdraw4"));
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
 
-        vm.prank(feeController);
-        chainvoice.proposeFeeController(charlie);
+        vm.prank(dev);
+        chainvoice.proposeDev(charlie);
         vm.prank(charlie);
-        chainvoice.acceptFeeController();
+        chainvoice.acceptDev();
 
         chainvoice.withdrawFees();
-        assertEq(feeRecipient.balance, INITIAL_FEE);
+        assertEq(devFeeReceiver.balance, INITIAL_FEE);
         assertEq(charlie.balance, 100 ether);
     }
 
-    /*                  FEE CONTROLLER / RECIPIENT                  */
+    function testWithdrawFees_PaysVaultContractReceiver() public {
+        VaultLikeReceiver vault = new VaultLikeReceiver();
+        vm.prank(dev);
+        chainvoice.setDevFeeReceiver(address(vault));
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("vault"));
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
+
+        chainvoice.withdrawFees();
+
+        assertEq(address(vault).balance, INITIAL_FEE);
+        assertEq(vault.deposits(), 1);
+        assertEq(vault.total(), INITIAL_FEE);
+        assertEq(chainvoice.accumulatedDevFees(), 0);
+    }
+
+    /* ------------------------------------------------------------ */
+    /*                    DEV / DEV FEE RECEIVER                    */
     /* ------------------------------------------------------------ */
 
-    function testConstructor_SetsFeeControllerAndRecipient() public {
+    function testConstructor_SetsDevAndReceiver() public {
         Chainvoice c = new Chainvoice(0.002 ether, address(0xABCD), address(0xDCBA));
-        assertEq(c.fee(), 0.002 ether);
-        assertEq(c.feeController(), address(0xABCD));
-        assertEq(c.feeRecipient(), address(0xDCBA));
-        assertEq(c.pendingFeeController(), address(0));
+        assertEq(c.devFee(), 0.002 ether);
+        assertEq(c.dev(), address(0xABCD));
+        assertEq(c.devFeeReceiver(), address(0xDCBA));
+        assertEq(c.pendingDev(), address(0));
     }
 
     function testConstructor_EmitsInitialEvents() public {
         vm.expectEmit(true, true, false, false);
-        emit FeeUpdated(0, 0.002 ether);
+        emit DevFeeUpdated(0, 0.002 ether);
         vm.expectEmit(true, true, false, false);
-        emit FeeControllerUpdated(address(0), address(0xABCD));
+        emit DevUpdated(address(0), address(0xABCD));
         vm.expectEmit(true, true, false, false);
-        emit FeeRecipientUpdated(address(0), address(0xDCBA));
+        emit DevFeeReceiverUpdated(address(0), address(0xDCBA));
         new Chainvoice(0.002 ether, address(0xABCD), address(0xDCBA));
     }
 
     function testConstructor_RevertIfZeroFee() public {
         vm.expectRevert(Chainvoice.InvalidAmount.selector);
-        new Chainvoice(0, feeController, feeRecipient);
+        new Chainvoice(0, dev, devFeeReceiver);
     }
 
-    function testConstructor_RevertIfZeroController() public {
+    function testConstructor_RevertIfZeroDev() public {
         vm.expectRevert(Chainvoice.ZeroAddress.selector);
-        new Chainvoice(INITIAL_FEE, address(0), feeRecipient);
+        new Chainvoice(INITIAL_FEE, address(0), devFeeReceiver);
     }
 
-    function testConstructor_RevertIfZeroRecipient() public {
+    function testConstructor_RevertIfZeroReceiver() public {
         vm.expectRevert(Chainvoice.ZeroAddress.selector);
-        new Chainvoice(INITIAL_FEE, feeController, address(0));
+        new Chainvoice(INITIAL_FEE, dev, address(0));
     }
 
-    function testSetFeeAmount_ByController() public {
+    function testSetDevFee_ByDev() public {
         uint256 newFee = 0.001 ether;
         vm.expectEmit(true, true, false, false);
-        emit FeeUpdated(INITIAL_FEE, newFee);
-        vm.prank(feeController);
-        chainvoice.setFeeAmount(newFee);
-        assertEq(chainvoice.fee(), newFee);
+        emit DevFeeUpdated(INITIAL_FEE, newFee);
+        vm.prank(dev);
+        chainvoice.setDevFee(newFee);
+        assertEq(chainvoice.devFee(), newFee);
     }
 
-    function testSetFeeAmount_NoCap() public {
-        vm.prank(feeController);
-        chainvoice.setFeeAmount(type(uint256).max);
-        assertEq(chainvoice.fee(), type(uint256).max);
+    function testSetDevFee_NoCap() public {
+        vm.prank(dev);
+        chainvoice.setDevFee(type(uint256).max);
+        assertEq(chainvoice.devFee(), type(uint256).max);
     }
 
-    function testSetFeeAmount_ControllerCanSetZero() public {
-        vm.prank(feeController);
-        chainvoice.setFeeAmount(0);
-        assertEq(chainvoice.fee(), 0);
+    function testSetDevFee_DevCanSetZero() public {
+        vm.prank(dev);
+        chainvoice.setDevFee(0);
+        assertEq(chainvoice.devFee(), 0);
     }
 
-    function testSetFeeRecipient_ByController() public {
-        address newRecipient = address(0xdead);
+    function testSetDevFeeReceiver_ByDev() public {
+        address newReceiver = address(0xdead);
         vm.expectEmit(true, true, false, false);
-        emit FeeRecipientUpdated(feeRecipient, newRecipient);
-        vm.prank(feeController);
-        chainvoice.setFeeRecipient(newRecipient);
-        assertEq(chainvoice.feeRecipient(), newRecipient);
+        emit DevFeeReceiverUpdated(devFeeReceiver, newReceiver);
+        vm.prank(dev);
+        chainvoice.setDevFeeReceiver(newReceiver);
+        assertEq(chainvoice.devFeeReceiver(), newReceiver);
     }
 
-    function testSetFeeRecipient_RevertIfZero() public {
+    function testSetDevFeeReceiver_RevertIfZero() public {
         vm.expectRevert(Chainvoice.ZeroAddress.selector);
-        vm.prank(feeController);
-        chainvoice.setFeeRecipient(address(0));
+        vm.prank(dev);
+        chainvoice.setDevFeeReceiver(address(0));
     }
 
-    function testNonController_CannotCallControllerFunctions() public {
-        // The recipient, a random user and the deployer (this contract) all revert.
-        address[3] memory callers = [feeRecipient, alice, address(this)];
+    function testNonDev_CannotCallDevFunctions() public {
+        // The receiver, a random user and the deployer (this contract) all revert.
+        address[3] memory callers = [devFeeReceiver, alice, address(this)];
         for (uint256 k = 0; k < callers.length; k++) {
             vm.startPrank(callers[k]);
             vm.expectRevert(Chainvoice.Unauthorized.selector);
-            chainvoice.setFeeAmount(1);
+            chainvoice.setDevFee(1);
             vm.expectRevert(Chainvoice.Unauthorized.selector);
-            chainvoice.setFeeRecipient(alice);
+            chainvoice.setDevFeeReceiver(alice);
             vm.expectRevert(Chainvoice.Unauthorized.selector);
-            chainvoice.proposeFeeController(alice);
+            chainvoice.proposeDev(alice);
             vm.expectRevert(Chainvoice.Unauthorized.selector);
-            chainvoice.cancelFeeControllerProposal();
+            chainvoice.cancelDevProposal();
             vm.stopPrank();
         }
     }
 
-    // ----- two-step controller handover -----
+    // ----- two-step dev handover -----
 
-    function testProposeFeeController_SetsPendingOnly() public {
+    function testProposeDev_SetsPendingOnly() public {
         vm.expectEmit(true, true, false, false);
-        emit FeeControllerProposed(feeController, alice);
-        vm.prank(feeController);
-        chainvoice.proposeFeeController(alice);
+        emit DevProposed(dev, alice);
+        vm.prank(dev);
+        chainvoice.proposeDev(alice);
 
-        assertEq(chainvoice.pendingFeeController(), alice);
-        assertEq(chainvoice.feeController(), feeController);
+        assertEq(chainvoice.pendingDev(), alice);
+        assertEq(chainvoice.dev(), dev);
 
         // The proposed address has no powers until it accepts.
         vm.prank(alice);
         vm.expectRevert(Chainvoice.Unauthorized.selector);
-        chainvoice.setFeeAmount(1);
+        chainvoice.setDevFee(1);
     }
 
-    function testProposeFeeController_RevertIfZero() public {
+    function testProposeDev_RevertIfZero() public {
         vm.expectRevert(Chainvoice.ZeroAddress.selector);
-        vm.prank(feeController);
-        chainvoice.proposeFeeController(address(0));
+        vm.prank(dev);
+        chainvoice.proposeDev(address(0));
     }
 
-    function testAcceptFeeController_Succeeds() public {
-        vm.prank(feeController);
-        chainvoice.proposeFeeController(alice);
+    function testAcceptDev_Succeeds() public {
+        vm.prank(dev);
+        chainvoice.proposeDev(alice);
 
         vm.expectEmit(true, true, false, false);
-        emit FeeControllerUpdated(feeController, alice);
+        emit DevUpdated(dev, alice);
         vm.prank(alice);
-        chainvoice.acceptFeeController();
+        chainvoice.acceptDev();
 
-        assertEq(chainvoice.feeController(), alice);
-        assertEq(chainvoice.pendingFeeController(), address(0));
+        assertEq(chainvoice.dev(), alice);
+        assertEq(chainvoice.pendingDev(), address(0));
 
-        // Old controller is out, new controller is in.
-        vm.prank(feeController);
+        // Old dev is out, new dev is in.
+        vm.prank(dev);
         vm.expectRevert(Chainvoice.Unauthorized.selector);
-        chainvoice.setFeeAmount(1);
+        chainvoice.setDevFee(1);
         vm.prank(alice);
-        chainvoice.setFeeAmount(1);
-        assertEq(chainvoice.fee(), 1);
+        chainvoice.setDevFee(1);
+        assertEq(chainvoice.devFee(), 1);
     }
 
-    function testAcceptFeeController_RevertIfWrongAddress() public {
-        vm.prank(feeController);
-        chainvoice.proposeFeeController(alice);
+    function testAcceptDev_RevertIfWrongAddress() public {
+        vm.prank(dev);
+        chainvoice.proposeDev(alice);
 
-        // Neither a stranger, the recipient nor the current controller can accept.
-        address[3] memory callers = [bob, feeRecipient, feeController];
+        // Neither a stranger, the receiver nor the current dev can accept.
+        address[3] memory callers = [bob, devFeeReceiver, dev];
         for (uint256 k = 0; k < callers.length; k++) {
             vm.prank(callers[k]);
             vm.expectRevert(Chainvoice.Unauthorized.selector);
-            chainvoice.acceptFeeController();
+            chainvoice.acceptDev();
         }
-        assertEq(chainvoice.feeController(), feeController);
-        assertEq(chainvoice.pendingFeeController(), alice);
+        assertEq(chainvoice.dev(), dev);
+        assertEq(chainvoice.pendingDev(), alice);
     }
 
-    function testAcceptFeeController_RevertIfNothingPending() public {
+    function testAcceptDev_RevertIfNothingPending() public {
         vm.prank(alice);
-        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
-        chainvoice.acceptFeeController();
+        vm.expectRevert(Chainvoice.NoPendingDev.selector);
+        chainvoice.acceptDev();
 
-        // Not even the current controller can "accept" when nothing is pending.
-        vm.prank(feeController);
-        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
-        chainvoice.acceptFeeController();
+        // Not even the current dev can "accept" when nothing is pending.
+        vm.prank(dev);
+        vm.expectRevert(Chainvoice.NoPendingDev.selector);
+        chainvoice.acceptDev();
     }
 
-    function testAcceptFeeController_CannotBeReplayed() public {
-        vm.prank(feeController);
-        chainvoice.proposeFeeController(alice);
+    function testAcceptDev_CannotBeReplayed() public {
+        vm.prank(dev);
+        chainvoice.proposeDev(alice);
         vm.prank(alice);
-        chainvoice.acceptFeeController();
+        chainvoice.acceptDev();
 
         vm.prank(alice);
-        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
-        chainvoice.acceptFeeController();
+        vm.expectRevert(Chainvoice.NoPendingDev.selector);
+        chainvoice.acceptDev();
     }
 
-    function testProposeFeeController_ReplacesPending() public {
-        vm.startPrank(feeController);
-        chainvoice.proposeFeeController(alice);
-        chainvoice.proposeFeeController(bob);
+    function testProposeDev_ReplacesPending() public {
+        vm.startPrank(dev);
+        chainvoice.proposeDev(alice);
+        chainvoice.proposeDev(bob);
         vm.stopPrank();
 
         vm.prank(alice);
         vm.expectRevert(Chainvoice.Unauthorized.selector);
-        chainvoice.acceptFeeController();
+        chainvoice.acceptDev();
 
         vm.prank(bob);
-        chainvoice.acceptFeeController();
-        assertEq(chainvoice.feeController(), bob);
+        chainvoice.acceptDev();
+        assertEq(chainvoice.dev(), bob);
     }
 
     // ----- cancelling a proposal -----
 
-    function testCancelFeeControllerProposal_ClearsPending() public {
-        vm.prank(feeController);
-        chainvoice.proposeFeeController(alice);
+    function testCancelDevProposal_ClearsPending() public {
+        vm.prank(dev);
+        chainvoice.proposeDev(alice);
 
         vm.expectEmit(true, true, false, false);
-        emit FeeControllerProposalCancelled(feeController, alice);
-        vm.prank(feeController);
-        chainvoice.cancelFeeControllerProposal();
+        emit DevProposalCancelled(dev, alice);
+        vm.prank(dev);
+        chainvoice.cancelDevProposal();
 
-        assertEq(chainvoice.pendingFeeController(), address(0));
-        assertEq(chainvoice.feeController(), feeController);
+        assertEq(chainvoice.pendingDev(), address(0));
+        assertEq(chainvoice.dev(), dev);
     }
 
-    function testCancelFeeControllerProposal_ProposedAddressCanNoLongerAccept() public {
-        vm.prank(feeController);
-        chainvoice.proposeFeeController(alice);
-        vm.prank(feeController);
-        chainvoice.cancelFeeControllerProposal();
+    function testCancelDevProposal_ProposedAddressCanNoLongerAccept() public {
+        vm.prank(dev);
+        chainvoice.proposeDev(alice);
+        vm.prank(dev);
+        chainvoice.cancelDevProposal();
 
         vm.prank(alice);
-        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
-        chainvoice.acceptFeeController();
-        assertEq(chainvoice.feeController(), feeController);
+        vm.expectRevert(Chainvoice.NoPendingDev.selector);
+        chainvoice.acceptDev();
+        assertEq(chainvoice.dev(), dev);
     }
 
-    function testCancelFeeControllerProposal_ControllerCanProposeAgain() public {
-        vm.startPrank(feeController);
-        chainvoice.proposeFeeController(alice);
-        chainvoice.cancelFeeControllerProposal();
-        chainvoice.proposeFeeController(bob);
+    function testCancelDevProposal_DevCanProposeAgain() public {
+        vm.startPrank(dev);
+        chainvoice.proposeDev(alice);
+        chainvoice.cancelDevProposal();
+        chainvoice.proposeDev(bob);
         vm.stopPrank();
 
         vm.prank(bob);
-        chainvoice.acceptFeeController();
-        assertEq(chainvoice.feeController(), bob);
+        chainvoice.acceptDev();
+        assertEq(chainvoice.dev(), bob);
     }
 
-    function testCancelFeeControllerProposal_RevertIfNothingPending() public {
-        vm.prank(feeController);
-        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
-        chainvoice.cancelFeeControllerProposal();
+    function testCancelDevProposal_RevertIfNothingPending() public {
+        vm.prank(dev);
+        vm.expectRevert(Chainvoice.NoPendingDev.selector);
+        chainvoice.cancelDevProposal();
     }
 
-    function testCancelFeeControllerProposal_RevertIfAlreadyCancelled() public {
-        vm.startPrank(feeController);
-        chainvoice.proposeFeeController(alice);
-        chainvoice.cancelFeeControllerProposal();
-        vm.expectRevert(Chainvoice.NoPendingFeeController.selector);
-        chainvoice.cancelFeeControllerProposal();
+    function testCancelDevProposal_RevertIfAlreadyCancelled() public {
+        vm.startPrank(dev);
+        chainvoice.proposeDev(alice);
+        chainvoice.cancelDevProposal();
+        vm.expectRevert(Chainvoice.NoPendingDev.selector);
+        chainvoice.cancelDevProposal();
         vm.stopPrank();
     }
 
-    function testCancelFeeControllerProposal_RevertIfNotController() public {
-        vm.prank(feeController);
-        chainvoice.proposeFeeController(alice);
+    function testCancelDevProposal_RevertIfNotDev() public {
+        vm.prank(dev);
+        chainvoice.proposeDev(alice);
 
-        // A stranger, the recipient, the deployer and the proposed address itself
+        // A stranger, the receiver, the deployer and the proposed address itself
         // all revert, and the proposal survives.
-        address[4] memory callers = [bob, feeRecipient, address(this), alice];
+        address[4] memory callers = [bob, devFeeReceiver, address(this), alice];
         for (uint256 k = 0; k < callers.length; k++) {
             vm.prank(callers[k]);
             vm.expectRevert(Chainvoice.Unauthorized.selector);
-            chainvoice.cancelFeeControllerProposal();
+            chainvoice.cancelDevProposal();
         }
-        assertEq(chainvoice.pendingFeeController(), alice);
+        assertEq(chainvoice.pendingDev(), alice);
     }
 
-    function testProposeFeeController_PendingCannotActBeforeAcceptingRecipientChange() public {
-        // A pending controller cannot change the recipient before accepting.
-        vm.prank(feeController);
-        chainvoice.proposeFeeController(alice);
+    function testProposeDev_PendingCannotActBeforeAcceptingReceiverChange() public {
+        // A pending dev cannot change the receiver before accepting.
+        vm.prank(dev);
+        chainvoice.proposeDev(alice);
         vm.prank(alice);
         vm.expectRevert(Chainvoice.Unauthorized.selector);
-        chainvoice.setFeeRecipient(alice);
+        chainvoice.setDevFeeReceiver(alice);
+    }
+
+    function testAcceptDev_NewDevTakesOverEveryDevFunction() public {
+        vm.prank(dev);
+        chainvoice.proposeDev(alice);
+        vm.prank(alice);
+        chainvoice.acceptDev();
+
+        // The old dev has lost every dev function.
+        vm.startPrank(dev);
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
+        chainvoice.setDevFeeReceiver(dev);
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
+        chainvoice.proposeDev(dev);
+        vm.stopPrank();
+
+        // The new dev can change the receiver and hand the role on again.
+        vm.startPrank(alice);
+        chainvoice.setDevFeeReceiver(address(0xBEEF));
+        chainvoice.proposeDev(bob);
+        vm.stopPrank();
+        assertEq(chainvoice.devFeeReceiver(), address(0xBEEF));
+
+        vm.prank(bob);
+        chainvoice.acceptDev();
+        assertEq(chainvoice.dev(), bob);
+    }
+
+    function testFuzz_DevFunctions_OnlyDev(address caller, uint256 newDevFee, address newAddr) public {
+        vm.assume(caller != dev);
+        vm.assume(newAddr != address(0));
+
+        vm.startPrank(caller);
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
+        chainvoice.setDevFee(newDevFee);
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
+        chainvoice.setDevFeeReceiver(newAddr);
+        vm.expectRevert(Chainvoice.Unauthorized.selector);
+        chainvoice.proposeDev(newAddr);
+        vm.stopPrank();
+
+        assertEq(chainvoice.devFee(), INITIAL_FEE);
+        assertEq(chainvoice.devFeeReceiver(), devFeeReceiver);
+        assertEq(chainvoice.pendingDev(), address(0));
+    }
+
+    /// Whatever fee the dev sets, a payment must include exactly that fee:
+    /// the issuer gets the full amount and only the fee accrues to the dev.
+    function testFuzz_PayInvoice_Native_ChargesExactDevFee(uint96 amount, uint96 newDevFee) public {
+        vm.assume(amount > 0);
+        vm.prank(dev);
+        chainvoice.setDevFee(newDevFee);
+
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, amount, address(0), keccak256("fuzz-fee"));
+
+        uint256 due = uint256(amount) + newDevFee;
+        vm.deal(bob, due + 1);
+
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.IncorrectPaymentAmount.selector);
+        chainvoice.payInvoice{value: due + 1}(0);
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.IncorrectPaymentAmount.selector);
+        chainvoice.payInvoice{value: due - 1}(0);
+
+        uint256 aliceBefore = alice.balance;
+        vm.prank(bob);
+        chainvoice.payInvoice{value: due}(0);
+
+        assertEq(alice.balance - aliceBefore, amount);
+        assertEq(chainvoice.accumulatedDevFees(), newDevFee);
+        assertEq(address(chainvoice).balance, newDevFee);
     }
 
     /* ------------------------------------------------------------ */
@@ -1380,7 +1484,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("erc20Data"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
 
         vm.startPrank(bob);
         token.approve(address(chainvoice), 100 * 10**18);
@@ -1391,7 +1495,7 @@ contract ChainvoiceTest is Test {
         assertTrue(inv.isPaid);
         assertEq(token.balanceOf(bob), 0);
         assertEq(token.balanceOf(alice), 100 * 10**18);
-        assertEq(chainvoice.accumulatedFees(), fee);
+        assertEq(chainvoice.accumulatedDevFees(), fee);
     }
 
     function testPayInvoice_ERC20_RevertInsufficientBalance() public {
@@ -1401,7 +1505,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("erc20Data"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
 
         vm.startPrank(bob);
         token.approve(address(chainvoice), 100 * 10**18); // Sufficient allowance
@@ -1411,7 +1515,7 @@ contract ChainvoiceTest is Test {
 
         Chainvoice.InvoiceDetails memory inv = chainvoice.getInvoice(0);
         assertFalse(inv.isPaid);
-        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(chainvoice.accumulatedDevFees(), 0);
     }
 
     function testPayInvoice_ERC20_RevertInsufficientAllowance() public {
@@ -1421,7 +1525,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 100 * 10**18, address(token), keccak256("erc20Data"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
 
         vm.prank(bob);
         vm.expectRevert(Chainvoice.InsufficientAllowance.selector);
@@ -1451,7 +1555,7 @@ contract ChainvoiceTest is Test {
         chainvoice.createInvoice(bob, 200 * 10**18, address(token), keccak256("b2"));
         vm.stopPrank();
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         uint256 totalFee = fee * 2;
 
         uint256[] memory ids = new uint256[](2);
@@ -1467,7 +1571,7 @@ contract ChainvoiceTest is Test {
         assertTrue(chainvoice.getInvoice(1).isPaid);
         assertEq(token.balanceOf(bob), 0);
         assertEq(token.balanceOf(alice), 300 * 10**18);
-        assertEq(chainvoice.accumulatedFees(), totalFee);
+        assertEq(chainvoice.accumulatedDevFees(), totalFee);
     }
 
     function testPayInvoicesBatch_ERC20_RevertInsufficientBalance() public {
@@ -1479,7 +1583,7 @@ contract ChainvoiceTest is Test {
         chainvoice.createInvoice(bob, 200 * 10**18, address(token), keccak256("b2"));
         vm.stopPrank();
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         uint256 totalFee = fee * 2;
 
         uint256[] memory ids = new uint256[](2);
@@ -1494,7 +1598,7 @@ contract ChainvoiceTest is Test {
 
         assertFalse(chainvoice.getInvoice(0).isPaid);
         assertFalse(chainvoice.getInvoice(1).isPaid);
-        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(chainvoice.accumulatedDevFees(), 0);
     }
 
     function testPayInvoicesBatch_ERC20_RevertInsufficientAllowance() public {
@@ -1506,7 +1610,7 @@ contract ChainvoiceTest is Test {
         chainvoice.createInvoice(bob, 200 * 10**18, address(token), keccak256("b2"));
         vm.stopPrank();
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         uint256 totalFee = fee * 2;
 
         uint256[] memory ids = new uint256[](2);
@@ -1521,7 +1625,7 @@ contract ChainvoiceTest is Test {
 
         assertFalse(chainvoice.getInvoice(0).isPaid);
         assertFalse(chainvoice.getInvoice(1).isPaid);
-        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(chainvoice.accumulatedDevFees(), 0);
     }
 
     function testPayInvoicesBatch_ERC20_RevertIncorrectNativeValue() public {
@@ -1546,7 +1650,7 @@ contract ChainvoiceTest is Test {
 
         assertFalse(chainvoice.getInvoice(0).isPaid);
         assertFalse(chainvoice.getInvoice(1).isPaid);
-        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(chainvoice.accumulatedDevFees(), 0);
 
     }
 
@@ -1561,7 +1665,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 100e6, address(token), keccak256("usdt"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.startPrank(bob);
         token.approve(address(chainvoice), 100e6);
         chainvoice.payInvoice{value: fee}(0);
@@ -1585,7 +1689,7 @@ contract ChainvoiceTest is Test {
         ids[0] = 0;
         ids[1] = 1;
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.startPrank(bob);
         token.approve(address(chainvoice), 300e6);
         chainvoice.payInvoicesBatch{value: fee * 2}(ids);
@@ -1603,7 +1707,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 100e6, address(token), keccak256("usdt"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.startPrank(bob);
         token.approve(address(chainvoice), 100e6);
         vm.expectRevert("balance");
@@ -1611,7 +1715,7 @@ contract ChainvoiceTest is Test {
         vm.stopPrank();
 
         assertFalse(chainvoice.getInvoice(0).isPaid);
-        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(chainvoice.accumulatedDevFees(), 0);
     }
 
     function testPayInvoice_FeeOnTransferToken_RevertShortfall() public {
@@ -1621,7 +1725,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 100 ether, address(token), keccak256("fot"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.startPrank(bob);
         token.approve(address(chainvoice), 100 ether);
         vm.expectRevert(Chainvoice.TokenAmountShortfall.selector);
@@ -1630,7 +1734,7 @@ contract ChainvoiceTest is Test {
 
         assertFalse(chainvoice.getInvoice(0).isPaid);
         assertEq(token.balanceOf(alice), 0);
-        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(chainvoice.accumulatedDevFees(), 0);
     }
 
     function testPayInvoicesBatch_FeeOnTransferToken_RevertShortfall() public {
@@ -1648,7 +1752,7 @@ contract ChainvoiceTest is Test {
         ids[0] = 0;
         ids[1] = 1;
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.startPrank(bob);
         token.approve(address(chainvoice), 200 ether + 50);
         vm.expectRevert(Chainvoice.TokenAmountShortfall.selector);
@@ -1658,7 +1762,7 @@ contract ChainvoiceTest is Test {
         assertFalse(chainvoice.getInvoice(0).isPaid);
         assertFalse(chainvoice.getInvoice(1).isPaid);
         assertEq(token.balanceOf(alice), 0);
-        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(chainvoice.accumulatedDevFees(), 0);
     }
 
     /* ------------------------------------------------------------ */
@@ -1669,7 +1773,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("n"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether + fee}(0);
 
@@ -1692,7 +1796,7 @@ contract ChainvoiceTest is Test {
         (bool canPay, , ) = chainvoice.getPaymentStatus(0, poor);
         assertFalse(canPay);
 
-        vm.deal(poor, chainvoice.fee());
+        vm.deal(poor, chainvoice.devFee());
         (canPay, , ) = chainvoice.getPaymentStatus(0, poor);
         assertTrue(canPay);
     }
@@ -1716,7 +1820,7 @@ contract ChainvoiceTest is Test {
 
         token.arm(chainvoice, abi.encodeCall(Chainvoice.payInvoice, (1)));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.startPrank(bob);
         token.approve(address(chainvoice), 2 ether);
         chainvoice.payInvoice{value: fee}(0);
@@ -1745,7 +1849,7 @@ contract ChainvoiceTest is Test {
         uint256[] memory ids = new uint256[](2);
         ids[0] = 0;
         ids[1] = 1;
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.startPrank(bob);
         token.approve(address(chainvoice), 3 ether);
         chainvoice.payInvoicesBatch{value: fee * 2}(ids);
@@ -1764,7 +1868,7 @@ contract ChainvoiceTest is Test {
         issuer.createInvoice(bob, 1 ether);
         issuer.arm(abi.encodeCall(Chainvoice.payInvoice, (1)), 0);
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether + fee}(0);
 
@@ -1785,7 +1889,7 @@ contract ChainvoiceTest is Test {
 
         uint256[] memory ids = new uint256[](1);
         ids[0] = 0;
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.prank(bob);
         chainvoice.payInvoicesBatch{value: 1 ether + fee}(ids);
 
@@ -1804,7 +1908,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(address(issuer), 1 ether, address(0), keccak256("nested"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         issuer.arm(abi.encodeCall(Chainvoice.payInvoice, (1)), 1 ether + fee);
 
         vm.prank(bob);
@@ -1826,7 +1930,7 @@ contract ChainvoiceTest is Test {
         chainvoice.cancelInvoice(0);
         vm.stopPrank();
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.expectRevert(Chainvoice.InvoiceCancelledError.selector);
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether + fee}(0);
@@ -1836,7 +1940,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("data"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.startPrank(bob);
         chainvoice.payInvoice{value: 1 ether + fee}(0);
         vm.expectRevert(Chainvoice.InvoiceAlreadyPaid.selector);
@@ -1857,7 +1961,7 @@ contract ChainvoiceTest is Test {
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("data"));
 
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether + fee}(0);
 
@@ -1877,7 +1981,7 @@ contract ChainvoiceTest is Test {
         uint256[] memory ids = new uint256[](2);
         ids[0] = 0;
         ids[1] = 1;
-        uint256 fee = chainvoice.fee();
+        uint256 fee = chainvoice.devFee();
         vm.expectRevert(Chainvoice.MixedTokenBatch.selector);
         vm.prank(bob);
         chainvoice.payInvoicesBatch{value: 1 ether + fee * 2}(ids);
@@ -1895,8 +1999,8 @@ contract ChainvoiceTest is Test {
     uint256 constant NEW_FEE = 0.01 ether;
 
     function _setNewFee() private {
-        vm.prank(feeController);
-        chainvoice.setFeeAmount(NEW_FEE);
+        vm.prank(dev);
+        chainvoice.setDevFee(NEW_FEE);
     }
 
     function testPayInvoice_Native_ChargesInitialThenNewFee() public {
@@ -1907,7 +2011,7 @@ contract ChainvoiceTest is Test {
 
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
-        assertEq(chainvoice.accumulatedFees(), INITIAL_FEE);
+        assertEq(chainvoice.accumulatedDevFees(), INITIAL_FEE);
 
         _setNewFee();
 
@@ -1920,10 +2024,10 @@ contract ChainvoiceTest is Test {
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether + NEW_FEE}(1);
         assertEq(alice.balance - aliceBefore, 1 ether);
-        assertEq(chainvoice.accumulatedFees(), INITIAL_FEE + NEW_FEE);
+        assertEq(chainvoice.accumulatedDevFees(), INITIAL_FEE + NEW_FEE);
 
         chainvoice.withdrawFees();
-        assertEq(feeRecipient.balance, INITIAL_FEE + NEW_FEE);
+        assertEq(devFeeReceiver.balance, INITIAL_FEE + NEW_FEE);
     }
 
     function testPayInvoice_ERC20_ChargesInitialThenNewNativeFee() public {
@@ -1939,7 +2043,7 @@ contract ChainvoiceTest is Test {
         token.approve(address(chainvoice), 200 * 10**18);
         chainvoice.payInvoice{value: INITIAL_FEE}(0);
         vm.stopPrank();
-        assertEq(chainvoice.accumulatedFees(), INITIAL_FEE);
+        assertEq(chainvoice.accumulatedDevFees(), INITIAL_FEE);
 
         _setNewFee();
 
@@ -1950,7 +2054,7 @@ contract ChainvoiceTest is Test {
         vm.prank(bob);
         chainvoice.payInvoice{value: NEW_FEE}(1);
         assertEq(token.balanceOf(alice), 200 * 10**18);
-        assertEq(chainvoice.accumulatedFees(), INITIAL_FEE + NEW_FEE);
+        assertEq(chainvoice.accumulatedDevFees(), INITIAL_FEE + NEW_FEE);
     }
 
     function testPayInvoicesBatch_Native_ChargesInitialThenNewFee() public {
@@ -1965,7 +2069,7 @@ contract ChainvoiceTest is Test {
         first[1] = 1;
         vm.prank(bob);
         chainvoice.payInvoicesBatch{value: 2 ether + 2 * INITIAL_FEE}(first);
-        assertEq(chainvoice.accumulatedFees(), 2 * INITIAL_FEE);
+        assertEq(chainvoice.accumulatedDevFees(), 2 * INITIAL_FEE);
 
         _setNewFee();
 
@@ -1978,10 +2082,10 @@ contract ChainvoiceTest is Test {
 
         vm.prank(bob);
         chainvoice.payInvoicesBatch{value: 2 ether + 2 * NEW_FEE}(second);
-        assertEq(chainvoice.accumulatedFees(), 2 * INITIAL_FEE + 2 * NEW_FEE);
+        assertEq(chainvoice.accumulatedDevFees(), 2 * INITIAL_FEE + 2 * NEW_FEE);
 
         chainvoice.withdrawFees();
-        assertEq(feeRecipient.balance, 2 * INITIAL_FEE + 2 * NEW_FEE);
+        assertEq(devFeeReceiver.balance, 2 * INITIAL_FEE + 2 * NEW_FEE);
     }
 
     function testPayInvoicesBatch_ERC20_ChargesInitialThenNewFee() public {
@@ -2002,7 +2106,7 @@ contract ChainvoiceTest is Test {
         first[1] = 1;
         vm.prank(bob);
         chainvoice.payInvoicesBatch{value: 2 * INITIAL_FEE}(first);
-        assertEq(chainvoice.accumulatedFees(), 2 * INITIAL_FEE);
+        assertEq(chainvoice.accumulatedDevFees(), 2 * INITIAL_FEE);
 
         _setNewFee();
 
@@ -2016,17 +2120,17 @@ contract ChainvoiceTest is Test {
         vm.prank(bob);
         chainvoice.payInvoicesBatch{value: 2 * NEW_FEE}(second);
         assertEq(token.balanceOf(alice), 400 * 10**18);
-        assertEq(chainvoice.accumulatedFees(), 2 * INITIAL_FEE + 2 * NEW_FEE);
+        assertEq(chainvoice.accumulatedDevFees(), 2 * INITIAL_FEE + 2 * NEW_FEE);
     }
 
-    function testPayInvoice_ZeroFeeSetByController() public {
-        vm.prank(feeController);
-        chainvoice.setFeeAmount(0);
+    function testPayInvoice_ZeroFeeSetByDev() public {
+        vm.prank(dev);
+        chainvoice.setDevFee(0);
 
         vm.prank(alice);
         chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("free"));
         vm.prank(bob);
         chainvoice.payInvoice{value: 1 ether}(0);
-        assertEq(chainvoice.accumulatedFees(), 0);
+        assertEq(chainvoice.accumulatedDevFees(), 0);
     }
 }
