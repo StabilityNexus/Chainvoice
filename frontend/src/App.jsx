@@ -1,9 +1,4 @@
-import "@rainbow-me/rainbowkit/styles.css";
-import {
-  getDefaultConfig,
-  RainbowKitProvider,
-  darkTheme,
-} from "@rainbow-me/rainbowkit";
+import { createWalletLinkConfig } from "@stability-nexus/walletlink";
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import {
@@ -52,11 +47,8 @@ const AllChains = [
 ];
 
 // eslint-disable-next-line react-refresh/only-export-components
-export const config = getDefaultConfig({
-  appName: "Chainvoice",
-  projectId: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
+export const config = createWalletLinkConfig({
   chains: AllChains,
-  ssr: false,
 });
 
 const queryClient = new QueryClient();
@@ -96,54 +88,34 @@ function App() {
       />
       <WagmiProvider config={config}>
         <QueryClientProvider client={queryClient}>
-          <RainbowKitProvider
-            coolMode
-            theme={darkTheme({
-              accentColor: "#22c55e",
-              accentColorForeground: "white",
-              borderRadius: "medium",
-              fontStack: "system",
-              overlayBlur: "small",
-            })}
-          >
-            <div className="font-Montserrat h-screen">
-              <Router>
-                <Suspense
-                  fallback={
-                    <div className="flex h-screen items-center justify-center text-white">
-                      Loading...
-                    </div>
-                  }
-                >
-                  <Routes>
-                    <Route path="/" element={<Applayout />}>
-                      <Route index element={<Landing />} />
-                      <Route path="dashboard" element={<Home />}>
-                        <Route path="create" element={<CreateInvoice />} />
-                        <Route path="sent" element={<SentInvoice />} />
-                        <Route path="pending" element={<ReceivedInvoice />} />
-                        <Route
-                          path="generate-link"
-                          element={<GenerateLink />}
-                        />
-                        <Route path="import" element={<ImportInvoice />} />
-                        <Route
-                          path="batch-invoice"
-                          element={<CreateInvoicesBatch />}
-                        />
-                        <Route path="settings" element={<Settings />} />
-                      </Route>
-                      <Route path="feature" element={<Feature />} />
-                      <Route path="about" element={<About />} />
-                      <Route path="working" element={<Working />} />
-                      <Route path="treasure" element={<Treasure />} />
-                      <Route path="*" element={<NotFound />} />
+          <div className="font-Montserrat h-screen">
+            <Router>
+              <Suspense fallback={<div className="flex h-screen items-center justify-center text-white">Loading...</div>}>
+                <Routes>
+                  <Route path="/" element={<Applayout />}>
+                    <Route index element={<Landing />} />
+                    <Route path="dashboard" element={<Home />}>
+                      <Route path="create" element={<CreateInvoice />} />
+                      <Route path="sent" element={<SentInvoice />} />
+                      <Route path="pending" element={<ReceivedInvoice />} />
+                      <Route path="generate-link" element={<GenerateLink />} />
+                      <Route path="import" element={<ImportInvoice />} />
+                      <Route
+                        path="batch-invoice"
+                        element={<CreateInvoicesBatch />}
+                      />
+                      <Route path="settings" element={<Settings />} />
                     </Route>
-                  </Routes>
-                </Suspense>
-              </Router>
-            </div>
-          </RainbowKitProvider>
+                    <Route path="feature" element={<Feature />} />
+                    <Route path="about" element={<About />} />
+                    <Route path="working" element={<Working />} />
+                    <Route path="treasure" element={<Treasure />} />
+                    <Route path="*" element={<NotFound />} />
+                  </Route>
+                </Routes>
+              </Suspense>
+            </Router>
+          </div>
         </QueryClientProvider>
       </WagmiProvider>
     </div>
