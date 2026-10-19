@@ -37,7 +37,7 @@
 
 # Chainvoice
 
-Chainvoice is a decentralized invoicing platform that enables secure, transparent, and tamper‑proof invoice creation, management, and payments on blockchain. Powered by Ethereum-compatible smart contracts, Chainvoice automates payment flows and reduces reliance on intermediaries.
+**Chainvoice** is a decentralized invoicing dApp for EVM-compatible chains. Create, send and pay invoices on-chain in the network's native coin or any ERC-20 token, with invoice details encrypted end to end. The contract has no owner and isn't upgradeable, and it can be deployed to any EVM chain. Live deployments are listed in [Deployments.md](./Deployments.md).
 
 ## Table of Contents
 
@@ -48,7 +48,7 @@ Chainvoice is a decentralized invoicing platform that enables secure, transparen
 - [Frontend Setup](#frontend-setup)
 - [Run with Docker](#run-with-docker)
 - [Smart Contract Testing](#smart-contract-testing)
-- [Deploy to Ethereum Classic](#deploy-to-ethereum-classic)
+- [Deploy to an EVM Chain](#deploy-to-an-evm-chain)
 - [Environment Variables](#environment-variables)
 - [Community and Support](#community-and-support)
 
@@ -129,12 +129,14 @@ forge test
 forge test -vvv
 
 
-## Deploy to Ethereum Classic
+## Deploy to an EVM Chain
+
+The same contract and deploy script work on any EVM chain.
 
 ### Prerequisites
 - [Foundry](https://getfoundry.sh/) installed
-- Wallet funded with ETC
-- ETC RPC URL (e.g., `https://etc.etcdesktop.com`, Ankr, Chainstack)
+- A wallet funded with the chain's native coin
+- An RPC URL for the chain
 
 ### Deployment Steps
 
@@ -149,33 +151,39 @@ forge build
 3. **Load environment variables**  
 source .env
 
-4. **Deploy to Ethereum Classic**  
+4. **Deploy**  
 The script reads `DEV_ADDRESS` and `DEV_FEE_RECEIVER` (both required, non-zero)
 and an optional `DEV_FEE_WEI` (default `0.0005 ether`, must not be `0`) from `.env`,
 and passes them to the constructor. The `dev` address sets `devFee` and
 `devFeeReceiver` and hands its own role over in two steps (`proposeDev`, then
 `acceptDev` from the new address), so use a multisig; `devFeeReceiver` receives
 withdrawn fees. The compiler targets `evm_version = "london"` with `via_ir`
-(see `contracts/foundry.toml`) so the same bytecode runs on Sepolia and ETC.
+(see `contracts/foundry.toml`), so one bytecode also runs on chains that have
+not adopted newer EVM upgrades.
 
 ```bash
-forge script script/Chainvoice.s.sol:DeployChainvoice   --rpc-url etc --account deployer --broadcast --legacy   --verify --verifier blockscout --verifier-url https://etc.blockscout.com/api/
+forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url <RPC_URL> --account deployer --broadcast --verify
 ```
 
-`--legacy` is required on Ethereum Classic, which has no EIP-1559; without it
-`forge script` fails with `unsupported feature: eip1559`.
+Chain-specific flags:
+- **No EIP-1559** (no base fee): add `--legacy`, or `forge script` fails with
+  `unsupported feature: eip1559`.
+- **Verification:** `--verify` uses Etherscan and needs `ETHERSCAN_API_KEY`. For
+  a chain with a Blockscout explorer, add
+  `--verifier blockscout --verifier-url <explorer>/api/` instead (no key needed).
+- **Higher on-chain gas than forge simulates** (Sepolia, for example): add
+  `--gas-estimate-multiplier 800`.
+- **Block gas limit:** a full 30-invoice batch needs about 6.2M gas, so the
+  chain's block gas limit should be at least 8M.
 
-For Sepolia, use `--rpc-url sepolia --verify` (Etherscan, needs `ETHERSCAN_API_KEY`) and
-leave `--legacy` out. Sepolia charges several times more gas for deployed code
-than forge's local simulation, so also pass `--gas-estimate-multiplier 800`.
 After deploying, record the address in [Deployments.md](./Deployments.md).
 
 5. **Configure frontend**  
 cp frontend/.env.example frontend/.env  
 Edit frontend/.env and set the variable for the chain you deployed to — the
-frontend reads `VITE_CONTRACT_ADDRESS_<chainId>`, not a single shared variable.
-For Ethereum Classic that is:  
-VITE_CONTRACT_ADDRESS_61=your_deployed_contract_address_here  
+frontend reads `VITE_CONTRACT_ADDRESS_<chainId>`, not a single shared variable,
+for example:  
+VITE_CONTRACT_ADDRESS_<chainId>=your_deployed_contract_address_here  
 See [Environment Variables](#environment-variables) for the full list.  
 
 6. **Restart frontend development server**  

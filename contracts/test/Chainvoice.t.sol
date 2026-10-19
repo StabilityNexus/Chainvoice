@@ -346,7 +346,7 @@ contract ChainvoiceTest is Test {
         chainvoice.createInvoicesBatch(tos, amounts, address(0), payloads);
     }
 
-    uint256 constant ETC_BLOCK_GAS_LIMIT = 8_000_000;
+    uint256 constant MIN_BLOCK_GAS_LIMIT = 8_000_000;
 
     function _batchArgs(uint256 n)
         private
@@ -405,9 +405,9 @@ contract ChainvoiceTest is Test {
         chainvoice.createInvoicesBatch(tos, amounts, address(0), hashes);
     }
 
-    /// The cap exists so a full batch fits in one Ethereum Classic block. Worst
+    /// The cap exists so a full batch fits in one 8M-gas block. Worst
     /// case is an ERC-20 token and recipients that have never been touched.
-    function testCreateInvoicesBatch_MaxSizeFitsEtcBlockGasLimit() public {
+    function testCreateInvoicesBatch_MaxSizeFits8MBlockGasLimit() public {
         MockERC20 token = new MockERC20();
         uint256 n = chainvoice.MAX_CREATE_BATCH();
         (address[] memory tos, uint256[] memory amounts, bytes32[] memory hashes) = _batchArgs(n);
@@ -424,7 +424,7 @@ contract ChainvoiceTest is Test {
         uint256 execution = before - gasleft();
         uint256 used = execution + _txOverhead(data);
 
-        assertLt(used, ETC_BLOCK_GAS_LIMIT);
+        assertLt(used, MIN_BLOCK_GAS_LIMIT);
     }
 
     function testPayInvoicesBatch_AcceptsMaxBatch() public {

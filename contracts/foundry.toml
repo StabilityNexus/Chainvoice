@@ -4,9 +4,9 @@ out = "out"
 libs = ["lib"]
 remappings = ["openzeppelin-contracts/=lib/openzeppelin-contracts/"]
 solc_version = "0.8.19"
-# Pinned so one bytecode runs on both Sepolia and Ethereum Classic. Newer
-# targets emit opcodes ETC does not have (PUSH0 from shanghai, MCOPY/TSTORE
-# from cancun); london is the newest fork ETC fully matches.
+# Pinned so one bytecode runs on every EVM chain Chainvoice targets, including
+# ones that have not adopted newer upgrades: later targets emit opcodes such
+# chains lack (PUSH0 from shanghai, MCOPY/TSTORE from cancun).
 evm_version = "london"
 optimizer = true
 optimizer_runs = 200
