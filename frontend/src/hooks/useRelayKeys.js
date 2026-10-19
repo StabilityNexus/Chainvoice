@@ -10,11 +10,7 @@ import {
   getCachedKeyPair,
   clearCachedKeys,
 } from '../services/relay/relayKeyManager.js';
-
-const KEY_MISMATCH_MESSAGE =
-  'This account already has a different encryption key registered, probably from another wallet app or site. ' +
-  'Registering a new one would make invoices sent to the old key unreadable. ' +
-  'Use "Replace key" on Received Invoices only if you no longer use the old key.';
+import { useTranslation } from './useTranslation.js';
 
 /**
  * React hook for managing the user's ECIES messaging keypair.
@@ -31,6 +27,12 @@ export function useRelayKeys() {
   const [isCheckingRegistration, setIsCheckingRegistration] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  // 'KEY_MISMATCH' when the last error was a refusal to replace a different
+  // registered key, so the inbox can show its own warning in place of it.
+  const [errorCode, setErrorCode] = useState(null);
+  const { t } = useTranslation('keySafety');
+  // Bumped by every registry read; only the latest may apply its result.
+  const registryRequestRef = useRef(0);
   // The key the registry holds for this account, and whether reading it failed.
   const [onChainKey, setOnChainKey] = useState(null);
   const [registryReadFailed, setRegistryReadFailed] = useState(false);
@@ -60,6 +62,7 @@ export function useRelayKeys() {
     setOnChainKey(null);
     setRegistryReadFailed(false);
     setError(null);
+    setErrorCode(null);
 
     const cached = address ? getCachedKeyPair(address) : null;
     setKeys(cached);
@@ -120,7 +123,11 @@ export function useRelayKeys() {
     // account — applying it would report the previous account's registration
     // state for the current one, and could skip the setup step for an address
     // that has no key on chain.
-    const isStale = () => activeAddressRef.current !== requestedAddress;
+    // A newer read (after a chain switch, say) makes this one stale too.
+    const requestId = ++registryRequestRef.current;
+    const isStale = () =>
+      activeAddressRef.current !== requestedAddress ||
+      registryRequestRef.current !== requestId;
 
     // Callers gate UI on this, so distinguish "still looking" from "absent" —
     // otherwise a registration prompt flashes on every load before the read
@@ -193,6 +200,7 @@ export function useRelayKeys() {
       try {
         setIsLoading(true);
         setError(null);
+        setErrorCode(null);
 
         const keyPair = await deriveKeysOnly(remember);
         assertSameAccount();
@@ -208,7 +216,7 @@ export function useRelayKeys() {
 
         if (isDifferentRegisteredKey(existingKey, keyPair.publicKey)) {
           if (!replaceExisting) {
-            const mismatch = new Error(KEY_MISMATCH_MESSAGE);
+            const mismatch = new Error(t('mismatchError'));
             mismatch.code = 'KEY_MISMATCH';
             throw mismatch;
           }
@@ -242,12 +250,13 @@ export function useRelayKeys() {
             'Signature request rejected. You must sign the message to enable encrypted invoices.';
         }
         setError(errMsg);
+        setErrorCode(code === 'KEY_MISMATCH' ? code : null);
         throw err;
       } finally {
         setIsLoading(false);
       }
     },
-    [deriveKeysOnly, getContract, address]
+    [deriveKeysOnly, getContract, address, t]
   );
 
   // Check registration status when wallet/chain changes
@@ -273,6 +282,7 @@ export function useRelayKeys() {
     isCheckingRegistration,
     isLoading,
     error,
+    errorCode,
     rememberSession,
     setRememberSession,
     deriveAndRegister,

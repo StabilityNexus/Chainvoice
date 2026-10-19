@@ -67,6 +67,14 @@
     "description": "Something on this page failed to load. Your invoices on-chain are not affected. Reload to try again, or open another section from the menu.",
     "reload": "Reload page"
   },
+  "keySafety": {
+    "mismatchError": "This account already has a different encryption key registered, probably from another wallet app or site. Registering a new one would make invoices sent to the old key unreadable. Use \"Replace key\" on Received Invoices only if you no longer use the old key.",
+    "readFailed": "Couldn't check your encryption key on-chain. Check your connection and try again.",
+    "retry": "Retry",
+    "mismatch": "This browser's encryption key is different from the one registered for this account, so invoices sent to you can't be opened here. This happens when the key was registered from another wallet app or site. Use that one to read them, or replace the key if you no longer use it.",
+    "replace": "Replace key",
+    "replaceConfirm": "Replace the encryption key registered for this account? Invoices already sent to the old key will stay unreadable here."
+  },
   "seo": {
     "titleTemplate": "{{page}} | Chainvoice",
     "pages": {

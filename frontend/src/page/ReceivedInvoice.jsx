@@ -112,6 +112,7 @@ function ReceivedInvoice() {
     "ETH";
   const { t } = useTranslation("invoiceVerification");
   const { t: tReceivedInvoices } = useTranslation("receivedInvoices");
+  const { t: tKeySafety } = useTranslation("keySafety");
 
   const [anchorEl, setAnchorEl] = useState(null);
   const openExportMenu = Boolean(anchorEl);
@@ -152,6 +153,7 @@ function ReceivedInvoice() {
     isCheckingRegistration,
     isLoading: keysLoading,
     error: keysError,
+    errorCode: keysErrorCode,
     deriveAndRegister,
     deriveKeysOnly,
     checkRegistration,
@@ -1160,12 +1162,11 @@ function ReceivedInvoice() {
                   variant="contained"
                   onClick={() => checkRegistration().catch(() => {})}
                 >
-                  Retry
+                  {tKeySafety("retry")}
                 </Button>
               }
             >
-              Couldn&apos;t check your encryption key on-chain. Check your
-              connection and try again.
+              {tKeySafety("readFailed")}
             </Alert>
           )}
 
@@ -1182,9 +1183,7 @@ function ReceivedInvoice() {
                   variant="contained"
                   disabled={keysLoading}
                   onClick={() => {
-                    const confirmed = window.confirm(
-                      "Replace the encryption key registered for this account? Invoices already sent to the old key will stay unreadable here."
-                    );
+                    const confirmed = window.confirm(tKeySafety("replaceConfirm"));
                     if (!confirmed) return;
                     deriveAndRegister(true, { replaceExisting: true }).catch(() => {
                       /* surfaced via the hook's error state */
@@ -1194,20 +1193,19 @@ function ReceivedInvoice() {
                   {keysLoading ? (
                     <CircularProgress size={16} sx={{ color: "white" }} />
                   ) : (
-                    "Replace key"
+                    tKeySafety("replace")
                   )}
                 </Button>
               }
             >
-              This browser&apos;s encryption key is different from the one
-              registered for this account, so invoices sent to you can&apos;t be
-              opened here. This happens when the key was registered from another
-              wallet app or site. Use that one to read them, or replace the key
-              if you no longer use it.
+              {tKeySafety("mismatch")}
             </Alert>
           )}
 
-          {isConnected && keysError && !keyMismatch && (
+          {/* The mismatch banner above already explains a refused
+              registration; any other failure, including a rejected
+              replacement, still shows here. */}
+          {isConnected && keysError && keysErrorCode !== "KEY_MISMATCH" && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {keysError}
             </Alert>
