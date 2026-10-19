@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-# PR previews are published under the production domain; keep them out of
-# search results so they don't compete with the live site.
-Disallow: /pr-preview/
-
-Sitemap: https://chainvoice.stability.nexus/sitemap.xml
