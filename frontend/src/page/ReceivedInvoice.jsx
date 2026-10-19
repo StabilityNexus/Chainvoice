@@ -11,6 +11,7 @@ import TableHead from "@mui/material/TableHead";
 import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
+import { getWagmiChainInfo } from "@/utils/wagmiChainHelpers";
 import { BrowserProvider, Contract, ethers } from "ethers";
 import { useEffect, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
@@ -105,6 +106,10 @@ function ReceivedInvoice() {
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_INVOICE_PAGE_SIZE);
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId, chain } = useAccount();
+  const nativeSymbol =
+    getWagmiChainInfo(chainId)?.nativeCurrency?.symbol ||
+    chain?.nativeCurrency?.symbol ||
+    "ETH";
   const { t } = useTranslation("invoiceVerification");
   const { t: tReceivedInvoices } = useTranslation("receivedInvoices");
 
@@ -286,10 +291,10 @@ function ReceivedInvoice() {
       const totalRequired = amount + BigInt(fee);
 
       if (balance < totalRequired) {
-        const requiredEth = ethers.formatEther(totalRequired);
-        const availableEth = ethers.formatEther(balance);
+        const requiredNative = ethers.formatEther(totalRequired);
+        const availableNative = ethers.formatEther(balance);
         throw new Error(
-          `Insufficient ETH balance. Required: ${requiredEth} ETH, Available: ${availableEth} ETH`
+          `Insufficient ${nativeSymbol} balance. Required: ${requiredNative} ${nativeSymbol}, Available: ${availableNative} ${nativeSymbol}`
         );
       }
     } else {
@@ -306,10 +311,10 @@ function ReceivedInvoice() {
 
       const ethBalance = await signer.provider.getBalance(userAddress);
       if (ethBalance < BigInt(fee)) {
-        const requiredEthFee = ethers.formatEther(fee);
-        const availableEth = ethers.formatEther(ethBalance);
+        const requiredNativeFee = ethers.formatEther(fee);
+        const availableNative = ethers.formatEther(ethBalance);
         throw new Error(
-          `Insufficient ETH for fees. Required: ${requiredEthFee} ETH, Available: ${availableEth} ETH`
+          `Insufficient ${nativeSymbol} for fees. Required: ${requiredNativeFee} ${nativeSymbol}, Available: ${availableNative} ${nativeSymbol}`
         );
       }
     }
@@ -500,7 +505,7 @@ function ReceivedInvoice() {
           "Payment transaction submitted. Please wait for confirmation..."
         );
         await tx.wait();
-        toast.success("Payment successful! Paid with ETH");
+        toast.success(`Payment successful! Paid with ${nativeSymbol}`);
       }
 
       // The optimistic row patch only applies if the page it started on is
@@ -645,7 +650,7 @@ function ReceivedInvoice() {
           });
           await tx.wait();
           toast.success(
-            `Successfully paid ${invoices.length} invoices with ETH!`
+            `Successfully paid ${invoices.length} invoices with ${nativeSymbol}!`
           );
         }
       }
@@ -2158,7 +2163,7 @@ function ReceivedInvoice() {
                   <div className="flex justify-between mb-2">
                     <span className="text-sm text-gray-600">Network Fee:</span>
                     <span className="font-medium">
-                      {ethers.formatUnits(fee)} ETH
+                      {ethers.formatUnits(fee)} {nativeSymbol}
                     </span>
                   </div>
                   <div className="flex justify-between pt-2 border-t border-gray-200">

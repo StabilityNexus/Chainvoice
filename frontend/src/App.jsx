@@ -6,7 +6,14 @@ import {
 } from "@rainbow-me/rainbowkit";
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-import { mainnet as wagmiMainnet, classic, base, bsc, polygon, sepolia } from "wagmi/chains";
+import {
+  mainnet as wagmiMainnet,
+  classic,
+  base,
+  bsc,
+  polygon,
+  sepolia,
+} from "wagmi/chains";
 
 import { HashRouter as Router, Route, Routes } from "react-router-dom";
 
@@ -34,7 +41,15 @@ const mainnet = {
   },
 };
 
-const AllChains = [mainnet, classic, base, bsc, polygon, sepolia, citreaTestnet];
+const AllChains = [
+  mainnet,
+  classic,
+  base,
+  bsc,
+  polygon,
+  sepolia,
+  citreaTestnet,
+];
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const config = getDefaultConfig({
@@ -43,6 +58,7 @@ export const config = getDefaultConfig({
   chains: AllChains,
   ssr: false,
 });
+
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
 const GenerateLink = lazy(() => import("./page/GenerateLink"));
@@ -92,7 +108,13 @@ function App() {
           >
             <div className="font-Montserrat h-screen">
               <Router>
-                <Suspense fallback={<div className="flex h-screen items-center justify-center text-white">Loading...</div>}>
+                <Suspense
+                  fallback={
+                    <div className="flex h-screen items-center justify-center text-white">
+                      Loading...
+                    </div>
+                  }
+                >
                   <Routes>
                     <Route path="/" element={<Applayout />}>
                       <Route index element={<Landing />} />
@@ -100,7 +122,10 @@ function App() {
                         <Route path="create" element={<CreateInvoice />} />
                         <Route path="sent" element={<SentInvoice />} />
                         <Route path="pending" element={<ReceivedInvoice />} />
-                        <Route path="generate-link" element={<GenerateLink />} />
+                        <Route
+                          path="generate-link"
+                          element={<GenerateLink />}
+                        />
                         <Route path="import" element={<ImportInvoice />} />
                         <Route
                           path="batch-invoice"

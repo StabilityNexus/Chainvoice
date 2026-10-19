@@ -109,7 +109,12 @@ export const toISODate = (value) => {
  * ERC-20 payments show "amount TOKEN + fee NATIVE".
  */
 export const formatInvoiceTotal = (invoice, fee, fallbackChainId) => {
-  const tokenSymbol = invoice.paymentToken?.symbol || "ETH";
+  const tokenSymbol =
+  invoice.paymentToken?.symbol ||
+  getWagmiChainInfo(
+    invoice.paymentToken?.chainId ?? invoice.chainId ?? fallbackChainId
+  )?.nativeCurrency?.symbol ||
+  "ETH";
   const tokenAddress = invoice.paymentToken?.address;
   const chainInfo = getWagmiChainInfo(
     invoice.paymentToken?.chainId ?? invoice.chainId ?? fallbackChainId
