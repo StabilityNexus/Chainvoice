@@ -1,5 +1,6 @@
 import { ethers } from 'ethers';
 import { verifyInvoiceHash } from '../relay/invoiceHashUtils.js';
+import { getPayloadShapeError } from '../../utils/invoicePayloadShape.js';
 
 /**
  * The decision at the heart of importing a shared invoice.
@@ -52,6 +53,12 @@ export function evaluateOnChainInvoice(raw, invoiceData) {
 
   if (!verifyInvoiceHash(invoiceData, onChain.invoiceDataHash)) {
     return { code: VERIFY_HASH_MISMATCH, onChain };
+  }
+
+  // A committed payload the pages can't render is the sender misrepresenting
+  // their invoice just as much as a wrong amount is.
+  if (getPayloadShapeError(invoiceData)) {
+    return { code: VERIFY_FIELD_MISMATCH, onChain, mismatch: 'invoice format' };
   }
 
   const mismatch = findFieldMismatch(onChain, invoiceData);

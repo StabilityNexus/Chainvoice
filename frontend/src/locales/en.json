@@ -62,6 +62,11 @@
     },
     "payBlocked": "This invoice's details contradict its on-chain record, so it can't be paid here."
   },
+  "pageError": {
+    "title": "This page couldn't be shown",
+    "description": "Something on this page failed to load. Your invoices on-chain are not affected. Reload to try again, or open another section from the menu.",
+    "reload": "Reload page"
+  },
   "seo": {
     "titleTemplate": "{{page}} | Chainvoice",
     "pages": {

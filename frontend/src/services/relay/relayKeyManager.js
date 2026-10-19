@@ -346,4 +346,21 @@ export async function fetchPublicKeyFromChain(contract, userAddress) {
   return publicKey;
 }
 
+/**
+ * Whether a registry entry holds a key other than `derived`.
+ *
+ * The derived key depends on the wallet's signature and on the site's origin,
+ * so a key registered from another wallet app or site differs from the one
+ * derived here. Replacing it makes every invoice already encrypted to it
+ * unreadable, so callers must not do that without asking.
+ *
+ * @param {Uint8Array|null} registered - key from `fetchPublicKeyFromChain`
+ * @param {Uint8Array} derived - public key derived in this browser
+ * @returns {boolean}
+ */
+export function isDifferentRegisteredKey(registered, derived) {
+  if (!registered || registered.length === 0 || !derived) return false;
+  return bytesToHex(registered) !== bytesToHex(derived);
+}
+
 export { hexToBytes, bytesToHex };

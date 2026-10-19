@@ -146,12 +146,18 @@ function ReceivedInvoice() {
   const {
     keys,
     isRegistered,
+    keyMismatch,
+    registryReadFailed,
     isUnsupportedNetwork,
+    isCheckingRegistration,
     isLoading: keysLoading,
     error: keysError,
     deriveAndRegister,
     deriveKeysOnly,
+    checkRegistration,
   } = useRelayKeys();
+  // Key banners wait for the registry read, so none flashes while it loads.
+  const showKeyBanners = isConnected && !isUnsupportedNetwork && !isCheckingRegistration;
   const relayStopRef = useRef(null);
 
   // Error handling states
@@ -1083,7 +1089,7 @@ function ReceivedInvoice() {
 
           {/* Without a registered public key, senders have nothing to encrypt
               to, so invoices arrive as on-chain summaries with no detail. */}
-          {isConnected && !isUnsupportedNetwork && !isRegistered && (
+          {showKeyBanners && !registryReadFailed && !isRegistered && (
             <Alert
               severity="info"
               sx={{ mb: 2 }}
@@ -1114,7 +1120,7 @@ function ReceivedInvoice() {
           {/* Registered on-chain, but this tab holds no private key â€” the key
               is derived from a signature and never stored beyond the session,
               so nothing can be decrypted until the user re-derives it. */}
-          {isConnected && !isUnsupportedNetwork && isRegistered && !keys && (
+          {showKeyBanners && isRegistered && !keys && (
             <Alert
               severity="warning"
               sx={{ mb: 2 }}
@@ -1142,7 +1148,66 @@ function ReceivedInvoice() {
             </Alert>
           )}
 
-          {isConnected && keysError && (
+          {/* A failed registry read is not "unregistered": offering setup
+              here could lead the user to replace a key they still use. */}
+          {showKeyBanners && registryReadFailed && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2 }}
+              action={
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => checkRegistration().catch(() => {})}
+                >
+                  Retry
+                </Button>
+              }
+            >
+              Couldn&apos;t check your encryption key on-chain. Check your
+              connection and try again.
+            </Alert>
+          )}
+
+          {/* The key derived here differs from the registered one, e.g. it was
+              registered from another wallet app or site. Replacing it is the
+              user's call: invoices sent to the old key become unreadable. */}
+          {showKeyBanners && keyMismatch && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2 }}
+              action={
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={keysLoading}
+                  onClick={() => {
+                    const confirmed = window.confirm(
+                      "Replace the encryption key registered for this account? Invoices already sent to the old key will stay unreadable here."
+                    );
+                    if (!confirmed) return;
+                    deriveAndRegister(true, { replaceExisting: true }).catch(() => {
+                      /* surfaced via the hook's error state */
+                    });
+                  }}
+                >
+                  {keysLoading ? (
+                    <CircularProgress size={16} sx={{ color: "white" }} />
+                  ) : (
+                    "Replace key"
+                  )}
+                </Button>
+              }
+            >
+              This browser&apos;s encryption key is different from the one
+              registered for this account, so invoices sent to you can&apos;t be
+              opened here. This happens when the key was registered from another
+              wallet app or site. Use that one to read them, or replace the key
+              if you no longer use it.
+            </Alert>
+          )}
+
+          {isConnected && keysError && !keyMismatch && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {keysError}
             </Alert>

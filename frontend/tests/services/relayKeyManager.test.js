@@ -9,6 +9,7 @@ import {
   hexToBytes,
   bytesToHex,
   buildDerivationMessage,
+  isDifferentRegisteredKey,
 } from "../../src/services/relay/relayKeyManager.js";
 
 const ADDRESS = "0x69fF0f180e74112cF707DdDEC729095631c4B809";
@@ -271,6 +272,27 @@ describe("fetchPublicKeyFromChain", () => {
     const contract = contractReturning("0x");
     await fetchPublicKeyFromChain(contract, ADDRESS);
     expect(contract.getPublicKey).toHaveBeenCalledWith(ADDRESS);
+  });
+});
+
+describe("isDifferentRegisteredKey", () => {
+  // Decides whether registering would replace a key the user may still rely on.
+  it("is false when nothing is registered", async () => {
+    const { publicKey } = await deriveRelayKeyPair(makeSigner(), ADDRESS);
+    expect(isDifferentRegisteredKey(null, publicKey)).toBe(false);
+    expect(isDifferentRegisteredKey(new Uint8Array(0), publicKey)).toBe(false);
+  });
+
+  it("is false when the registered key is the derived one", async () => {
+    const { publicKey } = await deriveRelayKeyPair(makeSigner(), ADDRESS);
+    expect(isDifferentRegisteredKey(Uint8Array.from(publicKey), publicKey)).toBe(false);
+  });
+
+  it("is true when another key is registered", async () => {
+    const { publicKey } = await deriveRelayKeyPair(makeSigner(), ADDRESS);
+    const other = Uint8Array.from(publicKey);
+    other[64] ^= 0xff;
+    expect(isDifferentRegisteredKey(other, publicKey)).toBe(true);
   });
 });
 
