@@ -11,6 +11,7 @@ import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { BrowserProvider, Contract, ethers } from "ethers";
 import { useEffect, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
+import { getWagmiChainInfo } from "@/utils/wagmiChainHelpers";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
@@ -92,6 +93,10 @@ function SentInvoice() {
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_INVOICE_PAGE_SIZE);
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId, chain } = useAccount();
+  const nativeSymbol =
+    getWagmiChainInfo(chainId)?.nativeCurrency?.symbol ||
+    chain?.nativeCurrency?.symbol ||
+    "ETH";
 
   const [anchorEl, setAnchorEl] = useState(null);
   const openExportMenu = Boolean(anchorEl);
@@ -264,8 +269,8 @@ function SentInvoice() {
             if (parsed._hashMismatch || parsed._payloadMismatch) {
               console.warn(
                 `Invoice ${id}: stored payload does not match the on-chain record` +
-                  (parsed._payloadMismatch ? ` (${parsed._payloadMismatch})` : "") +
-                  "; showing on-chain data only"
+                (parsed._payloadMismatch ? ` (${parsed._payloadMismatch})` : "") +
+                "; showing on-chain data only"
               );
             }
 
@@ -1360,7 +1365,7 @@ function SentInvoice() {
                 <div className="flex justify-between mb-2">
                   <span className="text-sm text-gray-600">Network Fee:</span>
                   <span className="font-medium">
-                    {ethers.formatUnits(fee)} ETH
+                    {ethers.formatUnits(fee)} {nativeSymbol}
                   </span>
                 </div>
                 <div className="flex justify-between pt-2 border-t border-gray-200">

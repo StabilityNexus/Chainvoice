@@ -6,7 +6,14 @@ import {
 } from "@rainbow-me/rainbowkit";
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-import { mainnet as wagmiMainnet, classic, base, bsc, polygon, sepolia } from "wagmi/chains";
+import {
+  mainnet as wagmiMainnet,
+  classic,
+  base,
+  bsc,
+  polygon,
+  sepolia,
+} from "wagmi/chains";
 
 import { HashRouter as Router, Route, Routes } from "react-router-dom";
 
@@ -14,7 +21,6 @@ import { lazy, Suspense } from "react";
 import Landing from "./page/Landing";
 import Applayout from "./page/Applayout";
 import { citreaTestnet } from "./utils/CitreaTestnet";
-import { defineChain } from "viem";
 
 const Home = lazy(() => import("./page/Home"));
 const Feature = lazy(() => import("./page/Feature"));
@@ -34,48 +40,7 @@ const mainnet = {
     },
   },
 };
-const wemix = defineChain({
-  id: 1111,
-  name: "WEMIX Mainnet",
-  nativeCurrency: {
-    name: "WEMIX",
-    symbol: "WEMIX",
-    decimals: 18,
-  },
-  rpcUrls: {
-    default: {
-      http: ["https://api.wemix.com/"],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: "WEMIX Explorer",
-      url: "https://explorer.wemix.com/",
-    },
-  },
-});
 
-const wemixTestnet = defineChain({
-  id: 1112,
-  name: "WEMIX Testnet",
-  nativeCurrency: {
-    name: "Testnet WEMIX",
-    symbol: "tWEMIX",
-    decimals: 18,
-  },
-  rpcUrls: {
-    default: {
-      http: ["https://api.test.wemix.com/"],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: "WEMIX Testnet Explorer",
-      url: "https://explorer.test.wemix.com/",
-    },
-  },
-  testnet: true,
-});
 const AllChains = [
   mainnet,
   classic,
@@ -84,8 +49,6 @@ const AllChains = [
   polygon,
   sepolia,
   citreaTestnet,
-  wemix,
-  wemixTestnet,
 ];
 
 // eslint-disable-next-line react-refresh/only-export-components
@@ -95,6 +58,7 @@ export const config = getDefaultConfig({
   chains: AllChains,
   ssr: false,
 });
+
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
 const GenerateLink = lazy(() => import("./page/GenerateLink"));
@@ -144,7 +108,13 @@ function App() {
           >
             <div className="font-Montserrat h-screen">
               <Router>
-                <Suspense fallback={<div className="flex h-screen items-center justify-center text-white">Loading...</div>}>
+                <Suspense
+                  fallback={
+                    <div className="flex h-screen items-center justify-center text-white">
+                      Loading...
+                    </div>
+                  }
+                >
                   <Routes>
                     <Route path="/" element={<Applayout />}>
                       <Route index element={<Landing />} />
@@ -152,7 +122,10 @@ function App() {
                         <Route path="create" element={<CreateInvoice />} />
                         <Route path="sent" element={<SentInvoice />} />
                         <Route path="pending" element={<ReceivedInvoice />} />
-                        <Route path="generate-link" element={<GenerateLink />} />
+                        <Route
+                          path="generate-link"
+                          element={<GenerateLink />}
+                        />
                         <Route path="import" element={<ImportInvoice />} />
                         <Route
                           path="batch-invoice"

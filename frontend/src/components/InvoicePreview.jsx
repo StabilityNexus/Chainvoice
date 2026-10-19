@@ -185,7 +185,8 @@ const InvoicePreview = ({
                   className="text-red-700 mt-0.5 text-xs"
                 >
                   {cancelledMessage ||
-                    `This invoice was cancelled by ${invoice.user?.fname || "The sender"
+                    `This invoice was cancelled by ${
+                      invoice.user?.fname || "The sender"
                     } ${invoice.user?.lname || ""}. You no longer need to make payment for this invoice.`}
                 </Typography>
               </div>
@@ -381,8 +382,9 @@ const InvoicePreview = ({
                   return (
                     <tr
                       key={index}
-                      className={`hover:bg-gray-50 transition-colors ${index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                        }`}
+                      className={`hover:bg-gray-50 transition-colors ${
+                        index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                      }`}
                     >
                       <td className="px-4 py-3 text-xs sm:text-sm font-medium text-gray-900">
                         {item.description}
