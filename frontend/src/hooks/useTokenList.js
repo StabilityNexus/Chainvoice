@@ -63,7 +63,6 @@ export function useTokenList(chainId) {
         }
 
         const data = await response.json();
-        console.log(data);
         // Transform data to match expected format
         const transformedData = data.map((token) => ({
           contract_address: token.contract_address || token.address,
