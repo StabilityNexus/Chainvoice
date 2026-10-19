@@ -150,11 +150,12 @@ forge build
 source .env
 
 4. **Deploy to Ethereum Classic**  
-The script reads `FEE_CONTROLLER` and `FEE_RECIPIENT` (both required, non-zero)
-and an optional `FEE_WEI` (default `0.0005 ether`, must not be `0`) from `.env`,
-and passes them to the constructor. `FEE_CONTROLLER` sets the fee and the fee
-recipient and hands its own role over in two steps, so use a multisig;
-`FEE_RECIPIENT` receives withdrawn fees. The compiler targets `evm_version = "london"`
+The script reads `DEV_ADDRESS` and `DEV_FEE_RECEIVER` (both required, non-zero)
+and an optional `DEV_FEE_WEI` (default `0.0005 ether`, must not be `0`) from `.env`,
+and passes them to the constructor. The `dev` address sets `devFee` and
+`devFeeReceiver` and hands its own role over in two steps (`proposeDev`, then
+`acceptDev` from the new address), so use a multisig; `devFeeReceiver` receives
+withdrawn fees. The compiler targets `evm_version = "london"` with `via_ir`
 (see `contracts/foundry.toml`) so the same bytecode runs on Sepolia and ETC.
 
 ```bash
@@ -165,7 +166,8 @@ forge script script/Chainvoice.s.sol:DeployChainvoice   --rpc-url etc --account 
 `forge script` fails with `unsupported feature: eip1559`.
 
 For Sepolia, use `--rpc-url sepolia --verify` (Etherscan, needs `ETHERSCAN_API_KEY`) and
-leave `--legacy` out.
+leave `--legacy` out. Sepolia charges several times more gas for deployed code
+than forge's local simulation, so also pass `--gas-estimate-multiplier 800`.
 After deploying, record the address in [Deployments.md](./Deployments.md).
 
 5. **Configure frontend**  

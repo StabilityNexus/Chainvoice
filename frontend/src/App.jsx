@@ -1,7 +1,14 @@
 import { createWalletLinkConfig } from "@stability-nexus/walletlink";
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-import { mainnet as wagmiMainnet, classic, base, bsc, polygon, sepolia } from "wagmi/chains";
+import {
+  mainnet as wagmiMainnet,
+  classic,
+  base,
+  bsc,
+  polygon,
+  sepolia,
+} from "wagmi/chains";
 
 import { HashRouter as Router, Route, Routes } from "react-router-dom";
 
@@ -29,12 +36,21 @@ const mainnet = {
   },
 };
 
-const AllChains = [mainnet, classic, base, bsc, polygon, sepolia, citreaTestnet];
+const AllChains = [
+  mainnet,
+  classic,
+  base,
+  bsc,
+  polygon,
+  sepolia,
+  citreaTestnet,
+];
 
 // eslint-disable-next-line react-refresh/only-export-components
 export const config = createWalletLinkConfig({
   chains: AllChains,
 });
+
 const queryClient = new QueryClient();
 import { Toaster } from "react-hot-toast";
 const GenerateLink = lazy(() => import("./page/GenerateLink"));

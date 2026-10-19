@@ -3,17 +3,17 @@ export const ChainvoiceABI = [
     "type": "constructor",
     "inputs": [
       {
-        "name": "_fee",
+        "name": "_devFee",
         "type": "uint256",
         "internalType": "uint256"
       },
       {
-        "name": "_feeController",
+        "name": "_dev",
         "type": "address",
         "internalType": "address"
       },
       {
-        "name": "_feeRecipient",
+        "name": "_devFeeReceiver",
         "type": "address",
         "internalType": "address"
       }
@@ -61,14 +61,14 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "acceptFeeController",
+    "name": "acceptDev",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
   {
     "type": "function",
-    "name": "accumulatedFees",
+    "name": "accumulatedDevFees",
     "inputs": [],
     "outputs": [
       {
@@ -81,7 +81,7 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "cancelFeeControllerProposal",
+    "name": "cancelDevProposal",
     "inputs": [],
     "outputs": [],
     "stateMutability": "nonpayable"
@@ -157,20 +157,7 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "fee",
-    "inputs": [],
-    "outputs": [
-      {
-        "name": "",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ],
-    "stateMutability": "view"
-  },
-  {
-    "type": "function",
-    "name": "feeController",
+    "name": "dev",
     "inputs": [],
     "outputs": [
       {
@@ -183,7 +170,20 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "feeRecipient",
+    "name": "devFee",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "devFeeReceiver",
     "inputs": [],
     "outputs": [
       {
@@ -542,7 +542,7 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "pendingFeeController",
+    "name": "pendingDev",
     "inputs": [],
     "outputs": [
       {
@@ -555,10 +555,10 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "proposeFeeController",
+    "name": "proposeDev",
     "inputs": [
       {
-        "name": "newFeeController",
+        "name": "newDev",
         "type": "address",
         "internalType": "address"
       }
@@ -629,10 +629,10 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "setFeeAmount",
+    "name": "setDevFee",
     "inputs": [
       {
-        "name": "_fee",
+        "name": "newDevFee",
         "type": "uint256",
         "internalType": "uint256"
       }
@@ -642,10 +642,10 @@ export const ChainvoiceABI = [
   },
   {
     "type": "function",
-    "name": "setFeeRecipient",
+    "name": "setDevFeeReceiver",
     "inputs": [
       {
-        "name": "newFeeRecipient",
+        "name": "newDevFeeReceiver",
         "type": "address",
         "internalType": "address"
       }
@@ -662,16 +662,16 @@ export const ChainvoiceABI = [
   },
   {
     "type": "event",
-    "name": "FeeControllerProposalCancelled",
+    "name": "DevFeeReceiverUpdated",
     "inputs": [
       {
-        "name": "currentFeeController",
+        "name": "previousDevFeeReceiver",
         "type": "address",
         "indexed": true,
         "internalType": "address"
       },
       {
-        "name": "cancelledFeeController",
+        "name": "newDevFeeReceiver",
         "type": "address",
         "indexed": true,
         "internalType": "address"
@@ -681,76 +681,76 @@ export const ChainvoiceABI = [
   },
   {
     "type": "event",
-    "name": "FeeControllerProposed",
+    "name": "DevFeeUpdated",
     "inputs": [
       {
-        "name": "currentFeeController",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "proposedFeeController",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "FeeControllerUpdated",
-    "inputs": [
-      {
-        "name": "previousFeeController",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newFeeController",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "FeeRecipientUpdated",
-    "inputs": [
-      {
-        "name": "previousFeeRecipient",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      },
-      {
-        "name": "newFeeRecipient",
-        "type": "address",
-        "indexed": true,
-        "internalType": "address"
-      }
-    ],
-    "anonymous": false
-  },
-  {
-    "type": "event",
-    "name": "FeeUpdated",
-    "inputs": [
-      {
-        "name": "previousFee",
+        "name": "previousDevFee",
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
       },
       {
-        "name": "newFee",
+        "name": "newDevFee",
         "type": "uint256",
         "indexed": true,
         "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DevProposalCancelled",
+    "inputs": [
+      {
+        "name": "currentDev",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "cancelledDev",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DevProposed",
+    "inputs": [
+      {
+        "name": "currentDev",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "proposedDev",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "DevUpdated",
+    "inputs": [
+      {
+        "name": "previousDev",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "newDev",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
       }
     ],
     "anonymous": false
@@ -1038,7 +1038,7 @@ export const ChainvoiceABI = [
   },
   {
     "type": "error",
-    "name": "NoPendingFeeController",
+    "name": "NoPendingDev",
     "inputs": []
   },
   {
