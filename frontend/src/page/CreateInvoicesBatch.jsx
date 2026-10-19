@@ -10,6 +10,8 @@ import {
   JsonRpcProvider,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
+import { usePaymentToken } from "../hooks/usePaymentToken.js";
+import { resolveTokenDecimals as resolvePaymentTokenDecimals } from "../utils/paymentToken.js";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import {
   Popover,
@@ -100,11 +102,15 @@ function CreateInvoicesBatch() {
   const itemRefs = useRef({});
 
   // Token selection state
-  const [selectedToken, setSelectedToken] = useState(null);
-  const [customTokenAddress, setCustomTokenAddress] = useState("");
-  const [useCustomToken, setUseCustomToken] = useState(false);
-  const [tokenVerificationState, setTokenVerificationState] = useState("idle");
-  const [verifiedToken, setVerifiedToken] = useState(null);
+  const {
+    nativeToken,
+    selectedToken, setSelectedToken,
+    customTokenAddress, setCustomTokenAddress,
+    useCustomToken, setUseCustomToken,
+    tokenVerificationState, setTokenVerificationState,
+    verifiedToken, setVerifiedToken,
+    beginTokenRequest,
+  } = usePaymentToken(chainId || 1);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [clientAddressErrors, setClientAddressErrors] = useState({});
   const [rowTotalErrors, setRowTotalErrors] = useState({});
@@ -167,33 +173,27 @@ function CreateInvoicesBatch() {
   }, [isConnected]);
 
   const resolveTokenDecimals = async (tokenAddress, fallbackDecimals) => {
-    if (
-      fallbackDecimals !== undefined &&
-      fallbackDecimals !== null &&
-      !Number.isNaN(Number(fallbackDecimals))
-    ) {
-      return Number(fallbackDecimals);
-    }
+    return resolvePaymentTokenDecimals(tokenAddress, fallbackDecimals, nativeToken, async () => {
+      try {
+        let provider;
+        const rpcUrl = chainId && CHAIN_ID_TO_PUBLIC_RPC[Number(chainId)];
 
-    try {
-      let provider;
-      const rpcUrl = chainId && CHAIN_ID_TO_PUBLIC_RPC[Number(chainId)];
+        if (rpcUrl) {
+          provider = new JsonRpcProvider(rpcUrl);
+        } else if (typeof window !== "undefined" && window.ethereum) {
+          provider = new BrowserProvider(window.ethereum);
+        } else {
+          return null;
+        }
 
-      if (rpcUrl) {
-        provider = new JsonRpcProvider(rpcUrl);
-      } else if (typeof window !== "undefined" && window.ethereum) {
-        provider = new BrowserProvider(window.ethereum);
-      } else {
+        const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+        const decimals = await contract.decimals();
+        return Number(decimals);
+      } catch (error) {
+        console.warn("Failed to resolve token decimals:", error);
         return null;
       }
-
-      const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-      const decimals = await contract.decimals();
-      return Number(decimals);
-    } catch (error) {
-      console.warn("Failed to resolve token decimals:", error);
-      return null;
-    }
+    });
   };
 
   // Invoice management
@@ -378,6 +378,14 @@ function CreateInvoicesBatch() {
 
   // Token verification
   const verifyToken = async (address) => {
+    const isCurrent = beginTokenRequest();
+    if (address.toLowerCase() === ethers.ZeroAddress && nativeToken) {
+      setSelectedToken(nativeToken);
+      setUseCustomToken(false);
+      setVerifiedToken(null);
+      setTokenVerificationState("idle");
+      return;
+    }
     setTokenVerificationState("verifying");
 
     try {
@@ -391,6 +399,7 @@ function CreateInvoicesBatch() {
           contract.decimals().catch(() => 18),
         ]);
 
+        if (!isCurrent()) return;
         setVerifiedToken({ address, symbol, name, decimals });
         setTokenVerificationState("success");
         toast.success(`Token verified: ${name} (${symbol})`);
@@ -400,6 +409,7 @@ function CreateInvoicesBatch() {
         toast.error("No Ethereum provider found");
       }
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Verification failed:", error);
       setTokenVerificationState("error");
       toast.error("Token verification failed. Please check the address.");
@@ -957,7 +967,10 @@ function CreateInvoicesBatch() {
             <div className="space-y-4">
               <ToggleSwitch
                 enabled={useCustomToken}
-                onChange={setUseCustomToken}
+                onChange={(enabled) => {
+                  beginTokenRequest();
+                  setUseCustomToken(enabled);
+                }}
                 leftLabel="Select Token"
                 rightLabel="Input Custom Token"
               />
@@ -972,11 +985,13 @@ function CreateInvoicesBatch() {
                       selected={selectedToken}
                       onSelect={async (token) => {
                         const address = token.contract_address || token.address;
+                        const isCurrent = beginTokenRequest();
                         const decimals = await resolveTokenDecimals(
                           address,
                           token.decimals
                         );
 
+                        if (!isCurrent()) return false;
                         if (decimals === null) {
                           toast.error(
                             "Failed to fetch token decimals for selected token"
@@ -1025,6 +1040,7 @@ function CreateInvoicesBatch() {
                       placeholder="0x... (Enter token contract address)"
                       value={customTokenAddress}
                       onChange={(e) => {
+                        beginTokenRequest();
                         const address = e.target.value;
                         setCustomTokenAddress(address);
                         if (!address || !ethers.isAddress(address)) {

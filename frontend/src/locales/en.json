@@ -59,6 +59,15 @@
       "generic": "Payment failed. Please try again or contact support"
     }
   },
+  "tokenPicker": {
+    "testnetNotice": "Select the native coin or use Input Custom Token for testnet ERC-20 tokens.",
+    "testnetListUnavailable": "ERC-20 token lists are not available on testnets."
+  },
+  "createInvoice": {
+    "linkChainMismatch": "This link requests a token on {{chainName}}. Switch network to use it.",
+    "nativeCoinUnsupported": "The native coin is not supported on this network.",
+    "tokenDecimalsFetchFailed": "Failed to fetch token decimals for selected token"
+  },
   "invoiceVerification": {
     "received": {
       "pending": "Details pending",
