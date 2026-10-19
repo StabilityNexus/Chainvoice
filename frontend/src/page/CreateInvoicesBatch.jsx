@@ -48,6 +48,7 @@ import TokenIntegrationRequest from "@/components/TokenIntegrationRequest";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
+import { getMaxInvoicesPerBatch } from "@/utils/batchLimits";
 import { AmountTypeToggle } from "../components/AmountTypeToggle";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
@@ -83,11 +84,6 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
   11155111: "https://ethereum-sepolia-rpc.publicnode.com",
   5115: "https://rpc.testnet.citrea.xyz",
 };
-
-// Mirrors MAX_CREATE_BATCH in Chainvoice.sol, which is the real guard: a larger
-// batch reverts with InvalidBatchSize. It is sized so a full batch fits in one
-// Ethereum Classic block (8M gas).
-const MAX_INVOICES_PER_BATCH = 30;
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
@@ -199,7 +195,7 @@ function CreateInvoicesBatch() {
 
   // Invoice management
   const addInvoiceRow = () => {
-    if (invoiceRows.length >= MAX_INVOICES_PER_BATCH) return;
+    if (invoiceRows.length >= getMaxInvoicesPerBatch(chainId)) return;
     const newIndex = invoiceRows.length;
     setInvoiceRows((prev) => [
       ...prev,
@@ -811,6 +807,17 @@ function CreateInvoicesBatch() {
       return;
     }
 
+    // Rows added on another chain can exceed this chain's limit after a switch.
+    const maxInvoices = getMaxInvoicesPerBatch(chainId);
+    if (invoiceRows.length > maxInvoices) {
+      toast.error(
+        `This network fits at most ${maxInvoices} invoices per batch. Remove ${
+          invoiceRows.length - maxInvoices
+        } and send them in another batch.`
+      );
+      return;
+    }
+
     await createInvoicesRequest();
   };
 
@@ -1120,16 +1127,16 @@ function CreateInvoicesBatch() {
               <Button
                 type="button"
                 onClick={addInvoiceRow}
-                disabled={invoiceRows.length >= MAX_INVOICES_PER_BATCH}
+                disabled={invoiceRows.length >= getMaxInvoicesPerBatch(chainId)}
                 className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
               >
                 <PlusIcon className="w-4 h-4" />
                 Add Invoice
               </Button>
             </div>
-            {invoiceRows.length >= MAX_INVOICES_PER_BATCH && (
+            {invoiceRows.length >= getMaxInvoicesPerBatch(chainId) && (
               <p className="text-sm text-amber-400">
-                A batch can hold at most {MAX_INVOICES_PER_BATCH} invoices so
+                A batch can hold at most {getMaxInvoicesPerBatch(chainId)} invoices so
                 the transaction fits in a block. Submit this batch, then create
                 another for the rest.
               </p>
