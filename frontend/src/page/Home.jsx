@@ -18,6 +18,7 @@ import DownloadForOfflineIcon from "@mui/icons-material/DownloadForOffline";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { FileStackIcon, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
+import PageErrorBoundary from "@/components/PageErrorBoundary";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useTermsOfUse } from "@/hooks/useTermsOfUse";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -176,6 +177,7 @@ export default function Home() {
   } = useUserProfile();
   const { accepted: termsAccepted } = useTermsOfUse();
   const { t } = useTranslation("seo");
+  const { t: tPageError } = useTranslation("pageError");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
   const [railCollapsed, setRailCollapsed] = useState(readRailCollapsed);
@@ -352,7 +354,14 @@ export default function Home() {
           >
             {/* Each section renders its own visible h2 beneath this. */}
             <h1 className="sr-only">{t("pages.dashboard.title")}</h1>
-            <Outlet />
+            <PageErrorBoundary
+              key={location.pathname}
+              title={tPageError("title")}
+              description={tPageError("description")}
+              reloadLabel={tPageError("reload")}
+            >
+              <Outlet />
+            </PageErrorBoundary>
           </Box>
         </Box>
       </div>

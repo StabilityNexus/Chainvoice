@@ -112,6 +112,7 @@ function ReceivedInvoice() {
     "ETH";
   const { t } = useTranslation("invoiceVerification");
   const { t: tReceivedInvoices } = useTranslation("receivedInvoices");
+  const { t: tKeySafety } = useTranslation("keySafety");
 
   const [anchorEl, setAnchorEl] = useState(null);
   const openExportMenu = Boolean(anchorEl);
@@ -146,12 +147,19 @@ function ReceivedInvoice() {
   const {
     keys,
     isRegistered,
+    keyMismatch,
+    registryReadFailed,
     isUnsupportedNetwork,
+    isCheckingRegistration,
     isLoading: keysLoading,
     error: keysError,
+    errorCode: keysErrorCode,
     deriveAndRegister,
     deriveKeysOnly,
+    checkRegistration,
   } = useRelayKeys();
+  // Key banners wait for the registry read, so none flashes while it loads.
+  const showKeyBanners = isConnected && !isUnsupportedNetwork && !isCheckingRegistration;
   const relayStopRef = useRef(null);
 
   // Error handling states
@@ -1083,7 +1091,7 @@ function ReceivedInvoice() {
 
           {/* Without a registered public key, senders have nothing to encrypt
               to, so invoices arrive as on-chain summaries with no detail. */}
-          {isConnected && !isUnsupportedNetwork && !isRegistered && (
+          {showKeyBanners && !registryReadFailed && !isRegistered && (
             <Alert
               severity="info"
               sx={{ mb: 2 }}
@@ -1114,7 +1122,7 @@ function ReceivedInvoice() {
           {/* Registered on-chain, but this tab holds no private key â€” the key
               is derived from a signature and never stored beyond the session,
               so nothing can be decrypted until the user re-derives it. */}
-          {isConnected && !isUnsupportedNetwork && isRegistered && !keys && (
+          {showKeyBanners && isRegistered && !keys && (
             <Alert
               severity="warning"
               sx={{ mb: 2 }}
@@ -1142,7 +1150,62 @@ function ReceivedInvoice() {
             </Alert>
           )}
 
-          {isConnected && keysError && (
+          {/* A failed registry read is not "unregistered": offering setup
+              here could lead the user to replace a key they still use. */}
+          {showKeyBanners && registryReadFailed && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2 }}
+              action={
+                <Button
+                  size="small"
+                  variant="contained"
+                  onClick={() => checkRegistration().catch(() => {})}
+                >
+                  {tKeySafety("retry")}
+                </Button>
+              }
+            >
+              {tKeySafety("readFailed")}
+            </Alert>
+          )}
+
+          {/* The key derived here differs from the registered one, e.g. it was
+              registered from another wallet app or site. Replacing it is the
+              user's call: invoices sent to the old key become unreadable. */}
+          {showKeyBanners && keyMismatch && (
+            <Alert
+              severity="warning"
+              sx={{ mb: 2 }}
+              action={
+                <Button
+                  size="small"
+                  variant="contained"
+                  disabled={keysLoading}
+                  onClick={() => {
+                    const confirmed = window.confirm(tKeySafety("replaceConfirm"));
+                    if (!confirmed) return;
+                    deriveAndRegister(true, { replaceExisting: true }).catch(() => {
+                      /* surfaced via the hook's error state */
+                    });
+                  }}
+                >
+                  {keysLoading ? (
+                    <CircularProgress size={16} sx={{ color: "white" }} />
+                  ) : (
+                    tKeySafety("replace")
+                  )}
+                </Button>
+              }
+            >
+              {tKeySafety("mismatch")}
+            </Alert>
+          )}
+
+          {/* The mismatch banner above already explains a refused
+              registration; any other failure, including a rejected
+              replacement, still shows here. */}
+          {isConnected && keysError && keysErrorCode !== "KEY_MISMATCH" && (
             <Alert severity="error" sx={{ mb: 2 }}>
               {keysError}
             </Alert>

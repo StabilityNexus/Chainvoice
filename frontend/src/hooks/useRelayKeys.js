@@ -6,10 +6,11 @@ import {
   deriveRelayKeyPair,
   registerPublicKeyOnChain,
   fetchPublicKeyFromChain,
-  bytesToHex,
+  isDifferentRegisteredKey,
   getCachedKeyPair,
   clearCachedKeys,
 } from '../services/relay/relayKeyManager.js';
+import { useTranslation } from './useTranslation.js';
 
 /**
  * React hook for managing the user's ECIES messaging keypair.
@@ -26,6 +27,15 @@ export function useRelayKeys() {
   const [isCheckingRegistration, setIsCheckingRegistration] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
+  // 'KEY_MISMATCH' when the last error was a refusal to replace a different
+  // registered key, so the inbox can show its own warning in place of it.
+  const [errorCode, setErrorCode] = useState(null);
+  const { t } = useTranslation('keySafety');
+  // Bumped by every registry read; only the latest may apply its result.
+  const registryRequestRef = useRef(0);
+  // The key the registry holds for this account, and whether reading it failed.
+  const [onChainKey, setOnChainKey] = useState(null);
+  const [registryReadFailed, setRegistryReadFailed] = useState(false);
   // Persist to sessionStorage by default. Without this the private key lives
   // only in module memory, so a page reload silently loses it and anything
   // gated on key availability — like polling the relay for new invoices —
@@ -49,7 +59,10 @@ export function useRelayKeys() {
   // is empty or corrupt and pop an unexplained signature prompt on page load.
   useEffect(() => {
     setIsRegistered(false);
+    setOnChainKey(null);
+    setRegistryReadFailed(false);
     setError(null);
+    setErrorCode(null);
 
     const cached = address ? getCachedKeyPair(address) : null;
     setKeys(cached);
@@ -110,7 +123,11 @@ export function useRelayKeys() {
     // account — applying it would report the previous account's registration
     // state for the current one, and could skip the setup step for an address
     // that has no key on chain.
-    const isStale = () => activeAddressRef.current !== requestedAddress;
+    // A newer read (after a chain switch, say) makes this one stale too.
+    const requestId = ++registryRequestRef.current;
+    const isStale = () =>
+      activeAddressRef.current !== requestedAddress ||
+      registryRequestRef.current !== requestId;
 
     // Callers gate UI on this, so distinguish "still looking" from "absent" —
     // otherwise a registration prompt flashes on every load before the read
@@ -126,22 +143,32 @@ export function useRelayKeys() {
     try {
       const contract = await getContract();
       if (!contract || !requestedAddress) {
-        if (!isStale()) setIsRegistered(false);
+        if (!isStale()) {
+          setIsRegistered(false);
+          // A key read on another chain says nothing about this one.
+          setOnChainKey(null);
+        }
         return false;
       }
 
       const pubKey = await fetchPublicKeyFromChain(contract, requestedAddress);
       const registered = pubKey !== null && pubKey.length > 0;
-      if (!isStale()) setIsRegistered(registered);
+      if (!isStale()) {
+        setIsRegistered(registered);
+        setOnChainKey(pubKey);
+        setRegistryReadFailed(false);
+      }
       return registered;
     } catch (err) {
-      // A failed read is indistinguishable from "not registered" here. Treating
-      // it as unregistered is the safe default: registering again is a no-op
-      // when the same key is already on-chain, so the worst case is one extra
-      // signature rather than a wrongly unlocked flow. Log it so a transient
-      // RPC failure can still be told apart from a genuine absence.
+      // Report "not registered" to callers that just need a yes/no (creating
+      // an invoice re-reads the registry before registering, and
+      // deriveAndRegister will not replace a different key). Flag the failure
+      // separately so the inbox can offer a retry instead of a setup step.
       console.warn('[useRelayKeys] Registry read failed:', err);
-      if (!isStale()) setIsRegistered(false);
+      if (!isStale()) {
+        setIsRegistered(false);
+        setRegistryReadFailed(true);
+      }
       return false;
     } finally {
       // Only the newest request may clear this. A stale one finishing would
@@ -151,9 +178,15 @@ export function useRelayKeys() {
     }
   }, [getContract, address, chainId]);
 
-  /** Derive keys AND register the public key on-chain (if not already). */
+  /**
+   * Derive keys AND register the public key on-chain (if not already).
+   *
+   * Refuses to replace a different key that is already registered unless
+   * `replaceExisting` is set: invoices encrypted to that key would become
+   * unreadable, so only an explicit user choice may do it.
+   */
   const deriveAndRegister = useCallback(
-    async (remember) => {
+    async (remember, { replaceExisting = false } = {}) => {
       const requestedAddress = address;
       // Abort rather than publish if the account changes mid-flow: the signer,
       // the key being compared and the key being registered must all describe
@@ -167,6 +200,7 @@ export function useRelayKeys() {
       try {
         setIsLoading(true);
         setError(null);
+        setErrorCode(null);
 
         const keyPair = await deriveKeysOnly(remember);
         assertSameAccount();
@@ -175,18 +209,26 @@ export function useRelayKeys() {
         if (!contract) throw new Error('Contract not available on this network');
         assertSameAccount();
 
-        // Skip the transaction if the same key is already registered
         const existingKey = await fetchPublicKeyFromChain(contract, requestedAddress);
         assertSameAccount();
-        if (existingKey && existingKey.length > 0) {
-          if (bytesToHex(existingKey) === bytesToHex(keyPair.publicKey)) {
-            setIsRegistered(true);
-            return;
+        setOnChainKey(existingKey);
+        setRegistryReadFailed(false);
+
+        if (isDifferentRegisteredKey(existingKey, keyPair.publicKey)) {
+          if (!replaceExisting) {
+            const mismatch = new Error(t('mismatchError'));
+            mismatch.code = 'KEY_MISMATCH';
+            throw mismatch;
           }
+        } else if (existingKey && existingKey.length > 0) {
+          // The same key is already registered, so skip the transaction.
+          setIsRegistered(true);
+          return;
         }
 
         await registerPublicKeyOnChain(contract, keyPair.publicKey);
         assertSameAccount();
+        setOnChainKey(keyPair.publicKey);
         setIsRegistered(true);
       } catch (err) {
         console.error('[useRelayKeys] Failed to derive/register keys:', err);
@@ -208,29 +250,44 @@ export function useRelayKeys() {
             'Signature request rejected. You must sign the message to enable encrypted invoices.';
         }
         setError(errMsg);
+        setErrorCode(code === 'KEY_MISMATCH' ? code : null);
         throw err;
       } finally {
         setIsLoading(false);
       }
     },
-    [deriveKeysOnly, getContract, address]
+    [deriveKeysOnly, getContract, address, t]
   );
 
   // Check registration status when wallet/chain changes
   useEffect(() => {
     if (address && walletClient && chainId) {
       checkRegistration().catch(() => {});
+    } else {
+      // No read can start, so drop any pending one and stop "checking";
+      // otherwise a read left stale by a disconnect would keep it set.
+      registryRequestRef.current += 1;
+      setIsCheckingRegistration(false);
     }
   }, [address, walletClient, chainId, checkRegistration]);
+
+  // This browser holds a key, but the registry lists a different one, so
+  // invoices sent to this account are encrypted to a key we cannot use.
+  const keyMismatch = Boolean(
+    keys && isDifferentRegisteredKey(onChainKey, keys.publicKey)
+  );
 
   return {
     keys,
     hasKeys,
     isRegistered,
+    keyMismatch,
+    registryReadFailed,
     isUnsupportedNetwork,
     isCheckingRegistration,
     isLoading,
     error,
+    errorCode,
     rememberSession,
     setRememberSession,
     deriveAndRegister,
