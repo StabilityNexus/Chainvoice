@@ -1,27 +1,28 @@
-# Workflow 1 of 2 for PR previews.
+# Builds PR previews. pr-deploy.yml publishes them; pr-preview-approval.yml
+# records maintainer approvals; pr-preview-sweep.yml catches what cleanup missed.
 #
 # Runs in the pull request's own context, which is the only context a fork's
 # code may be built in. A `pull_request` run gets a read-only token, no secrets
 # and no repository variables, and its workflow file is the fork's own copy —
 # so nothing here is trusted with anything, and nothing it produces is trusted
-# by pr-deploy.yml either.
+# by pr-deploy.yml either. In particular, whether a preview is allowed at all is
+# decided over there: a fork can rewrite every condition in this file.
 #
 # That is why the build lives here rather than in the workflow that has the
 # secrets. Building in the base repository's context would mean executing a
 # fork's dependency tree and vite config in a job holding this repository's
-# token, secrets and default-branch cache scope — the "pwn request" shape that
-# actions/checkout refuses by default. The settings the build needs are
-# committed in frontend/.env.preview instead; none of them is a credential.
-#
-# pr-deploy.yml picks the artifact up over workflow_run, checks it, and
-# publishes it. Which pull request that is, it works out from the event
-# payload — never from anything in here.
+# token, Cloudflare credentials and default-branch cache scope — the "pwn
+# request" shape that actions/checkout refuses by default. The settings the
+# build needs are committed in frontend/.env.preview instead; none of them is a
+# credential.
 
 name: 'PR Preview: Build'
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    # labeled: adding the preview label is how a maintainer approves an outside
+    # contributor's pull request, and approval needs a build to publish.
+    types: [opened, synchronize, reopened, labeled, closed]
     paths:
       - 'frontend/**'
 
@@ -38,7 +39,9 @@ concurrency:
 jobs:
   build:
     name: Build preview
-    if: github.event.action != 'closed'
+    if: >-
+      github.event.action != 'closed' &&
+      (github.event.action != 'labeled' || github.event.label.name == 'preview')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -62,33 +65,11 @@ jobs:
 
       - name: Build
         working-directory: ./frontend
-        env:
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           set -euo pipefail
-
-          site_base="$(sed -n 's/^PREVIEW_PUBLIC_BASE=//p' .env.preview | tail -n 1)"
-          case "$site_base" in
-            /|/*/) ;;
-            *)
-              echo "::error::PREVIEW_PUBLIC_BASE in frontend/.env.preview must open and close with '/' (got '${site_base}')"
-              exit 1
-              ;;
-          esac
-
-          base="${site_base}pr-preview/pr-${PR_NUMBER}/"
-          echo "Building for ${base}"
           # --mode preview is what loads .env.preview.
-          npm run build -- --mode preview --base "$base"
-
-          # Recorded so the publish job can refuse a build made for the wrong
-          # path, instead of publishing a page that loads nothing. Not a
-          # dotfile: actions/upload-artifact leaves hidden files out of the
-          # artifact by default, and this has to survive the trip.
-          printf '%s' "$base" > dist/preview-base
-
-          # A CNAME means something only at the site root, and the root belongs
-          # to the production deploy.
+          npm run build -- --mode preview
+          # A CNAME means nothing on Cloudflare Pages.
           rm -f dist/CNAME
 
       - name: Upload preview build
@@ -109,4 +90,4 @@ jobs:
       - name: Nothing to build
         run: |
           echo "Pull request #${{ github.event.pull_request.number }} is closed."
-          echo "'PR Preview: Deploy' removes its preview from gh-pages."
+          echo "'PR Preview: Deploy' removes its preview from Cloudflare Pages."

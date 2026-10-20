@@ -1,0 +1,103 @@
+# Deletes PR preview deployments that cleanup missed: those of closed pull
+# requests, and every superseded upload of an open one. pr-deploy.yml normally
+# does both as it goes, but a cancelled or failed run leaves deployments behind,
+# and each stays reachable at its own permanent URL until it is deleted.
+
+name: 'PR Preview: Sweep'
+
+on:
+  schedule:
+    - cron: '23 4 * * 1' # Mondays, 04:23 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pr-preview-sweep
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Delete stale previews
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: read
+    env:
+      PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT || 'chainvoice-preview' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: Sweep
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        with:
+          script: |
+            const { client, branchOf, newestFirst } = require(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/cloudflare-pages.js`,
+            );
+            const { owner, repo } = context.repo;
+            const cf = client({
+              accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+              apiToken: process.env.CLOUDFLARE_API_TOKEN,
+              project: process.env.PROJECT,
+            });
+
+            const byBranch = new Map();
+            for (const deployment of await cf.previewDeployments()) {
+              const branch = branchOf(deployment);
+              byBranch.set(branch, [...(byBranch.get(branch) ?? []), deployment]);
+            }
+
+            const isOpen = async (number) => {
+              try {
+                const { data } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+                return data.state === 'open';
+              } catch (error) {
+                if (error.status === 404) return false;
+                throw error;
+              }
+            };
+
+            // One failure must not end the sweep: whatever it skipped would stay
+            // online until next week. Failures are counted and fail the run once
+            // everything else has been dealt with.
+            let removed = 0;
+            let failed = 0;
+            for (const [branch, deployments] of byBranch) {
+              const label = branch || '(no branch)';
+              // Only pr-<n> branches are ours. Anything else in the preview
+              // environment was not made by these workflows and has no pull
+              // request keeping it alive.
+              const match = /^pr-(\d+)$/.exec(branch);
+              let keep;
+              try {
+                keep = match && (await isOpen(Number(match[1]))) ? 1 : 0;
+              } catch (error) {
+                core.warning(`${label}: could not read the pull request's state: ${error.message}`);
+                failed++;
+                continue;
+              }
+              const stale = deployments.sort(newestFirst).slice(keep);
+              let removedHere = 0;
+              for (const deployment of stale) {
+                try {
+                  await cf.remove(deployment);
+                  removedHere++;
+                } catch (error) {
+                  core.warning(`${label}: could not remove ${deployment.id}: ${error.message}`);
+                  failed++;
+                }
+              }
+              if (stale.length) core.info(`${label}: removed ${removedHere}, kept ${keep}.`);
+              removed += removedHere;
+            }
+            core.notice(`Removed ${removed} stale preview deployment(s) across ${byBranch.size} branch(es).`);
+            if (failed) core.setFailed(`${failed} sweep operation(s) failed; see the warnings above.`);
