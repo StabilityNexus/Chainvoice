@@ -163,16 +163,16 @@ not adopted newer EVM upgrades.
 
 ```bash
 RPC_URL=https://your-chain-rpc.example  # the chain's RPC endpoint
-forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url "$RPC_URL" --account deployer --broadcast --verify
+forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url "$RPC_URL" --account deployer --broadcast
 ```
 
 Chain-specific flags:
 - **No EIP-1559** (no base fee): add `--legacy`, or `forge script` fails with
   `unsupported feature: eip1559`.
-- **Verification:** `--verify` uses Etherscan and needs `ETHERSCAN_API_KEY`. For
-  a chain with a Blockscout explorer, add
-  `--verifier blockscout --verifier-url "$EXPLORER_URL/api/"` instead, with
-  `EXPLORER_URL` set to the explorer's base URL (no key needed).
+- **Verification** (recommended): add `--verify` on a chain Etherscan supports
+  (needs `ETHERSCAN_API_KEY`). For a chain with a Blockscout explorer, add
+  `--verify --verifier blockscout --verifier-url "$EXPLORER_URL/api/"` instead,
+  with `EXPLORER_URL` set to the explorer's base URL (no key needed).
 - **Higher on-chain gas than forge simulates** (Sepolia, for example): add
   `--gas-estimate-multiplier 800`.
 - **Block gas limit:** a full 30-invoice batch needs about 6.2M gas, so the
