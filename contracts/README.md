@@ -51,8 +51,8 @@ $ anvil
 # Sepolia charges more gas for deployed code than forge simulates
 $ forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url sepolia --account deployer --broadcast --gas-estimate-multiplier 800
 
-# Ethereum Classic has no EIP-1559, so it needs --legacy
-$ forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url etc --account deployer --broadcast --legacy
+# Chains without EIP-1559 need --legacy (RPC_URL is the chain's RPC endpoint)
+$ forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url "$RPC_URL" --account deployer --broadcast --legacy
 ```
 
 ### Cast

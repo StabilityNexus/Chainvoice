@@ -4,7 +4,7 @@ Instructions for AI coding agents working in this repository.
 
 ## Project Overview
 
-Chainvoice is a decentralized invoicing platform: a Solidity smart contract backend (deployed on Ethereum Classic) paired with a React/Vite frontend. See `README.md` for the full architecture and user-facing feature set.
+Chainvoice is a decentralized invoicing platform: a Solidity smart contract backend (deployable to any EVM chain) paired with a React/Vite frontend. See `README.md` for the full architecture and user-facing feature set.
 
 ## Repository Layout
 

@@ -128,7 +128,7 @@ contract Chainvoice {
     /// @notice Largest batch createInvoicesBatch accepts. Creating writes several
     ///         fresh storage slots per invoice, about 185k gas each for native
     ///         invoices and 205k for ERC-20. 30 invoices cost about 5.6M and 6.2M
-    ///         gas worst case, which fits Ethereum Classic's 8M block gas limit;
+    ///         gas worst case, which fits a chain with an 8M block gas limit;
     ///         40 would already exceed it with an ERC-20 token.
     uint256 public constant MAX_CREATE_BATCH = 30;
     uint256 public constant MAX_PAGE_LIMIT = 50;
