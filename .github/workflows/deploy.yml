@@ -1,11 +1,6 @@
 # Production deploy: builds the frontend and publishes it to the gh-pages
-# branch, leaving the pr-preview/ tree that PR Preview owns in place.
-#
-# Publishing to a branch rather than through actions/deploy-pages is what makes
-# PR previews possible at all: the Pages artifact is a single tarball that
-# replaces the whole site, so there is nowhere for a per-PR subdirectory to
-# live. The trade-off is that the Pages source has to be the branch — see
-# Deployments.md for the one-time switch and the order it has to happen in.
+# branch, which is what GitHub Pages serves. PR previews are not published
+# here; they go to Cloudflare Pages, on an origin of their own (pr-deploy.yml).
 name: Deploy static content to Pages
 
 on:
@@ -100,4 +95,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COMMIT_MESSAGE: 'deploy: production site from ${{ github.sha }}'
-        run: bash .github/scripts/gh-pages-publish.sh publish ./frontend/dist .
+        run: bash .github/scripts/gh-pages-publish.sh ./frontend/dist

@@ -1,16 +1,24 @@
-# Workflow 2 of 2 for PR previews.
+# Publishes PR previews to Cloudflare Pages, at pr-<n>.<project>.pages.dev.
 #
-# Runs in the base repository's context, so it holds a token that can push to
-# gh-pages and comment on the pull request. It therefore never checks out or
-# executes the pull request's code: pr-build.yml already built it, in the
+# Previews live on their own origin, never on the production site's: a
+# preview runs code nobody has merged, and on the production origin that code
+# could read invoices people stored there and ask for the signature their
+# messaging keys are derived from.
+#
+# Runs in the base repository's context, so it holds the Cloudflare credentials
+# and a token that can comment on the pull request. It therefore never checks
+# out or executes the pull request's code: pr-build.yml already built it, in the
 # pull request's own context, and this workflow only unpacks that artifact.
 #
-# Two things arrive here untrusted, and both are treated that way:
+# Three things arrive here untrusted, and all are treated that way:
 #   - The artifact, which is whatever a fork's build wrote. Checked before it is
-#     committed, and only ever written under pr-preview/pr-<n>/.
+#     uploaded, and stripped of anything Cloudflare would run or serve as
+#     configuration.
 #   - The triggering run's identity. Which pull request this is comes from the
 #     workflow_run payload, resolved against the API — never from a file the
 #     other workflow produced, because a fork controls its own copy of it.
+#   - Whether a preview is allowed at all. A fork can rewrite every condition in
+#     pr-build.yml, so the decision is made here, from the API.
 
 name: 'PR Preview: Deploy'
 
@@ -28,6 +36,9 @@ concurrency:
   group: pr-preview-${{ github.event.workflow_run.head_repository.full_name }}-${{ github.event.workflow_run.head_branch }}
   cancel-in-progress: true
 
+env:
+  PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT || 'chainvoice-preview' }}
+
 jobs:
   resolve:
     name: Resolve target
@@ -42,13 +53,12 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
-      pages: read
+      statuses: read # the maintainer's approval
+      actions: read # whether the triggering run produced a build
     outputs:
       mode: ${{ steps.pr.outputs.mode }}
       number: ${{ steps.pr.outputs.number }}
       sha: ${{ steps.pr.outputs.sha }}
-      base_path: ${{ steps.pages.outputs.base_path }}
-      site_url: ${{ steps.pages.outputs.site_url }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -58,22 +68,16 @@ jobs:
           # pick by itself on a `workflow_run` is not worth relying on when that
           # is what it decides.
           ref: ${{ github.event.repository.default_branch }}
-          # Nothing here uses git: the publish script clones with a GH_TOKEN of
-          # its own.
           persist-credentials: false
-
-      - name: Resolve Pages location
-        id: pages
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PAGES_SITE_URL: ${{ vars.PAGES_SITE_URL }}
-        run: bash .github/scripts/pages-config.sh
 
       - name: Resolve pull request
         id: pr
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
+            const { LABEL, hasWriteAccess, findApproval } = require(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/preview-access.js`,
+            );
             const { owner, repo } = context.repo;
             const run = context.payload.workflow_run;
 
@@ -110,32 +114,61 @@ jobs:
               );
             };
 
+            const settle = (mode, why, pr) => {
+              core.info(why);
+              core.setOutput('mode', mode);
+              if (pr) core.setOutput('number', String(pr.number));
+              core.setOutput('sha', run.head_sha);
+            };
+
             const pr = await findPullRequest();
             if (!pr) {
-              core.info(
-                `No pull request for ${run.head_repository.full_name}:${run.head_branch}; nothing to do.`,
-              );
-              core.setOutput('mode', 'none');
-              return;
+              return settle('none', `No pull request for ${run.head_repository.full_name}:${run.head_branch}.`);
+            }
+            // A closed pull request loses its preview, merged or not.
+            if (pr.state === 'closed') {
+              return settle('cleanup', `PR #${pr.number} is closed.`, pr);
+            }
+            // A newer push is already being built, and that run will publish.
+            if (pr.head.sha !== run.head_sha) {
+              return settle('none', `PR #${pr.number} has moved on to ${pr.head.sha.slice(0, 7)}.`);
+            }
+            // The run was for a label other than preview, so nothing was built.
+            const { data: artifacts } = await github.rest.actions.listWorkflowRunArtifacts({
+              owner,
+              repo,
+              run_id: run.id,
+              name: 'pr-preview-dist',
+            });
+            if (!artifacts.total_count) {
+              return settle('none', `Run ${run.id} produced no build.`);
             }
 
-            // A closed pull request loses its preview, merged or not.
-            core.setOutput('mode', pr.state === 'closed' ? 'cleanup' : 'deploy');
-            core.setOutput('number', String(pr.number));
-            core.setOutput('sha', pr.head.sha);
-            core.info(`PR #${pr.number} is ${pr.state}; head ${pr.head.sha.slice(0, 7)}.`);
+            const author = pr.user.login;
+            if (await hasWriteAccess({ github, context }, author)) {
+              return settle('deploy', `PR #${pr.number}: @${author} has write access.`, pr);
+            }
+            const approval = await findApproval({ github, context }, run.head_sha);
+            const labelled = pr.labels.some((label) => label.name === LABEL);
+            if (approval && labelled) {
+              return settle('deploy', `PR #${pr.number}: ${approval.description}.`, pr);
+            }
+            settle('awaiting', `PR #${pr.number}: ${run.head_sha.slice(0, 7)} is not approved.`, pr);
 
   publish:
     name: Publish preview
     needs: resolve
     if: needs.resolve.outputs.mode == 'deploy'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     permissions:
-      contents: write # pushes the preview to gh-pages
+      contents: read
+      actions: read # reads the build's artifact from the triggering run
       pull-requests: write # comments the preview URL
       issues: write # listComments/createComment go through the issues API
-      actions: read # reads the build's artifact from the triggering run
+    env:
+      PR_NUMBER: ${{ needs.resolve.outputs.number }}
+      HEAD_SHA: ${{ needs.resolve.outputs.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -152,80 +185,114 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Check the build before publishing it
-        env:
-          EXPECTED_BASE: ${{ needs.resolve.outputs.base_path }}pr-preview/pr-${{ needs.resolve.outputs.number }}/
+        working-directory: preview
         run: |
           set -euo pipefail
 
-          # The artifact holds whatever a fork's build wrote, so check the few
-          # things that would make committing it a bad idea. A symlink would go
-          # onto gh-pages as a symlink, and a .git entry would confuse the
-          # publish; a static site needs neither.
-          if [ -n "$(find preview -type l -print -quit)" ]; then
+          # The artifact holds whatever a fork's build wrote. A static site has
+          # no use for symlinks or a .git entry.
+          if [ -n "$(find . -type l -print -quit)" ]; then
             echo "::error::preview build contains symlinks"
             exit 1
           fi
-          if [ -e preview/.git ]; then
+          if [ -e .git ]; then
             echo "::error::preview build contains a .git entry"
             exit 1
           fi
-          if [ ! -f preview/index.html ]; then
+          if [ ! -f index.html ]; then
             echo "::error::preview build has no index.html"
             exit 1
           fi
-
-          # The build had to be told the site root, because it runs without a
-          # token that could ask the Pages API. This job can ask, so it checks —
-          # a mismatch means every asset would 404 and the preview would come up
-          # blank, which is worth an error rather than a puzzled contributor.
-          # Stripped of anything but path characters before being echoed, since
-          # the file came from the build.
-          built_base="$(tr -dc 'A-Za-z0-9/._-' < preview/preview-base 2>/dev/null || true)"
-          if [ "$built_base" != "$EXPECTED_BASE" ]; then
-            echo "::error::this build is for '${built_base:-<unset>}' but the site serves '${EXPECTED_BASE}'."
-            echo "::error::set PREVIEW_PUBLIC_BASE=${{ needs.resolve.outputs.base_path }} in frontend/.env.preview"
+          # Cloudflare runs a _worker.js, file or directory, as server-side
+          # code on every request to the preview.
+          if [ -e _worker.js ]; then
+            echo "::error::preview build contains _worker.js"
             exit 1
           fi
-          rm -f preview/preview-base
 
-      - name: Publish to gh-pages
+          # Response headers, redirects and routing are this workflow's to set,
+          # not the build's.
+          rm -f _headers _redirects _routes.json
+          cat > _headers <<'EOF'
+          /*
+            X-Robots-Tag: noindex, nofollow
+            X-Frame-Options: DENY
+            Content-Security-Policy: frame-ancestors 'none'
+          EOF
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: './frontend/.nvmrc'
+
+      - name: Upload to Cloudflare Pages
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ needs.resolve.outputs.number }}
-          COMMIT_MESSAGE: >-
-            deploy: preview for PR #${{ needs.resolve.outputs.number }}
-            (${{ needs.resolve.outputs.sha }})
-        run: bash .github/scripts/gh-pages-publish.sh publish preview "pr-preview/pr-${PR_NUMBER}"
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WRANGLER_SEND_METRICS: 'false'
+          # Uploading static files needs none of the native binaries wrangler's
+          # dependencies fetch at install time, and their install hooks would
+          # otherwise run in a step holding the Cloudflare token.
+          npm_config_ignore_scripts: 'true'
+        run: |
+          set -euo pipefail
+          # From an empty directory: wrangler compiles a functions/ directory
+          # and reads a wrangler config from wherever it runs, and a preview
+          # should pick up neither.
+          cd "$(mktemp -d)"
+          npx --yes wrangler@4.148.0 pages deploy "${GITHUB_WORKSPACE}/preview" \
+            --project-name "$PROJECT" \
+            --branch "pr-${PR_NUMBER}" \
+            --commit-hash "$HEAD_SHA" \
+            --commit-message "PR #${PR_NUMBER}" \
+            --commit-dirty=true
 
-      - name: Comment the preview URL
+      - name: Remove superseded deployments and comment the URL
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
-          PR_NUMBER: ${{ needs.resolve.outputs.number }}
-          SITE_URL: ${{ needs.resolve.outputs.site_url }}
-          HEAD_SHA: ${{ needs.resolve.outputs.sha }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         with:
           script: |
-            const upsert = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/upsert-comment.js`);
+            const scripts = `${process.env.GITHUB_WORKSPACE}/.github/scripts`;
+            const { client, prune } = require(`${scripts}/cloudflare-pages.js`);
+            const upsert = require(`${scripts}/upsert-comment.js`);
+
+            const cf = client({
+              accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+              apiToken: process.env.CLOUDFLARE_API_TOKEN,
+              project: process.env.PROJECT,
+            });
             const prNumber = Number(process.env.PR_NUMBER);
-            const url = `${process.env.SITE_URL}pr-preview/pr-${prNumber}/`;
+            const branch = `pr-${prNumber}`;
+
+            // The upload that just finished is the newest, and the concurrency
+            // group keeps any other run for this branch from adding one.
+            const { removed } = await prune(cf, branch, { keep: 1 });
+            core.info(`Removed ${removed} superseded deployment(s) of ${branch}.`);
+
+            const { subdomain } = await cf.project();
+            const url = `https://${branch}.${subdomain}/`;
             const sha = process.env.HEAD_SHA.slice(0, 7);
             const body =
               '### 🔍 PR Preview\n\n' +
               '| | |\n|---|---|\n' +
               `| **Preview** | ${url} |\n` +
               `| **Commit** | \`${sha}\` |\n` +
-              '| **Networks** | Ethereum Sepolia only |\n\n' +
-              '> Rebuilt on every commit, and removed when this pull request closes.';
+              '| **Networks** | Ethereum Sepolia only, on a preview contract |\n\n' +
+              '> Rebuilt on every commit, and removed when this pull request closes. ' +
+              'For contributors without write access, each new commit waits for a maintainer ' +
+              'to add the `preview` label again.';
             await upsert({ github, context, core }, prNumber, body);
 
-  cleanup:
-    name: Remove preview
+  awaiting:
+    name: Wait for approval
     needs: resolve
-    if: needs.resolve.outputs.mode == 'cleanup'
+    if: needs.resolve.outputs.mode == 'awaiting'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       issues: write
     steps:
@@ -235,26 +302,95 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      - name: Remove the preview from gh-pages
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_NUMBER: ${{ needs.resolve.outputs.number }}
-          COMMIT_MESSAGE: 'cleanup: remove preview for PR #${{ needs.resolve.outputs.number }}'
-        run: bash .github/scripts/gh-pages-publish.sh remove "pr-preview/pr-${PR_NUMBER}"
-
-      - name: Note the removal on the pull request
+      - name: Say what the preview is waiting for
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PR_NUMBER: ${{ needs.resolve.outputs.number }}
+          HEAD_SHA: ${{ needs.resolve.outputs.sha }}
+        with:
+          script: |
+            const scripts = `${process.env.GITHUB_WORKSPACE}/.github/scripts`;
+            const { client, branchOf, commitOf, newestFirst } = require(`${scripts}/cloudflare-pages.js`);
+            const upsert = require(`${scripts}/upsert-comment.js`);
+
+            const prNumber = Number(process.env.PR_NUMBER);
+            const branch = `pr-${prNumber}`;
+
+            // An earlier commit may have been approved, and its preview stays up
+            // until this one is. Only a nicety: runs Dependabot triggers get no
+            // Actions secrets, and the comment matters more than the link.
+            let previous = '';
+            if (process.env.CLOUDFLARE_API_TOKEN) {
+              const cf = client({
+                accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+                apiToken: process.env.CLOUDFLARE_API_TOKEN,
+                project: process.env.PROJECT,
+              });
+              const [latest] = (await cf.previewDeployments())
+                .filter((deployment) => branchOf(deployment) === branch)
+                .sort(newestFirst);
+              if (latest) {
+                const { subdomain } = await cf.project();
+                previous =
+                  `| **Last approved preview** | https://${branch}.${subdomain}/ ` +
+                  `(\`${commitOf(latest).slice(0, 7)}\`) |\n`;
+              }
+            }
+
+            const body =
+              '### 🔍 PR Preview\n\n' +
+              '⏸️ **Waiting for a maintainer.** Pull requests from contributors without write ' +
+              'access get a preview once a maintainer has reviewed the code and added the ' +
+              '`preview` label, and every new commit needs that approval again.\n\n' +
+              '| | |\n|---|---|\n' +
+              `| **Commit** | \`${process.env.HEAD_SHA.slice(0, 7)}\` |\n` +
+              previous;
+            await upsert({ github, context, core }, prNumber, body);
+
+  cleanup:
+    name: Remove preview
+    needs: resolve
+    if: needs.resolve.outputs.mode == 'cleanup'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Delete every deployment of the preview
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           PR_NUMBER: ${{ needs.resolve.outputs.number }}
         with:
           script: |
-            const upsert = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/upsert-comment.js`);
+            const scripts = `${process.env.GITHUB_WORKSPACE}/.github/scripts`;
+            const { client, prune } = require(`${scripts}/cloudflare-pages.js`);
+            const upsert = require(`${scripts}/upsert-comment.js`);
+
+            const cf = client({
+              accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+              apiToken: process.env.CLOUDFLARE_API_TOKEN,
+              project: process.env.PROJECT,
+            });
+            const prNumber = Number(process.env.PR_NUMBER);
+            const { removed } = await prune(cf, `pr-${prNumber}`);
+            core.info(`Removed ${removed} deployment(s) of pr-${prNumber}.`);
+
             const body =
               '### 🔍 PR Preview\n\n' +
               '| | |\n|---|---|\n' +
               '| **Status** | 🗑️ Removed — this pull request is closed |\n';
             // onlyIfPresent: a pull request that never had a preview should not
             // acquire a comment announcing that its preview is gone.
-            await upsert({ github, context, core }, Number(process.env.PR_NUMBER), body, {
-              onlyIfPresent: true,
-            });
+            await upsert({ github, context, core }, prNumber, body, { onlyIfPresent: true });

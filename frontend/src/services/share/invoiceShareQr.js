@@ -36,7 +36,7 @@ const ERROR_CORRECTION = 'M';
 const LOGO_RATIO = 0.16;
 
 // BASE_URL keeps the logo resolvable when the app is served from a
-// subdirectory, such as a /pr-preview/pr-N/ build.
+// subdirectory, such as /<repo>/ on a fork's github.io site.
 const DEFAULT_LOGO_SRC = `${import.meta.env?.BASE_URL ?? '/'}logo.png`;
 
 /** Load an image, resolving to null rather than throwing. */

@@ -1,0 +1,114 @@
+# Records a maintainer's approval of a PR preview, and withdraws it when new
+# commits arrive. Only pull requests from contributors without write access
+# need one; see .github/scripts/preview-access.js.
+#
+# pull_request_target, so this runs the default branch's copy of this file with
+# a token that can write — and therefore never checks out or runs anything from
+# the pull request. It reads the event and calls the API, nothing else.
+
+name: 'PR Preview: Approval'
+
+on:
+  pull_request_target:
+    types: [labeled, synchronize]
+    paths:
+      - 'frontend/**'
+
+permissions: {}
+
+concurrency:
+  group: pr-preview-approval-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    name: Record approval
+    if: github.event.action == 'labeled' && github.event.label.name == 'preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      statuses: write # the approval itself
+      pull-requests: write # takes the label back off a non-maintainer
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: Approve the labelled commit
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const { LABEL, STATUS_CONTEXT, hasWriteAccess } = require(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/preview-access.js`,
+            );
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+            const labeler = context.payload.sender.login;
+
+            // Triage can add labels too, but approving code to run on the
+            // preview domain takes write access.
+            if (!(await hasWriteAccess({ github, context }, labeler))) {
+              core.warning(`@${labeler} cannot approve previews; removing the label.`);
+              try {
+                await github.rest.issues.removeLabel({ owner, repo, issue_number: pr.number, name: LABEL });
+              } catch (error) {
+                if (error.status !== 404) throw error;
+              }
+              return;
+            }
+
+            // The commit the maintainer was looking at when they labelled it,
+            // from the event rather than the pull request's current state: a
+            // push that lands a moment later must not inherit the approval.
+            await github.rest.repos.createCommitStatus({
+              owner,
+              repo,
+              sha: pr.head.sha,
+              state: 'success',
+              context: STATUS_CONTEXT,
+              description: `Approved by @${labeler}`.slice(0, 140),
+            });
+            core.info(`Approved ${pr.head.sha.slice(0, 7)} of PR #${pr.number} for @${labeler}.`);
+
+  withdraw:
+    name: Withdraw approval
+    if: github.event.action == 'synchronize'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write # removes the label
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: .github/scripts
+
+      - name: Take the label off new commits
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const { LABEL, hasWriteAccess } = require(
+              `${process.env.GITHUB_WORKSPACE}/.github/scripts/preview-access.js`,
+            );
+            const { owner, repo } = context.repo;
+            const pr = context.payload.pull_request;
+
+            if (!pr.labels.some((label) => label.name === LABEL)) return;
+            if (await hasWriteAccess({ github, context }, pr.user.login)) return;
+
+            // The new commit has no approval status, so it would not deploy
+            // either way. Removing the label is what tells a maintainer it
+            // needs another look, and lets them re-add it to approve.
+            try {
+              await github.rest.issues.removeLabel({ owner, repo, issue_number: pr.number, name: LABEL });
+            } catch (error) {
+              if (error.status !== 404) throw error;
+            }
+            core.info(`PR #${pr.number} has new commits; removed the ${LABEL} label.`);
