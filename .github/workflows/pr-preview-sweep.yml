@@ -66,16 +66,38 @@ jobs:
               }
             };
 
+            // One failure must not end the sweep: whatever it skipped would stay
+            // online until next week. Failures are counted and fail the run once
+            // everything else has been dealt with.
             let removed = 0;
+            let failed = 0;
             for (const [branch, deployments] of byBranch) {
+              const label = branch || '(no branch)';
               // Only pr-<n> branches are ours. Anything else in the preview
               // environment was not made by these workflows and has no pull
               // request keeping it alive.
               const match = /^pr-(\d+)$/.exec(branch);
-              const keep = match && (await isOpen(Number(match[1]))) ? 1 : 0;
+              let keep;
+              try {
+                keep = match && (await isOpen(Number(match[1]))) ? 1 : 0;
+              } catch (error) {
+                core.warning(`${label}: could not read the pull request's state: ${error.message}`);
+                failed++;
+                continue;
+              }
               const stale = deployments.sort(newestFirst).slice(keep);
-              for (const deployment of stale) await cf.remove(deployment);
-              if (stale.length) core.info(`${branch || '(no branch)'}: removed ${stale.length}, kept ${keep}.`);
-              removed += stale.length;
+              let removedHere = 0;
+              for (const deployment of stale) {
+                try {
+                  await cf.remove(deployment);
+                  removedHere++;
+                } catch (error) {
+                  core.warning(`${label}: could not remove ${deployment.id}: ${error.message}`);
+                  failed++;
+                }
+              }
+              if (stale.length) core.info(`${label}: removed ${removedHere}, kept ${keep}.`);
+              removed += removedHere;
             }
             core.notice(`Removed ${removed} stale preview deployment(s) across ${byBranch.size} branch(es).`);
+            if (failed) core.setFailed(`${failed} sweep operation(s) failed; see the warnings above.`);

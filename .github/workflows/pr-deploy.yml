@@ -323,19 +323,23 @@ jobs:
             // Actions secrets, and the comment matters more than the link.
             let previous = '';
             if (process.env.CLOUDFLARE_API_TOKEN) {
-              const cf = client({
-                accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
-                apiToken: process.env.CLOUDFLARE_API_TOKEN,
-                project: process.env.PROJECT,
-              });
-              const [latest] = (await cf.previewDeployments())
-                .filter((deployment) => branchOf(deployment) === branch)
-                .sort(newestFirst);
-              if (latest) {
-                const { subdomain } = await cf.project();
-                previous =
-                  `| **Last approved preview** | https://${branch}.${subdomain}/ ` +
-                  `(\`${commitOf(latest).slice(0, 7)}\`) |\n`;
+              try {
+                const cf = client({
+                  accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
+                  apiToken: process.env.CLOUDFLARE_API_TOKEN,
+                  project: process.env.PROJECT,
+                });
+                const [latest] = (await cf.previewDeployments())
+                  .filter((deployment) => branchOf(deployment) === branch)
+                  .sort(newestFirst);
+                if (latest) {
+                  const { subdomain } = await cf.project();
+                  previous =
+                    `| **Last approved preview** | https://${branch}.${subdomain}/ ` +
+                    `(\`${commitOf(latest).slice(0, 7)}\`) |\n`;
+                }
+              } catch (error) {
+                core.warning(`Could not look up the last approved preview: ${error.message}`);
               }
             }
 
@@ -378,12 +382,19 @@ jobs:
             const { client, prune } = require(`${scripts}/cloudflare-pages.js`);
             const upsert = require(`${scripts}/upsert-comment.js`);
 
+            const prNumber = Number(process.env.PR_NUMBER);
+            // Runs Dependabot triggers get no Actions secrets. Its pull requests
+            // only ever have a preview if a maintainer approved one, and the
+            // weekly sweep deletes that.
+            if (!process.env.CLOUDFLARE_API_TOKEN) {
+              core.warning(`No Cloudflare credentials in this run; leaving pr-${prNumber} to the sweep.`);
+              return;
+            }
             const cf = client({
               accountId: process.env.CLOUDFLARE_ACCOUNT_ID,
               apiToken: process.env.CLOUDFLARE_API_TOKEN,
               project: process.env.PROJECT,
             });
-            const prNumber = Number(process.env.PR_NUMBER);
             const { removed } = await prune(cf, `pr-${prNumber}`);
             core.info(`Removed ${removed} deployment(s) of pr-${prNumber}.`);
 
