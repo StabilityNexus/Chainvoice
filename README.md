@@ -162,7 +162,8 @@ withdrawn fees. The compiler targets `evm_version = "london"` with `via_ir`
 not adopted newer EVM upgrades.
 
 ```bash
-forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url <RPC_URL> --account deployer --broadcast --verify
+RPC_URL=https://your-chain-rpc.example  # the chain's RPC endpoint
+forge script script/Chainvoice.s.sol:DeployChainvoice --rpc-url "$RPC_URL" --account deployer --broadcast --verify
 ```
 
 Chain-specific flags:
@@ -170,7 +171,8 @@ Chain-specific flags:
   `unsupported feature: eip1559`.
 - **Verification:** `--verify` uses Etherscan and needs `ETHERSCAN_API_KEY`. For
   a chain with a Blockscout explorer, add
-  `--verifier blockscout --verifier-url <explorer>/api/` instead (no key needed).
+  `--verifier blockscout --verifier-url "$EXPLORER_URL/api/"` instead, with
+  `EXPLORER_URL` set to the explorer's base URL (no key needed).
 - **Higher on-chain gas than forge simulates** (Sepolia, for example): add
   `--gas-estimate-multiplier 800`.
 - **Block gas limit:** a full 30-invoice batch needs about 6.2M gas, so the
