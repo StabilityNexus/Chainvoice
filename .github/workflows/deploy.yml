@@ -26,6 +26,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write # pushes the built site to gh-pages
       pages: read # reads the site's own URL and custom domain
@@ -52,15 +53,10 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
-          node-version: 20
+          node-version-file: './frontend/.nvmrc'
 
       - name: Install dependencies
-        run: |
-          if [ -f "./frontend/package-lock.json" ]; then
-            npm ci
-          else
-            npm install
-          fi
+        run: npm ci
         working-directory: ./frontend
 
       - name: Build
@@ -68,7 +64,6 @@ jobs:
         working-directory: ./frontend
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
-          VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
           VITE_CONTRACT_ADDRESS_11155111: ${{ secrets.VITE_CONTRACT_ADDRESS_11155111 }}
           # Ethereum Classic and Polygon are deliberately not injected. Both
           # still run the v1 contract, which stores payloads on-chain as strings

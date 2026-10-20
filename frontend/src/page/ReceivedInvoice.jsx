@@ -11,6 +11,7 @@ import TableHead from "@mui/material/TableHead";
 import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
+import { getWagmiChainInfo } from "@/utils/wagmiChainHelpers";
 import { BrowserProvider, Contract, ethers } from "ethers";
 import { useEffect, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
@@ -18,6 +19,7 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
 import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
+import { getPaymentErrorMessage } from "@/utils/paymentErrors";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
 import { getReceivedInvoices as getLocalReceivedInvoices, getInvoiceById, storeInvoice, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
 import { verifyInvoiceHash } from "@/services/relay/invoiceHashUtils.js";
@@ -104,6 +106,10 @@ function ReceivedInvoice() {
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_INVOICE_PAGE_SIZE);
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId, chain } = useAccount();
+  const nativeSymbol =
+    getWagmiChainInfo(chainId)?.nativeCurrency?.symbol ||
+    chain?.nativeCurrency?.symbol ||
+    "ETH";
   const { t } = useTranslation("invoiceVerification");
   const { t: tReceivedInvoices } = useTranslation("receivedInvoices");
 
@@ -119,6 +125,24 @@ function ReceivedInvoice() {
   const [paymentLoading, setPaymentLoading] = useState({});
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  useEffect(() => {
+    const handleStorageUpdate = () => {
+      setRefreshTrigger((previous) => previous + 1);
+    };
+
+    window.addEventListener(
+      "chainvoice:invoice-storage-updated",
+      handleStorageUpdate
+    );
+
+    return () => {
+      window.removeEventListener(
+        "chainvoice:invoice-storage-updated",
+        handleStorageUpdate
+      );
+    };
+  }, []);
   const {
     keys,
     isRegistered,
@@ -197,65 +221,11 @@ function ReceivedInvoice() {
   };
 
   // UNIFORM ERROR HANDLER
+  // The contract's custom errors reach the page as a CALL_EXCEPTION with no
+  // reason, so the message comes from decoding the revert data (see paymentErrors).
   const getDetailedErrorMessage = (error) => {
-    if (error.code === "CALL_EXCEPTION") {
-      if (error.reason === "missing revert data" || !error.reason) {
-        return "Transaction failed. This may be due to insufficient balance, contract issues, or network problems. Please check your balance and try again.";
-      }
-      return `Transaction failed: ${error.reason}`;
-    }
-
-    if (error.code === "ACTION_REJECTED" || error.code === 4001) {
-      return "Transaction was cancelled by user";
-    }
-
-    if (
-      error.message?.includes("insufficient balance") ||
-      error.message?.includes("insufficient funds")
-    ) {
-      return "Insufficient balance to complete this transaction";
-    }
-
-    if (
-      error.message?.includes("User rejected") ||
-      error.message?.includes("User denied")
-    ) {
-      return "Transaction was rejected in wallet";
-    }
-
-    if (error.message?.includes("network") || error.code === "NETWORK_ERROR") {
-      return "Network error. Please check your connection and try again";
-    }
-
-    if (error.message?.includes("gas")) {
-      return "Transaction failed due to gas estimation error. Please try again";
-    }
-
-    if (
-      error.message?.includes("cancelled") ||
-      error.message?.includes("cancel")
-    ) {
-      return "Cannot pay a cancelled invoice";
-    }
-
-    if (error.reason && error.reason !== "missing revert data") {
-      return `Transaction failed: ${error.reason}`;
-    }
-
-    if (error.message) {
-      const cleanMessage = error.message
-        .replace(
-          /\(action="[^"]*", data=[^,]*, reason=[^,]*, transaction=\{[^}]*\}, invocation=[^,]*, revert=[^,]*, code=[^,]*, version=[^)]*\)/g,
-          ""
-        )
-        .replace(/missing revert data/g, "transaction execution failed")
-        .trim();
-      return (
-        cleanMessage || "Payment failed. Please try again or contact support"
-      );
-    }
-
-    return "Payment failed. Please try again or contact support";
+    const { key, params } = getPaymentErrorMessage(error);
+    return tReceivedInvoices(`errors.${key}`, params);
   };
 
   // Helper functions
@@ -321,10 +291,10 @@ function ReceivedInvoice() {
       const totalRequired = amount + BigInt(fee);
 
       if (balance < totalRequired) {
-        const requiredEth = ethers.formatEther(totalRequired);
-        const availableEth = ethers.formatEther(balance);
+        const requiredNative = ethers.formatEther(totalRequired);
+        const availableNative = ethers.formatEther(balance);
         throw new Error(
-          `Insufficient ETH balance. Required: ${requiredEth} ETH, Available: ${availableEth} ETH`
+          `Insufficient ${nativeSymbol} balance. Required: ${requiredNative} ${nativeSymbol}, Available: ${availableNative} ${nativeSymbol}`
         );
       }
     } else {
@@ -341,10 +311,10 @@ function ReceivedInvoice() {
 
       const ethBalance = await signer.provider.getBalance(userAddress);
       if (ethBalance < BigInt(fee)) {
-        const requiredEthFee = ethers.formatEther(fee);
-        const availableEth = ethers.formatEther(ethBalance);
+        const requiredNativeFee = ethers.formatEther(fee);
+        const availableNative = ethers.formatEther(ethBalance);
         throw new Error(
-          `Insufficient ETH for fees. Required: ${requiredEthFee} ETH, Available: ${availableEth} ETH`
+          `Insufficient ${nativeSymbol} for fees. Required: ${requiredNativeFee} ${nativeSymbol}, Available: ${availableNative} ${nativeSymbol}`
         );
       }
     }
@@ -475,7 +445,7 @@ function ReceivedInvoice() {
         throw new Error(t("payBlocked"));
       }
 
-      const fee = await contract.fee();
+      const fee = await contract.devFee();
       const {
         address: tokenAddress,
         symbol: tokenSymbol,
@@ -535,7 +505,7 @@ function ReceivedInvoice() {
           "Payment transaction submitted. Please wait for confirmation..."
         );
         await tx.wait();
-        toast.success("Payment successful! Paid with ETH");
+        toast.success(`Payment successful! Paid with ${nativeSymbol}`);
       }
 
       // The optimistic row patch only applies if the page it started on is
@@ -638,7 +608,7 @@ function ReceivedInvoice() {
           );
         }
 
-        const feePerInvoice = await contract.fee();
+        const feePerInvoice = await contract.devFee();
         const totalFee = feePerInvoice * BigInt(invoiceIds.length);
         const isNativeToken = tokenAddress === ethers.ZeroAddress;
 
@@ -680,7 +650,7 @@ function ReceivedInvoice() {
           });
           await tx.wait();
           toast.success(
-            `Successfully paid ${invoices.length} invoices with ETH!`
+            `Successfully paid ${invoices.length} invoices with ${nativeSymbol}!`
           );
         }
       }
@@ -858,7 +828,7 @@ function ReceivedInvoice() {
         );
         const suggestions = findBatchSuggestions(decryptedInvoices);
         setBatchSuggestions(suggestions);
-        const fee = await contract.fee();
+        const fee = await contract.devFee();
         if (cancelled) return;
         setFee(fee);
       } catch (error) {
@@ -2193,7 +2163,7 @@ function ReceivedInvoice() {
                   <div className="flex justify-between mb-2">
                     <span className="text-sm text-gray-600">Network Fee:</span>
                     <span className="font-medium">
-                      {ethers.formatUnits(fee)} ETH
+                      {ethers.formatUnits(fee)} {nativeSymbol}
                     </span>
                   </div>
                   <div className="flex justify-between pt-2 border-t border-gray-200">

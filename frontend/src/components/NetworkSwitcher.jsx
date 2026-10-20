@@ -1,4 +1,4 @@
-import { useChainId, useSwitchChain, useAccount } from "wagmi";
+import { useSwitchChain, useAccount } from "wagmi";
 import {
   Popover,
   PopoverContent,
@@ -25,9 +25,10 @@ import { useEffect } from "react";
 import toast from "react-hot-toast";
 
 export default function NetworkSwitcher() {
-  const chainId = useChainId();
   const { chains, switchChain, isPending, error } = useSwitchChain();
-  const { isConnected } = useAccount();
+  // The wallet's own chain, which may be one the app doesn't support;
+  // useChainId() would fall back to a configured chain and hide that.
+  const { isConnected, chainId } = useAccount();
 
   useEffect(() => {
     if (error) {
@@ -49,7 +50,7 @@ export default function NetworkSwitcher() {
         >
           <div className="flex items-center gap-2">
             {CHAIN_ICONS[chainId] || <FaEthereum className="h-5 w-5 text-gray-400" />}
-            <span className="truncate">{activeChain?.name || "Select Network"}</span>
+            <span className="truncate">{activeChain?.name || "Unsupported network"}</span>
           </div>
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>

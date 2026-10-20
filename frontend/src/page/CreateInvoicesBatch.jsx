@@ -10,6 +10,8 @@ import {
   JsonRpcProvider,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
+import { usePaymentToken } from "../hooks/usePaymentToken.js";
+import { resolveTokenDecimals as resolvePaymentTokenDecimals } from "../utils/paymentToken.js";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import {
   Popover,
@@ -38,6 +40,8 @@ import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
+import { useTranslation } from "@/hooks/useTranslation";
+import { getBatchCreateErrorKey } from "@/utils/batchCreateError";
 import { computeInvoiceHash } from "../services/relay/invoiceHashUtils.js";
 import { sendEncryptedInvoice } from "../services/relay/relayInvoiceMessaging.js";
 import { fetchPublicKeyFromChain } from "../services/relay/relayKeyManager.js";
@@ -48,6 +52,7 @@ import TokenIntegrationRequest from "@/components/TokenIntegrationRequest";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
+import { getMaxInvoicesPerBatch } from "@/utils/batchLimits";
 import { AmountTypeToggle } from "../components/AmountTypeToggle";
 import { CopyButton } from "@/components/ui/copyButton";
 import CountryPicker from "@/components/CountryPicker";
@@ -84,11 +89,6 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
   5115: "https://rpc.testnet.citrea.xyz",
 };
 
-// Mirrors MAX_CREATE_BATCH in Chainvoice.sol, which is the real guard: a larger
-// batch reverts with InvalidBatchSize. It is sized so a full batch fits in one
-// Ethereum Classic block (8M gas).
-const MAX_INVOICES_PER_BATCH = 30;
-
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
   const { isConnected, chainId } = useAccount();
@@ -97,15 +97,20 @@ function CreateInvoicesBatch() {
   const [issueDate] = useState(new Date());
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { t } = useTranslation("batchInvoice");
 
   const itemRefs = useRef({});
 
   // Token selection state
-  const [selectedToken, setSelectedToken] = useState(null);
-  const [customTokenAddress, setCustomTokenAddress] = useState("");
-  const [useCustomToken, setUseCustomToken] = useState(false);
-  const [tokenVerificationState, setTokenVerificationState] = useState("idle");
-  const [verifiedToken, setVerifiedToken] = useState(null);
+  const {
+    nativeToken,
+    selectedToken, setSelectedToken,
+    customTokenAddress, setCustomTokenAddress,
+    useCustomToken, setUseCustomToken,
+    tokenVerificationState, setTokenVerificationState,
+    verifiedToken, setVerifiedToken,
+    beginTokenRequest,
+  } = usePaymentToken(chainId || 1);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [clientAddressErrors, setClientAddressErrors] = useState({});
   const [rowTotalErrors, setRowTotalErrors] = useState({});
@@ -168,38 +173,32 @@ function CreateInvoicesBatch() {
   }, [isConnected]);
 
   const resolveTokenDecimals = async (tokenAddress, fallbackDecimals) => {
-    if (
-      fallbackDecimals !== undefined &&
-      fallbackDecimals !== null &&
-      !Number.isNaN(Number(fallbackDecimals))
-    ) {
-      return Number(fallbackDecimals);
-    }
+    return resolvePaymentTokenDecimals(tokenAddress, fallbackDecimals, nativeToken, async () => {
+      try {
+        let provider;
+        const rpcUrl = chainId && CHAIN_ID_TO_PUBLIC_RPC[Number(chainId)];
 
-    try {
-      let provider;
-      const rpcUrl = chainId && CHAIN_ID_TO_PUBLIC_RPC[Number(chainId)];
+        if (rpcUrl) {
+          provider = new JsonRpcProvider(rpcUrl);
+        } else if (typeof window !== "undefined" && window.ethereum) {
+          provider = new BrowserProvider(window.ethereum);
+        } else {
+          return null;
+        }
 
-      if (rpcUrl) {
-        provider = new JsonRpcProvider(rpcUrl);
-      } else if (typeof window !== "undefined" && window.ethereum) {
-        provider = new BrowserProvider(window.ethereum);
-      } else {
+        const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
+        const decimals = await contract.decimals();
+        return Number(decimals);
+      } catch (error) {
+        console.warn("Failed to resolve token decimals:", error);
         return null;
       }
-
-      const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-      const decimals = await contract.decimals();
-      return Number(decimals);
-    } catch (error) {
-      console.warn("Failed to resolve token decimals:", error);
-      return null;
-    }
+    });
   };
 
   // Invoice management
   const addInvoiceRow = () => {
-    if (invoiceRows.length >= MAX_INVOICES_PER_BATCH) return;
+    if (invoiceRows.length >= getMaxInvoicesPerBatch(chainId)) return;
     const newIndex = invoiceRows.length;
     setInvoiceRows((prev) => [
       ...prev,
@@ -379,6 +378,14 @@ function CreateInvoicesBatch() {
 
   // Token verification
   const verifyToken = async (address) => {
+    const isCurrent = beginTokenRequest();
+    if (address.toLowerCase() === ethers.ZeroAddress && nativeToken) {
+      setSelectedToken(nativeToken);
+      setUseCustomToken(false);
+      setVerifiedToken(null);
+      setTokenVerificationState("idle");
+      return;
+    }
     setTokenVerificationState("verifying");
 
     try {
@@ -392,6 +399,7 @@ function CreateInvoicesBatch() {
           contract.decimals().catch(() => 18),
         ]);
 
+        if (!isCurrent()) return;
         setVerifiedToken({ address, symbol, name, decimals });
         setTokenVerificationState("success");
         toast.success(`Token verified: ${name} (${symbol})`);
@@ -401,35 +409,11 @@ function CreateInvoicesBatch() {
         toast.error("No Ethereum provider found");
       }
     } catch (error) {
+      if (!isCurrent()) return;
       console.error("Verification failed:", error);
       setTokenVerificationState("error");
       toast.error("Token verification failed. Please check the address.");
     }
-  };
-
-  // Enhanced error handling for batch creation
-  const getErrorMessage = (error) => {
-    if (error?.code === "ACTION_REJECTED") {
-      return "Transaction was cancelled by user";
-    }
-
-    if (error?.message?.toLowerCase().includes("insufficient")) {
-      return "Insufficient balance to complete transaction";
-    }
-
-    if (error?.message?.toLowerCase().includes("network")) {
-      return "Network error. Please check your connection and try again";
-    }
-
-    if (error?.reason) {
-      return `Transaction failed: ${error.reason}`;
-    }
-
-    if (error?.message) {
-      return error.message;
-    }
-
-    return "Failed to create invoice batch. Please try again.";
   };
 
   const handleInvoiceChange = (rowIndex, field, value) => {
@@ -551,6 +535,7 @@ function CreateInvoicesBatch() {
       toast(`Processing ${validInvoices.length} invoices...`);
 
       const invoicePayloads = [];
+      const batchId = `batch_${Date.now()}`;
 
       // Process each invoice
       for (const [index, row] of validInvoices.entries()) {
@@ -583,7 +568,7 @@ function CreateInvoicesBatch() {
           })),
           // Add batch metadata
           batchInfo: {
-            batchId: `batch_${Date.now()}`,
+            batchId,
             batchSize: validInvoices.length,
             index: index,
             batchType: "user_created",
@@ -780,16 +765,17 @@ function CreateInvoicesBatch() {
         );
       }
 
-      toast.success(
-        `Successfully created ${validInvoices.length} invoices in batch!`
-      );
-      toast.success(`Estimated gas savings: ~${(validInvoices.length - 1) * 75}%`);
+      toast.success(t("createdToast", { count: validInvoices.length }));
 
       setTimeout(() => navigate("/dashboard/sent"), 3000);
     } catch (err) {
       console.error("Batch creation failed:", err);
-      const errorMsg = getErrorMessage(err);
-      toast.error(errorMsg);
+      const errorKey = getBatchCreateErrorKey(err);
+      if (errorKey === "cancelled") {
+        toast(t("errors.cancelled"), { icon: "✋" });
+      } else {
+        toast.error(t(`errors.${errorKey}`));
+      }
     } finally {
       setLoading(false);
     }
@@ -811,6 +797,17 @@ function CreateInvoicesBatch() {
       return;
     }
 
+    // Rows added on another chain can exceed this chain's limit after a switch.
+    const maxInvoices = getMaxInvoicesPerBatch(chainId);
+    if (invoiceRows.length > maxInvoices) {
+      toast.error(
+        `This network fits at most ${maxInvoices} invoices per batch. Remove ${
+          invoiceRows.length - maxInvoices
+        } and send them in another batch.`
+      );
+      return;
+    }
+
     await createInvoicesRequest();
   };
 
@@ -821,8 +818,6 @@ function CreateInvoicesBatch() {
   const validInvoices = invoiceRows.filter(
     (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
   ).length;
-
-  const gasSavingsPercent = validInvoices > 1 ? (validInvoices - 1) * 75 : 0;
 
   return (
     <>
@@ -951,10 +946,12 @@ function CreateInvoicesBatch() {
             </div>
             <div>
               <div className="text-xl sm:text-2xl font-bold">
-                ~{gasSavingsPercent}%
+                1
               </div>
               <div className="text-gray-300 text-xs sm:text-sm">
-                Gas Savings
+                {validInvoices > 1
+                  ? t("transactionInsteadOf", { count: validInvoices })
+                  : t("transaction")}
               </div>
             </div>
           </div>
@@ -970,7 +967,10 @@ function CreateInvoicesBatch() {
             <div className="space-y-4">
               <ToggleSwitch
                 enabled={useCustomToken}
-                onChange={setUseCustomToken}
+                onChange={(enabled) => {
+                  beginTokenRequest();
+                  setUseCustomToken(enabled);
+                }}
                 leftLabel="Select Token"
                 rightLabel="Input Custom Token"
               />
@@ -985,11 +985,13 @@ function CreateInvoicesBatch() {
                       selected={selectedToken}
                       onSelect={async (token) => {
                         const address = token.contract_address || token.address;
+                        const isCurrent = beginTokenRequest();
                         const decimals = await resolveTokenDecimals(
                           address,
                           token.decimals
                         );
 
+                        if (!isCurrent()) return false;
                         if (decimals === null) {
                           toast.error(
                             "Failed to fetch token decimals for selected token"
@@ -1038,6 +1040,7 @@ function CreateInvoicesBatch() {
                       placeholder="0x... (Enter token contract address)"
                       value={customTokenAddress}
                       onChange={(e) => {
+                        beginTokenRequest();
                         const address = e.target.value;
                         setCustomTokenAddress(address);
                         if (!address || !ethers.isAddress(address)) {
@@ -1120,16 +1123,16 @@ function CreateInvoicesBatch() {
               <Button
                 type="button"
                 onClick={addInvoiceRow}
-                disabled={invoiceRows.length >= MAX_INVOICES_PER_BATCH}
+                disabled={invoiceRows.length >= getMaxInvoicesPerBatch(chainId)}
                 className="bg-green-600 hover:bg-green-700 text-white flex items-center gap-2"
               >
                 <PlusIcon className="w-4 h-4" />
                 Add Invoice
               </Button>
             </div>
-            {invoiceRows.length >= MAX_INVOICES_PER_BATCH && (
+            {invoiceRows.length >= getMaxInvoicesPerBatch(chainId) && (
               <p className="text-sm text-amber-400">
-                A batch can hold at most {MAX_INVOICES_PER_BATCH} invoices so
+                A batch can hold at most {getMaxInvoicesPerBatch(chainId)} invoices so
                 the transaction fits in a block. Submit this batch, then create
                 another for the rest.
               </p>

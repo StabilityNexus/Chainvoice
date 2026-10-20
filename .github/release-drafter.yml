@@ -1,0 +1,71 @@
+# Release notes for the next version, kept as a draft release by
+# .github/workflows/release-drafter.yml. Pull requests are grouped by their
+# conventional-commit title (feat:, fix:, ...), so nobody has to label them.
+# Rename the draft to the real version when publishing it.
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+categories:
+  - type: pre-exclude
+    when:
+      labels: ['skip-changelog', 'duplicate', 'invalid', 'wontfix']
+  # Before Maintenance: Dependabot titles are chore(deps): / chore(deps-dev):.
+  - title: '⬆️ Dependencies'
+    exclusive: true
+    collapse-after: 0
+    when:
+      - label: 'dependencies'
+      - conventional:
+          scopes: ['deps', 'deps-dev']
+  - title: '🚀 Features'
+    exclusive: true
+    semver-increment: minor
+    when:
+      conventional:
+        type: 'feat'
+  - title: '🐛 Bug Fixes'
+    exclusive: true
+    when:
+      conventional:
+        type: 'fix'
+  - title: '⚡ Performance'
+    exclusive: true
+    when:
+      conventional:
+        type: 'perf'
+  - title: '📝 Documentation'
+    exclusive: true
+    when:
+      conventional:
+        type: 'docs'
+  - title: '🔧 CI'
+    exclusive: true
+    when:
+      conventional:
+        type: 'ci'
+  - title: '🧰 Maintenance'
+    exclusive: true
+    when:
+      conventional:
+        types: ['chore', 'refactor', 'test', 'build', 'style']
+  - title: 'Other Changes'
+  # A breaking title (feat!:, fix(api)!: ...) proposes a major version.
+  - type: version-resolver
+    semver-increment: major
+    when:
+      conventional:
+        breaking: true
+
+change-template: '- $TITLE @$AUTHOR (#$NUMBER)'
+change-title-escapes: '\<*_&'
+
+template: |
+  ## What's Changed
+
+  $CHANGES
+
+  ## Contributors
+
+  $CONTRIBUTORS
+
+  **Full Changelog**: https://github.com/$OWNER/$REPOSITORY/compare/$PREVIOUS_TAG...v$RESOLVED_VERSION

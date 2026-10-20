@@ -1,4 +1,8 @@
-import { filterAndSortInvoices } from "../../src/utils/invoiceFilterSortHelpers.js";
+import { afterEach, jest } from "@jest/globals";
+import {
+  filterAndSortInvoices,
+  isPastDueDate,
+} from "../../src/utils/invoiceFilterSortHelpers.js";
 
 describe("filterAndSortInvoices helper", () => {
   const pastDate = new Date(Date.now() - 86400000 * 5).toISOString(); // 5 days ago
@@ -174,5 +178,119 @@ describe("filterAndSortInvoices helper", () => {
       isSent: false,
     });
     expect(receivedAsc.map((i) => i.id)).toEqual(["2", "1"]);
+  });
+});
+
+// A due date names a calendar day. The date picker stores it as local midnight at
+// the start of that day, so comparing the stored instant with the current time
+// flagged an invoice overdue the moment its due day began. The setup runs these
+// in Asia/Kolkata (UTC+5:30); every moment below is built in local time.
+describe("overdue is decided by local calendar days", () => {
+  // The user picked "Oct 20" in the calendar.
+  const dueDate = new Date(2026, 9, 20).toISOString(); // 2026-10-19T18:30:00.000Z in IST
+  const at = (...localParts) => new Date(...localParts).getTime();
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  describe("isPastDueDate", () => {
+    it("is false at the start of the due day", () => {
+      expect(isPastDueDate(dueDate, at(2026, 9, 20, 0, 0, 0, 0))).toBe(false);
+    });
+
+    it("is false at 09:00 on the due day, which used to flag it overdue", () => {
+      expect(isPastDueDate(dueDate, at(2026, 9, 20, 9, 0))).toBe(false);
+    });
+
+    it("is false at the very end of the due day", () => {
+      expect(isPastDueDate(dueDate, at(2026, 9, 20, 23, 59, 59, 999))).toBe(false);
+    });
+
+    it("flips exactly at the local midnight that follows the due day", () => {
+      expect(isPastDueDate(dueDate, at(2026, 9, 21, 0, 0, 0, 0) - 1)).toBe(false);
+      expect(isPastDueDate(dueDate, at(2026, 9, 21, 0, 0, 0, 0))).toBe(true);
+    });
+
+    it("is false just after the instant the old comparison used", () => {
+      // 2026-10-19T18:30Z is local midnight in IST: the stored instant the old check compared.
+      expect(isPastDueDate(dueDate, Date.parse("2026-10-19T18:30:00.001Z"))).toBe(false);
+      expect(isPastDueDate(dueDate, Date.parse("2026-10-20T00:00:00.000Z"))).toBe(false);
+    });
+
+    it("is true on later days", () => {
+      expect(isPastDueDate(dueDate, at(2026, 9, 25, 12, 0))).toBe(true);
+      expect(isPastDueDate(dueDate, at(2027, 0, 1, 0, 0))).toBe(true);
+    });
+
+    it("uses the due day of a due date that carries a time of day", () => {
+      const lateDue = new Date(2026, 9, 20, 22, 15).toISOString();
+      expect(isPastDueDate(lateDue, at(2026, 9, 20, 23, 0))).toBe(false);
+      expect(isPastDueDate(lateDue, at(2026, 9, 21, 0, 0))).toBe(true);
+    });
+
+    it("accepts a Date as well as an ISO string", () => {
+      expect(isPastDueDate(new Date(2026, 9, 20), at(2026, 9, 20, 9, 0))).toBe(false);
+      expect(isPastDueDate(new Date(2026, 9, 20), at(2026, 9, 21, 0, 0))).toBe(true);
+    });
+
+    it("is false for a missing or invalid due date", () => {
+      expect(isPastDueDate(null, at(2030, 0, 1))).toBe(false);
+      expect(isPastDueDate(undefined, at(2030, 0, 1))).toBe(false);
+      expect(isPastDueDate("", at(2030, 0, 1))).toBe(false);
+      expect(isPastDueDate("not a date", at(2030, 0, 1))).toBe(false);
+    });
+  });
+
+  describe("through the status filter and sort", () => {
+    const invoices = [
+      { id: "unpaid", dueDate, isPaid: false, isCancelled: false, amountDue: "1" },
+      { id: "paid", dueDate, isPaid: true, isCancelled: false, amountDue: "1" },
+      { id: "cancelled", dueDate, isPaid: false, isCancelled: true, amountDue: "1" },
+    ];
+    const overdueIds = () =>
+      filterAndSortInvoices(invoices, { status: "overdue" }).map((i) => i.id);
+    // Status rank: pending 1, overdue 2, paid 3, cancelled 4; equal ranks fall back to the id.
+    // The peer is pending with a far-off due date. Its id sorts after "unpaid", so with a
+    // descending sort it comes first while both are pending (tie, larger id first) and
+    // second once "unpaid" is overdue (rank 2 beats rank 1). The order only changes if the
+    // rank does.
+    const pendingPeer = {
+      id: "zz-peer",
+      dueDate: new Date(2030, 0, 1).toISOString(),
+      isPaid: false,
+      isCancelled: false,
+      amountDue: "1",
+    };
+    const rankedIds = () =>
+      filterAndSortInvoices([invoices[0], pendingPeer], { sortBy: "status", sortDir: "desc" }).map(
+        (i) => i.id,
+      );
+
+    it("does not list an invoice as overdue on its due day", () => {
+      jest.useFakeTimers({ now: at(2026, 9, 20, 9, 0) });
+      expect(overdueIds()).toEqual([]);
+    });
+
+    it("does not list it at the end of the due day", () => {
+      jest.useFakeTimers({ now: at(2026, 9, 20, 23, 59, 59, 999) });
+      expect(overdueIds()).toEqual([]);
+    });
+
+    it("lists only the unpaid, uncancelled invoice once the due day is over", () => {
+      jest.useFakeTimers({ now: at(2026, 9, 21, 0, 0, 0, 0) });
+      expect(overdueIds()).toEqual(["unpaid"]);
+    });
+
+    it("ranks the invoice as pending until the due day ends, then as overdue", () => {
+      jest.useFakeTimers({ now: at(2026, 9, 20, 9, 0) });
+      expect(rankedIds()).toEqual(["zz-peer", "unpaid"]);
+
+      jest.useFakeTimers({ now: at(2026, 9, 20, 23, 59, 59, 999) });
+      expect(rankedIds()).toEqual(["zz-peer", "unpaid"]);
+
+      jest.useFakeTimers({ now: at(2026, 9, 21, 0, 0, 0, 0) });
+      expect(rankedIds()).toEqual(["unpaid", "zz-peer"]);
+    });
   });
 });

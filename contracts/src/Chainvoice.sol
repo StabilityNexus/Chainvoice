@@ -36,7 +36,7 @@ contract Chainvoice {
     error NativeTransferFailed();
     error FeeMustBeNative();
     error TokenAmountShortfall();
-    error NoPendingFeeController();
+    error NoPendingDev();
     error NoFeesAvailable();
     error WithdrawFailed();
     error InvalidPublicKey();
@@ -62,16 +62,16 @@ contract Chainvoice {
     // ========== Messaging Public Key Registry ==========
     mapping(address => bytes) private messagingPublicKeys;
 
-    /// @notice Sets the fee and the fee recipient, and hands its own role to a
+    /// @notice Sets devFee and devFeeReceiver, and hands its own role to a
     ///         successor in two steps. There is no contract owner.
-    address public feeController;
-    /// @notice Address proposed as the next feeController; zero when none is pending.
-    address public pendingFeeController;
+    address public dev;
+    /// @notice Address proposed as the next dev; zero when none is pending.
+    address public pendingDev;
     /// @notice Receives withdrawn fees. May be a contract that cannot call back
     ///         into Chainvoice, such as a vault, so it is changed in one step.
-    address public feeRecipient;
-    uint256 public fee;                // native fee per invoice
-    uint256 public accumulatedFees;    // native fees accrued (for withdraw)
+    address public devFeeReceiver;
+    uint256 public devFee;             // native fee per invoice
+    uint256 public accumulatedDevFees; // native fees accrued (for withdraw)
 
     // ========== Events ==========
     event InvoiceCreated(uint256 indexed id, address indexed from, address indexed to, address tokenAddress);
@@ -81,32 +81,32 @@ contract Chainvoice {
     event InvoiceBatchPaid(address indexed payer, address indexed token, uint256 count, uint256 totalAmount, uint256[] ids);
     event PublicKeyRegistered(address indexed user, bytes publicKey);
 
-    event FeeUpdated(uint256 indexed previousFee, uint256 indexed newFee);
-    event FeeRecipientUpdated(address indexed previousFeeRecipient, address indexed newFeeRecipient);
-    event FeeControllerProposed(address indexed currentFeeController, address indexed proposedFeeController);
-    event FeeControllerProposalCancelled(address indexed currentFeeController, address indexed cancelledFeeController);
-    event FeeControllerUpdated(address indexed previousFeeController, address indexed newFeeController);
+    event DevFeeUpdated(uint256 indexed previousDevFee, uint256 indexed newDevFee);
+    event DevFeeReceiverUpdated(address indexed previousDevFeeReceiver, address indexed newDevFeeReceiver);
+    event DevProposed(address indexed currentDev, address indexed proposedDev);
+    event DevProposalCancelled(address indexed currentDev, address indexed cancelledDev);
+    event DevUpdated(address indexed previousDev, address indexed newDev);
 
-    /// @param _fee Native fee charged per paid invoice; must be non-zero.
-    /// @param _feeController Address that sets the fee and the fee recipient; must not be zero.
-    /// @param _feeRecipient Address that withdrawn fees are paid to; must not be zero.
-    constructor(uint256 _fee, address _feeController, address _feeRecipient) {
-        // A zero fee is rejected here only to catch an unset FEE_WEI at deploy
-        // time. The fee controller may still set the fee to 0 later via
-        // setFeeAmount(); that is a deliberate choice, not a misconfiguration.
-        if (_fee == 0) revert InvalidAmount();
-        if (_feeController == address(0) || _feeRecipient == address(0)) revert ZeroAddress();
-        fee = _fee;
-        feeController = _feeController;
-        feeRecipient = _feeRecipient;
-        emit FeeUpdated(0, _fee);
-        emit FeeControllerUpdated(address(0), _feeController);
-        emit FeeRecipientUpdated(address(0), _feeRecipient);
+    /// @param _devFee Native fee charged per paid invoice; must be non-zero.
+    /// @param _dev Address that sets devFee and devFeeReceiver; must not be zero.
+    /// @param _devFeeReceiver Address that withdrawn fees are paid to; must not be zero.
+    constructor(uint256 _devFee, address _dev, address _devFeeReceiver) {
+        // A zero fee is rejected here only to catch an unset DEV_FEE_WEI at deploy
+        // time. The dev may still set the fee to 0 later via setDevFee(); that
+        // is a deliberate choice, not a misconfiguration.
+        if (_devFee == 0) revert InvalidAmount();
+        if (_dev == address(0) || _devFeeReceiver == address(0)) revert ZeroAddress();
+        devFee = _devFee;
+        dev = _dev;
+        devFeeReceiver = _devFeeReceiver;
+        emit DevFeeUpdated(0, _devFee);
+        emit DevUpdated(address(0), _dev);
+        emit DevFeeReceiverUpdated(address(0), _devFeeReceiver);
     }
 
     // ========== Modifiers ==========
-    modifier onlyFeeController() {
-        if (msg.sender != feeController) revert Unauthorized();
+    modifier onlyDev() {
+        if (msg.sender != dev) revert Unauthorized();
         _;
     }
 
@@ -298,17 +298,17 @@ contract Chainvoice {
         // Effects first for CEI (mark paid, bump fees), then interactions
         invoice.isPaid = true;
         if (invoice.tokenAddress == address(0)) {
-            if (msg.value != invoice.amountDue + fee) revert IncorrectPaymentAmount();
-            accumulatedFees += fee;
+            if (msg.value != invoice.amountDue + devFee) revert IncorrectPaymentAmount();
+            accumulatedDevFees += devFee;
 
             (bool sent, ) = payable(invoice.from).call{value: invoice.amountDue}("");
             if (!sent) revert NativeTransferFailed();
         } else {
-            if (msg.value != fee) revert FeeMustBeNative();
+            if (msg.value != devFee) revert FeeMustBeNative();
             if (IERC20(invoice.tokenAddress).allowance(msg.sender, address(this)) < invoice.amountDue) {
                 revert InsufficientAllowance();
             }
-            accumulatedFees += fee;
+            accumulatedDevFees += devFee;
 
             _pullToken(IERC20(invoice.tokenAddress), msg.sender, invoice.from, invoice.amountDue);
         }
@@ -337,7 +337,7 @@ contract Chainvoice {
         address token = inv0.tokenAddress;
 
         uint256 totalAmounts = 0;
-        uint256 totalNativeFee = fee * n;
+        uint256 totalNativeFee = devFee * n;
         // Validate and mark paid in the same pass so a duplicate id in the
         // batch hits AlreadySettled() on its second occurrence, before any
         // funds move.
@@ -354,7 +354,7 @@ contract Chainvoice {
             totalAmounts += inv.amountDue;
             inv.isPaid = true;
         }
-        accumulatedFees += totalNativeFee;
+        accumulatedDevFees += totalNativeFee;
         // Interactions
         if (token == address(0)) {
             // Native: must include amounts + total fee
@@ -407,7 +407,7 @@ contract Chainvoice {
         if (invoice.tokenAddress == address(0)) {
             // Native
             return (
-                payer.balance >= invoice.amountDue + fee,
+                payer.balance >= invoice.amountDue + devFee,
                 payer.balance,
                 type(uint256).max // Native has no allowance
             );
@@ -416,7 +416,7 @@ contract Chainvoice {
             uint256 allw = IERC20(invoice.tokenAddress).allowance(payer, address(this));
             // The fee is charged in native currency on the token path too.
             return (
-                bal >= invoice.amountDue && allw >= invoice.amountDue && payer.balance >= fee,
+                bal >= invoice.amountDue && allw >= invoice.amountDue && payer.balance >= devFee,
                 bal,
                 allw
             );
@@ -482,58 +482,58 @@ contract Chainvoice {
     }
 
     // ========== Fee Management ==========
-    function setFeeAmount(uint256 _fee) external onlyFeeController {
-        emit FeeUpdated(fee, _fee);
-        fee = _fee;
+    function setDevFee(uint256 newDevFee) external onlyDev {
+        emit DevFeeUpdated(devFee, newDevFee);
+        devFee = newDevFee;
     }
 
-    function setFeeRecipient(address newFeeRecipient) external onlyFeeController {
-        if (newFeeRecipient == address(0)) revert ZeroAddress();
+    function setDevFeeReceiver(address newDevFeeReceiver) external onlyDev {
+        if (newDevFeeReceiver == address(0)) revert ZeroAddress();
 
-        emit FeeRecipientUpdated(feeRecipient, newFeeRecipient);
-        feeRecipient = newFeeRecipient;
+        emit DevFeeReceiverUpdated(devFeeReceiver, newDevFeeReceiver);
+        devFeeReceiver = newDevFeeReceiver;
     }
 
-    // ========== Fee Controller Handover (two-step) ==========
-    /// @notice Propose a new feeController. Nothing changes until that address
-    ///         calls acceptFeeController(); proposing again replaces the pending address.
-    function proposeFeeController(address newFeeController) external onlyFeeController {
-        if (newFeeController == address(0)) revert ZeroAddress();
+    // ========== Dev Handover (two-step) ==========
+    /// @notice Propose a new dev. Nothing changes until that address
+    ///         calls acceptDev(); proposing again replaces the pending address.
+    function proposeDev(address newDev) external onlyDev {
+        if (newDev == address(0)) revert ZeroAddress();
 
-        pendingFeeController = newFeeController;
-        emit FeeControllerProposed(feeController, newFeeController);
+        pendingDev = newDev;
+        emit DevProposed(dev, newDev);
     }
 
     /// @notice Withdraw a pending proposal, for example one sent to a mistyped
-    ///         address. The current feeController keeps its role.
-    function cancelFeeControllerProposal() external onlyFeeController {
-        address pending = pendingFeeController;
-        if (pending == address(0)) revert NoPendingFeeController();
+    ///         address. The current dev keeps its role.
+    function cancelDevProposal() external onlyDev {
+        address pending = pendingDev;
+        if (pending == address(0)) revert NoPendingDev();
 
-        pendingFeeController = address(0);
-        emit FeeControllerProposalCancelled(feeController, pending);
+        pendingDev = address(0);
+        emit DevProposalCancelled(dev, pending);
     }
 
     /// @notice Complete the handover. Only the proposed address can call this.
-    function acceptFeeController() external {
-        address pending = pendingFeeController;
-        if (pending == address(0)) revert NoPendingFeeController();
+    function acceptDev() external {
+        address pending = pendingDev;
+        if (pending == address(0)) revert NoPendingDev();
         if (msg.sender != pending) revert Unauthorized();
 
-        emit FeeControllerUpdated(feeController, pending);
-        feeController = pending;
-        pendingFeeController = address(0);
+        emit DevUpdated(dev, pending);
+        dev = pending;
+        pendingDev = address(0);
     }
 
     function withdrawFees() external {
-        if (accumulatedFees == 0) revert NoFeesAvailable();
+        if (accumulatedDevFees == 0) revert NoFeesAvailable();
 
-        uint256 amount = accumulatedFees;
-        accumulatedFees = 0;
+        uint256 amount = accumulatedDevFees;
+        accumulatedDevFees = 0;
 
-        // Destination is always feeRecipient, so a permissionless trigger is safe.
+        // Destination is always devFeeReceiver, so a permissionless trigger is safe.
         // slither-disable-next-line arbitrary-send-eth
-        (bool success, ) = payable(feeRecipient).call{value: amount}("");
+        (bool success, ) = payable(devFeeReceiver).call{value: amount}("");
         if (!success) revert WithdrawFailed();
     }
 }

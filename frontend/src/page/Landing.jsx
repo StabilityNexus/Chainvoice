@@ -1,8 +1,7 @@
-import { ConnectButton } from "@rainbow-me/rainbowkit";
 import { motion } from "framer-motion";
 import { FiShield, FiLock, FiZap } from "react-icons/fi";
 import { SiEthereum } from "react-icons/si";
-import TokenCarousel from "@/components/TokenCrousel";
+import TokenCarousel from "@/components/TokenCarousel";
 import Footer from "@/components/Footer";
 
 function Landing() {
@@ -234,21 +233,11 @@ function Landing() {
               <span className="text-green-400">Next-Gen</span> Invoicing?
             </h2>
 
-            <p className="text-xl text-gray-400 mb-10 max-w-3xl mx-auto leading-relaxed">
+            <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
               Join thousands of Web3-native businesses already using Chainvoice
               for secure, encrypted invoicing with support for all major ERC20
               tokens across multiple chains.
             </p>
-
-            <div className="flex flex-col items-center space-y-6">
-              <div className="flex justify-center">
-                <ConnectButton
-                  showBalance={false}
-                  accountStatus="full"
-                  chainStatus="full"
-                />
-              </div>
-            </div>
           </motion.div>
         </div>
       </section>

@@ -89,7 +89,7 @@
 ### Release Notes
 
 - [ ] 🔴 **release_notes** — Each release includes human-readable release notes summarizing major changes. Raw `git log` output is NOT acceptable.
-  - *Evidence URL:* Current release note is a one-line title only, not a change summary.
+  - *Evidence URL:* Current release note is a one-line title only, not a change summary. Release Drafter (`.github/workflows/release-drafter.yml`) now keeps a categorized draft for the next release; tick once `v2.0.0` is published from it.
 
 - [~] 🔴 **release_notes_vulns** — Release notes identify every publicly known vulnerability (with CVE) fixed in that release.
   - *Evidence URL:* N/A — *Justification: as of 2026-08-11, no CVEs or public vulnerability disclosures exist against this repository (verified via GitHub Security Advisories for this repo). Re-verify this justification at each future release rather than treating it as permanent.*
@@ -166,7 +166,7 @@
   - *Tool used:* ESLint (`frontend/eslint.config.js`), run in CI (`.github/workflows/test.yml`)
 
 - [ ] 🔴 **warnings_fixed** — Warnings from the linter are addressed (not suppressed without reason).
-  - *Note:* CI runs lint with `continue-on-error: true` — lint failures don't currently block merges.
+  - *Note:* ESLint errors now fail CI (`.github/workflows/test.yml`). Still open: the forge `unsafe-typecast` warnings in `contracts/test/Chainvoice.t.sol` (#258).
 
 - [ ] 🔵 **warnings_strict** — Project uses maximum strictness in linter config where practical. *(SUGGESTED)*
   - *Note:* Not assessed.
@@ -249,7 +249,7 @@
 
 ### Full-Stack Notes
 
-- Frontend is React + Vite + TypeScript, tested with Jest, linted with ESLint (CI currently `continue-on-error`).
+- Frontend is React + Vite + TypeScript, tested with Jest, linted with ESLint (errors fail CI).
 
 ---
 

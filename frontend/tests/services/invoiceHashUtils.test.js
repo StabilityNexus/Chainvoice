@@ -167,3 +167,58 @@ describe("verifyInvoiceHash", () => {
     expect(verifyInvoiceHash(invoice, "")).toBe(false);
   });
 });
+
+// Hashes already recorded on-chain were computed from payloads created before
+// issue and due dates were read as local calendar days. That fix changes how a
+// stored date is read for display, export and the overdue check; it must not
+// change what is hashed. These vectors were computed with the hashing code as it
+// was before the fix, from a payload in the shape an IST user produced (a
+// local-midnight due date and a 01:30 local issue date, both stored as UTC
+// instants), so a change to how dates are hashed fails here instead of silently
+// breaking verification of existing invoices.
+describe("hashes of invoices created before the date-only fix", () => {
+  const legacyPayload = {
+    amountDue: "125.5",
+    issueDate: "2026-10-19T20:00:00.000Z",
+    dueDate: "2026-10-19T18:30:00.000Z",
+    paymentToken: {
+      address: "0x0000000000000000000000000000000000000000",
+      symbol: "ETH",
+      decimals: 18,
+    },
+    user: { fname: "Ada", email: "ada@example.com" },
+    client: { fname: "Bob", email: "bob@example.com" },
+    items: [
+      { description: "Consulting", qty: "2", unitPrice: "50", discount: "0", tax: "0", amount: "100" },
+    ],
+  };
+  const LEGACY_HASH = "0x3895bea345f2238cdb44ff70d3cab38b90d89925c47aad6b3372801ce9b37b52";
+
+  it("keeps the exact serialisation, with dates as their stored UTC instants", () => {
+    expect(stableStringify(legacyPayload)).toBe(
+      '{"amountDue":"125.5","client":{"email":"bob@example.com","fname":"Bob"},' +
+        '"dueDate":"2026-10-19T18:30:00.000Z","issueDate":"2026-10-19T20:00:00.000Z",' +
+        '"items":[{"amount":"100","description":"Consulting","discount":"0","qty":"2","tax":"0","unitPrice":"50"}],' +
+        '"paymentToken":{"address":"0x0000000000000000000000000000000000000000","decimals":18,"symbol":"ETH"},' +
+        '"user":{"email":"ada@example.com","fname":"Ada"}}'
+    );
+  });
+
+  it("still computes the recorded hash", () => {
+    expect(computeInvoiceHash(legacyPayload)).toBe(LEGACY_HASH);
+  });
+
+  it("still verifies against the recorded hash", () => {
+    expect(verifyInvoiceHash(legacyPayload, LEGACY_HASH)).toBe(true);
+  });
+
+  it("hashes the same whether the dates arrive as Date objects or as stored strings", () => {
+    const asDates = {
+      ...legacyPayload,
+      issueDate: new Date(2026, 9, 20, 1, 30), // 01:30 IST
+      dueDate: new Date(2026, 9, 20), // local midnight, "Oct 20"
+    };
+
+    expect(computeInvoiceHash(asDates)).toBe(LEGACY_HASH);
+  });
+});

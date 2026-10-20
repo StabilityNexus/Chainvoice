@@ -48,7 +48,7 @@ const loadLogoImage = async () => {
       }
     }
   } catch (e) {
-    console.log('DOM logo method failed:', e);
+    console.warn('DOM logo-loading method failed:', e);
   }
 
   try {
@@ -104,7 +104,7 @@ const loadLogoImage = async () => {
       }
     }
   } catch (e) {
-    console.log('Fetch logo method failed:', e);
+    console.warn('Image logo-loading method failed:', e);
   }
 
   try {
@@ -148,7 +148,7 @@ const loadLogoImage = async () => {
     
     return logoDataUrl;
   } catch (e) {
-    console.log('Logo image load method 3 failed:', e);
+    console.error('Logo loading error:', e);
   }
   
   return null;
@@ -204,12 +204,9 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
           logoSize - 2 * logoPadding
         );
         logoAdded = true;
-        console.log('Logo successfully added to PDF');
       } catch (imgError) {
         console.error('Error adding logo image to PDF:', imgError);
       }
-    } else {
-      console.log('Logo data URL invalid or empty');
     }
   } catch (e) {
     console.error('Logo loading error:', e);

@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="#"><img alt="Stability Nexus · Chainvoice" src="https://img.shields.io/badge/Stability_Nexus-Chainvoice-228B22?style=for-the-badge&labelColor=FFC517"></a>
+  <a href="https://chainvoice.stability.nexus/"><img alt="Stability Nexus · Chainvoice" src="https://img.shields.io/badge/Stability_Nexus-Chainvoice-228B22?style=for-the-badge&labelColor=FFC517"></a>
 </p>
 
 <p align="center">
@@ -63,7 +63,7 @@ Chainvoice transforms traditional invoicing by leveraging blockchain technology 
 - **Immutable Records** - Verifiable transaction history and status tracking
 - **Treasury Management** - Built-in fee management for platform sustainability
 - **Privacy Protection** - Encrypted invoice data with access control
-- **User-Friendly Interface** - Intuitive web application with wallet integration
+- **User-Friendly Interface** - Intuitive web application with wallet integration: browser wallets connect through [WalletLink](https://github.com/StabilityNexus/WalletLink) (EIP-6963), with no WalletConnect relay or project ID
 
 ## Project Structure
 
@@ -150,11 +150,12 @@ forge build
 source .env
 
 4. **Deploy to Ethereum Classic**  
-The script reads `FEE_CONTROLLER` and `FEE_RECIPIENT` (both required, non-zero)
-and an optional `FEE_WEI` (default `0.0005 ether`, must not be `0`) from `.env`,
-and passes them to the constructor. `FEE_CONTROLLER` sets the fee and the fee
-recipient and hands its own role over in two steps, so use a multisig;
-`FEE_RECIPIENT` receives withdrawn fees. The compiler targets `evm_version = "london"`
+The script reads `DEV_ADDRESS` and `DEV_FEE_RECEIVER` (both required, non-zero)
+and an optional `DEV_FEE_WEI` (default `0.0005 ether`, must not be `0`) from `.env`,
+and passes them to the constructor. The `dev` address sets `devFee` and
+`devFeeReceiver` and hands its own role over in two steps (`proposeDev`, then
+`acceptDev` from the new address), so use a multisig; `devFeeReceiver` receives
+withdrawn fees. The compiler targets `evm_version = "london"` with `via_ir`
 (see `contracts/foundry.toml`) so the same bytecode runs on Sepolia and ETC.
 
 ```bash
@@ -165,7 +166,8 @@ forge script script/Chainvoice.s.sol:DeployChainvoice   --rpc-url etc --account 
 `forge script` fails with `unsupported feature: eip1559`.
 
 For Sepolia, use `--rpc-url sepolia --verify` (Etherscan, needs `ETHERSCAN_API_KEY`) and
-leave `--legacy` out.
+leave `--legacy` out. Sepolia charges several times more gas for deployed code
+than forge's local simulation, so also pass `--gas-estimate-multiplier 800`.
 After deploying, record the address in [Deployments.md](./Deployments.md).
 
 5. **Configure frontend**  
@@ -190,8 +192,6 @@ VITE_CONTRACT_ADDRESS_11155111=0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b
 VITE_CONTRACT_ADDRESS_61=
 #Polygon Mainnet (137) — blank until redeployed, see note below
 VITE_CONTRACT_ADDRESS_137=
-#Project ID
-VITE_WALLETCONNECT_PROJECT_ID=Your Project ID can be obtained from https://dashboard.reown.com/ 
 ```
 
 > ⚠️ Renaming the key registry functions changed their selectors, so only a

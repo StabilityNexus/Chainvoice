@@ -15,8 +15,58 @@
     "clearFilters": "Clear Filters",
     "showingResults": "Showing {{totalCount}} of {{rawCount}} invoices"
   },
+  "batchInvoice": {
+    "transaction": "Transaction",
+    "transactionInsteadOf": "Transaction instead of {{count}}",
+    "createdToast": "Created {{count}} invoices in 1 transaction instead of {{count}}",
+    "errors": {
+      "cancelled": "Transaction cancelled in your wallet.",
+      "insufficientFunds": "Your wallet doesn't have enough funds to pay the network fee.",
+      "network": "Network error. Check your connection and try again.",
+      "unsupportedNetwork": "Chainvoice isn't available on this network. Switch to a supported network.",
+      "batchTooLarge": "This batch has too many invoices. Split it into smaller batches.",
+      "invalidToken": "The selected token isn't a valid ERC-20 token on this network.",
+      "reverted": "The transaction failed on-chain, so no invoices were created. Try again; if it keeps failing, your wallet may have set the gas limit too low.",
+      "rejected": "The contract rejected this batch, so nothing was sent. Check the invoice details and try again.",
+      "generic": "Couldn't create the invoices. Please try again."
+    }
+  },
   "receivedInvoices": {
-    "smartBatchSuggestions": "Smart Batch Suggestions"
+    "smartBatchSuggestions": "Smart Batch Suggestions",
+    "errors": {
+      "invoiceNotFound": "This invoice doesn't exist on the network your wallet is connected to. Check that your wallet is on the right network, then refresh the page.",
+      "wrongPayer": "This invoice was issued to a different wallet. Switch to the wallet it was sent to and try again.",
+      "insufficientAllowance": "Chainvoice isn't approved to spend enough of this token. Approve the full amount, then pay again.",
+      "senderCannotReceive": "The invoice's sender can't receive this payment because their wallet rejected the transfer. Nothing was paid.",
+      "tokenTakesFee": "This token takes a fee on every transfer, so the sender would receive less than the invoice amount. The payment was blocked and nothing was paid.",
+      "busy": "The contract was still processing another payment. Wait a moment and try again.",
+      "alreadyPaid": "This invoice has already been paid.",
+      "cancelled": "The sender cancelled this invoice, so it can't be paid.",
+      "amountMismatch": "The amount sent doesn't match what this invoice needs. The network fee may have changed since the page loaded, so refresh the page and try again.",
+      "feeMismatch": "The network fee for a token invoice has to be paid in the network's native currency, and the amount sent didn't match the current fee. Refresh the page and try again.",
+      "batchSettled": "One or more of the selected invoices has already been paid or cancelled. Refresh the list and select again.",
+      "mixedTokens": "A batch can only hold invoices in the same token. Select invoices that use a single token.",
+      "batchSize": "That number of invoices isn't allowed in one batch. Select at least one invoice, or fewer invoices, and try again.",
+      "batchAmountMismatch": "The total sent for this batch doesn't match the invoices plus their network fees. The fee may have changed since the page loaded, so refresh the page and try again.",
+      "walletCancelled": "Transaction was cancelled by user",
+      "walletRejected": "Transaction was rejected in wallet",
+      "failedWithReason": "Transaction failed: {{reason}}",
+      "contractRejected": "The contract rejected this transaction ({{name}}).",
+      "insufficientFunds": "Insufficient balance to complete this transaction",
+      "network": "Network error. Please check your connection and try again",
+      "gas": "Transaction failed due to gas estimation error. Please try again",
+      "reverted": "The network rejected this transaction without giving a reason. Check that your balance covers the payment and the network fee and that the invoice can still be paid, then try again.",
+      "generic": "Payment failed. Please try again or contact support"
+    }
+  },
+  "tokenPicker": {
+    "testnetNotice": "Select the native coin or use Input Custom Token for testnet ERC-20 tokens.",
+    "testnetListUnavailable": "ERC-20 token lists are not available on testnets."
+  },
+  "createInvoice": {
+    "linkChainMismatch": "This link requests a token on {{chainName}}. Switch network to use it.",
+    "nativeCoinUnsupported": "The native coin is not supported on this network.",
+    "tokenDecimalsFetchFailed": "Failed to fetch token decimals for selected token"
   },
   "invoiceVerification": {
     "received": {

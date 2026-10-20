@@ -81,17 +81,25 @@ export const toDisplayDate = (value) => {
 };
 
 /**
- * Convert a date value to a date-only ISO string (YYYY-MM-DD) for JSON export.
+ * Convert a date value to a date-only string (YYYY-MM-DD) for CSV / JSON export.
  * Returns null when the input is missing or invalid.
+ *
+ * Issue and due dates are calendar dates: the picker produces local midnight and
+ * the UI formats them in local time. The day is therefore read from the local
+ * components, so an export shows the date the person picked and the UI shows.
+ * Reading UTC components instead shifted the date back one day east of UTC
+ * (local midnight in IST is 18:30 UTC the day before).
+ *
+ * The stored value is still an instant, so a viewer in another time zone reads
+ * the calendar day in their own zone, exactly as the UI does for them.
  */
 export const toISODate = (value) => {
   if (!value) return null;
   const d = new Date(value);
   if (isNaN(d.getTime())) return null;
-  // Use UTC components to avoid timezone-shift issues
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 };
 
@@ -101,7 +109,12 @@ export const toISODate = (value) => {
  * ERC-20 payments show "amount TOKEN + fee NATIVE".
  */
 export const formatInvoiceTotal = (invoice, fee, fallbackChainId) => {
-  const tokenSymbol = invoice.paymentToken?.symbol || "ETH";
+  const tokenSymbol =
+  invoice.paymentToken?.symbol ||
+  getWagmiChainInfo(
+    invoice.paymentToken?.chainId ?? invoice.chainId ?? fallbackChainId
+  )?.nativeCurrency?.symbol ||
+  "ETH";
   const tokenAddress = invoice.paymentToken?.address;
   const chainInfo = getWagmiChainInfo(
     invoice.paymentToken?.chainId ?? invoice.chainId ?? fallbackChainId

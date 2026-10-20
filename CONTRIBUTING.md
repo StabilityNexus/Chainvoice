@@ -8,9 +8,11 @@ The following guidelines apply to all contributions across the entire project (b
 **1. Pull Request Scope:**
 Pull requests must remain focused and limited in scope. Each pull request should address a single feature, improvement, or bug fix. Large, multi-feature updates or broad refactors must be divided into smaller, logically structured changes before review to ensure clarity and effective feedback.
 
+Give the pull request a [Conventional Commits](https://www.conventionalcommits.org/) title (`feat:`, `fix:`, `perf:`, `docs:`, `ci:`, `chore:`, …). The draft release notes are grouped by it.
+
 **2. Build, Test & CI Policy:**
 Before opening a pull request, you must ensure that your local build is successful, all relevant tests pass, and there are no new console errors or warnings in the browser. All automated CI checks must pass before a pull request can be merged:
-- **Frontend (`frontend/`):** New or modified frontend features must include unit tests using Jest (`npm run test` or `npm run test:ci`). The frontend CI suite (`test.yml`) enforces that unit tests with coverage (`npm run test:ci`) and the production build (`npm run build`) pass. Linting (`npm run lint`) runs in CI as an advisory check (`continue-on-error: true`).
+- **Frontend (`frontend/`):** New or modified frontend features must include unit tests using Jest (`npm run test` or `npm run test:ci`). The frontend CI suite (`test.yml`) enforces that linting (`npm run lint`), unit tests with coverage (`npm run test:ci`) and the production build (`npm run build`) pass, on the Node.js version in `frontend/.nvmrc` (`nvm use` picks it up) with dependencies installed from the committed `package-lock.json`.
 - **Smart Contracts (`contracts/`):** Any new or modified contract logic must include comprehensive automated tests in Foundry (`forge test` / `forge test -vvv`) covering expected behavior, edge cases, and revert conditions. The contract CI suite (`contracts.yml`) enforces that compilation (`forge build --sizes`), test execution (`forge test -vvv`), and Slither static analysis (`slither . --config-file slither.config.json --fail-high`) pass.
 - **Static Analysis & Security:** The CodeQL workflow (`codeql.yml`) checks frontend JavaScript/TypeScript code for vulnerabilities.
 
