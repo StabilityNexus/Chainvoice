@@ -86,6 +86,8 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
   56: "https://bsc-dataseed.binance.org",
   8453: "https://mainnet.base.org",
   11155111: "https://ethereum-sepolia-rpc.publicnode.com",
+  63: "https://0xrpc.io/mordor",
+  80002: "https://polygon-amoy.drpc.org",
   5115: "https://rpc.testnet.citrea.xyz",
 };
 

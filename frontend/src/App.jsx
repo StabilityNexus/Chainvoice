@@ -1,21 +1,15 @@
 import { createWalletLinkConfig } from "@stability-nexus/walletlink";
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
-import {
-  mainnet as wagmiMainnet,
-  classic,
-  base,
-  bsc,
-  polygon,
-  sepolia,
-} from "wagmi/chains";
 
 import { HashRouter as Router, Navigate, Route, Routes } from "react-router-dom";
 
 import { lazy, Suspense } from "react";
 import Landing from "./page/Landing";
 import Applayout from "./page/Applayout";
-import { citreaTestnet } from "./utils/CitreaTestnet";
+import SupportedNetworkGuard from "./components/SupportedNetworkGuard";
+import { chainConfig } from "./utils/chainConfig";
+import { SHELL } from "./utils/layout";
 
 const Home = lazy(() => import("./page/Home"));
 const Feature = lazy(() => import("./page/Feature"));
@@ -26,29 +20,9 @@ const CreateInvoice = lazy(() => import("./page/CreateInvoice"));
 const SentInvoice = lazy(() => import("./page/SentInvoice"));
 const ReceivedInvoice = lazy(() => import("./page/ReceivedInvoice"));
 
-const mainnet = {
-  ...wagmiMainnet,
-  rpcUrls: {
-    ...wagmiMainnet.rpcUrls,
-    default: {
-      http: ["https://cloudflare-eth.com", ...wagmiMainnet.rpcUrls.default.http],
-    },
-  },
-};
-
-const AllChains = [
-  mainnet,
-  classic,
-  base,
-  bsc,
-  polygon,
-  sepolia,
-  citreaTestnet,
-];
-
 // eslint-disable-next-line react-refresh/only-export-components
 export const config = createWalletLinkConfig({
-  chains: AllChains,
+  chains: chainConfig,
 });
 
 const queryClient = new QueryClient();
@@ -110,7 +84,14 @@ function App() {
                     <Route path="feature" element={<Feature />} />
                     <Route path="about" element={<About />} />
                     <Route path="working" element={<Working />} />
-                    <Route path="treasure" element={<Treasure />} />
+                    <Route
+                      path="treasure"
+                      element={
+                        <SupportedNetworkGuard className={SHELL}>
+                          <Treasure />
+                        </SupportedNetworkGuard>
+                      }
+                    />
                     <Route path="*" element={<NotFound />} />
                   </Route>
                 </Routes>

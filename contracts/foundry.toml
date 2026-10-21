@@ -18,6 +18,9 @@ via_ir = true
 [rpc_endpoints]
 sepolia = "${SEPOLIA_RPC_URL}"
 etc = "${ETC_RPC_URL}"
+mordor = "${MORDOR_RPC_URL}"
+amoy = "${AMOY_RPC_URL}"
 
 [etherscan]
 sepolia = { key = "${ETHERSCAN_API_KEY}", chain = 11155111 }
+amoy = { key = "${ETHERSCAN_API_KEY}", chain = 80002 }

@@ -87,6 +87,8 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
   56: "https://bsc-dataseed.binance.org",
   8453: "https://mainnet.base.org",
   11155111: "https://ethereum-sepolia-rpc.publicnode.com",
+  63: "https://0xrpc.io/mordor",
+  80002: "https://polygon-amoy.drpc.org",
   5115: "https://rpc.testnet.citrea.xyz",
 };
 
@@ -154,19 +156,10 @@ function CreateInvoice() {
 
   const {
     isRegistered,
-    isCheckingRegistration,
-    isUnsupportedNetwork,
     error: keysError,
     checkRegistration,
     deriveAndRegister,
   } = useRelayKeys();
-
-  // Registering cannot help on a chain with no deployment, so that case still
-  // gets its own message rather than a setup step guaranteed to fail. Key
-  // registration itself is no longer gated up front here — it happens inline
-  // in createInvoiceRequest, the first time it's actually needed.
-  const showUnsupportedNetwork =
-    isConnected && !isCheckingRegistration && isUnsupportedNetwork;
 
   // Whether the client can receive encrypted details: "unknown" | "checking"
   // | "registered" | "unregistered". Checked as soon as a valid address is
@@ -831,22 +824,7 @@ function CreateInvoice() {
         />
       </div>
 
-      {showUnsupportedNetwork && (
-        <div className={PAGE_CONTAINER}>
-          <div className="bg-white border border-amber-200 rounded-lg p-6 shadow-sm">
-            <h2 className="text-xl font-bold mb-2 text-gray-800">
-              Unsupported network
-            </h2>
-            <p className="text-sm text-gray-600">
-              Chainvoice is not deployed on the network your wallet is connected
-              to, so invoices cannot be created here. Switch to a supported
-              network to continue.
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className={cn(PAGE_CONTAINER, showUnsupportedNetwork && "hidden")}>
+      <div className={PAGE_CONTAINER}>
         {(searchParams.get("clientAddress") ||
           searchParams.get("amount") ||
           searchParams.get("description")) && (

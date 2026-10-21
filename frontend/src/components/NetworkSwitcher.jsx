@@ -9,6 +9,7 @@ import { Check, ChevronDown } from "lucide-react";
 import { FaEthereum } from "react-icons/fa";
 import { SiBinance, SiPolygon, SiCoinbase } from "react-icons/si";
 import { cn } from "@/lib/utils";
+import { isChainDeployed } from "@/utils/chainConfig";
 import { FaBitcoin } from "react-icons/fa";
 
 const CHAIN_ICONS = {
@@ -18,6 +19,8 @@ const CHAIN_ICONS = {
   56: <SiBinance className="h-5 w-5 text-yellow-500" />, // BSC
   8453: <SiCoinbase className="h-5 w-5 text-blue-500" />, // Base
   11155111: <FaEthereum className="h-5 w-5 text-gray-400" />, // Sepolia
+  63: <FaEthereum className="h-5 w-5 text-green-300" />, // Mordor Testnet
+  80002: <SiPolygon className="h-5 w-5 text-purple-300" />, // Polygon Amoy
   5115: <FaBitcoin className="h-5 w-5 text-orange-500" />, //Citrea Testnet
 };
 
@@ -38,7 +41,10 @@ export default function NetworkSwitcher() {
 
   if (!isConnected) return null;
 
-  const activeChain = chains.find((c) => c.id === chainId);
+  // Only chains with a contract: switching to any other leaves every page
+  // unusable. The wallet may still sit on one, which shows as unsupported.
+  const supportedChains = chains.filter((c) => isChainDeployed(c.id));
+  const activeChain = supportedChains.find((c) => c.id === chainId);
 
   return (
     <Popover>
@@ -57,7 +63,7 @@ export default function NetworkSwitcher() {
       </PopoverTrigger>
       <PopoverContent className="w-[200px] p-0 border-gray-700 bg-[#1f2937] text-white">
         <div className="grid gap-1 p-2">
-          {chains.map((chain) => (
+          {supportedChains.map((chain) => (
             <Button
               key={chain.id}
               variant="ghost"
