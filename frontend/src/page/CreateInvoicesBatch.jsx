@@ -396,7 +396,7 @@ function CreateInvoicesBatch() {
         const [symbol, name, decimals] = await Promise.all([
           contract.symbol().catch(() => "UNKNOWN"),
           contract.name().catch(() => "Unknown Token"),
-          contract.decimals().catch(() => 18),
+          contract.decimals(),
         ]);
 
         if (!isCurrent()) return;
