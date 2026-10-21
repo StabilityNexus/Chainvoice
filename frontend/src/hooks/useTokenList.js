@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 const tokenCache = {};
 
 // Add testnet chain IDs
-const TESTNET_CHAIN_IDS = new Set([11155111, 5, 5115]); // Sepolia, Goerli, Citrea Testnet
+const TESTNET_CHAIN_IDS = new Set([11155111, 5, 63, 80002, 5115]); // Sepolia, Goerli, Mordor, Polygon Amoy, Citrea Testnet
 
 // Helper function to check if a chain is testnet
 export const isTestnet = (chainId) => TESTNET_CHAIN_IDS.has(chainId);

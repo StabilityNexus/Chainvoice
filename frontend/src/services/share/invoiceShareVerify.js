@@ -1,5 +1,5 @@
 import { ethers } from 'ethers';
-import { chainConfig } from '../../utils/chainConfig.js';
+import { chainConfig, getContractAddress } from '../../utils/chainConfig.js';
 import { ChainvoiceABI } from '../../contractsABI/ChainvoiceABI.js';
 import {
   evaluateOnChainInvoice,
@@ -7,6 +7,8 @@ import {
   VERIFY_UNREACHABLE,
   VERIFY_UNSUPPORTED_CHAIN,
 } from './invoiceShareMatch.js';
+
+export { getContractAddress };
 
 /**
  * Check a shared invoice against the chain, without a wallet.
@@ -50,21 +52,6 @@ export function getPublicProvider(chainId) {
   return new ethers.JsonRpcProvider(url, Number(chain.id), {
     staticNetwork: true,
   });
-}
-
-/**
- * Read the Chainvoice contract address configured for a chain.
- *
- * Mirrors how every other caller resolves it. An empty value means the chain
- * is deliberately not wired up yet — see the notes in `.env.example` about
- * deployments still running the v1 contract.
- *
- * @param {number|string} chainId
- * @returns {string|null}
- */
-export function getContractAddress(chainId) {
-  const configured = import.meta.env[`VITE_CONTRACT_ADDRESS_${Number(chainId)}`];
-  return configured ? configured : null;
 }
 
 /**

@@ -24,6 +24,8 @@ const CHAIN_ID_TO_NAME = {
   1111: "WEMIX3.0 Testnet",
   1112: "WEMIX3.0 Mainnet",
   61: "Ethereum Classic",
+  63: "Mordor Testnet",
+  80002: "Polygon Amoy",
   5115: "Citrea Testnet",
   // Add more as needed
 };

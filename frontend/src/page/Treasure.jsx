@@ -18,12 +18,17 @@ import { motion } from "framer-motion";
 import toast from "react-hot-toast";
 import { cn } from "@/lib/utils";
 import { SHELL } from "@/utils/layout";
+import { getWagmiChainInfo } from "@/utils/wagmiChainHelpers";
 
 const Treasure = () => {
   const [treasureAmount, setTreasureAmount] = useState(0);
   const [fee, setFee] = useState(0);
   const { data: walletClient } = useWalletClient();
-  const { chainId, address: account } = useAccount();
+  const { chainId, chain, address: account } = useAccount();
+  const nativeSymbol =
+    getWagmiChainInfo(chainId)?.nativeCurrency?.symbol ||
+    chain?.nativeCurrency?.symbol ||
+    "ETH";
   const [loading, setLoading] = useState({
     fetch: false,
     setAddress: false,
@@ -41,6 +46,15 @@ const Treasure = () => {
   const [newFee, setNewFee] = useState("");
 
   useEffect(() => {
+    // Values from another chain would be shown in this chain's currency, and a
+    // slower read from the previous chain could land after this one.
+    let active = true;
+    setTreasureAmount(0);
+    setFee(0);
+    setDev("");
+    setDevFeeReceiver("");
+    setLoading((prev) => ({ ...prev, fetch: false }));
+
     const fetchTreasureAmount = async () => {
       try {
         if (!chainId) {
@@ -65,6 +79,7 @@ const Treasure = () => {
           contract.dev(),
           contract.devFee(),
         ]);
+        if (!active) return;
         setTreasureAmount(ethers.formatUnits(amt));
         setDevFeeReceiver(receiver);
         setDev(devAddress);
@@ -72,11 +87,14 @@ const Treasure = () => {
       } catch (error) {
         console.error("Error fetching treasure amount:", error);
       } finally {
-        setLoading((prev) => ({ ...prev, fetch: false }));
+        if (active) setLoading((prev) => ({ ...prev, fetch: false }));
       }
     };
 
     fetchTreasureAmount();
+    return () => {
+      active = false;
+    };
   }, [walletClient, chainId]);
 
   const handleSetDevFeeReceiver = async () => {
@@ -228,7 +246,7 @@ const Treasure = () => {
                       {loading.fetch ? (
                         <Loader2 className="h-4 w-4 animate-spin inline" />
                       ) : (
-                        `${treasureAmount} ETH`
+                        `${treasureAmount} ${nativeSymbol}`
                       )}
                     </span>
                   </div>
@@ -242,7 +260,7 @@ const Treasure = () => {
                       {loading.fetch ? (
                         <Loader2 className="h-4 w-4 animate-spin inline" />
                       ) : (
-                        `${fee} ETH`
+                        `${fee} ${nativeSymbol}`
                       )}
                     </span>
                   </div>
@@ -334,7 +352,7 @@ const Treasure = () => {
             <div className="space-y-3">
               <Input
                 type="number"
-                placeholder={`Current: ${fee} ETH`}
+                placeholder={`Current: ${fee} ${nativeSymbol}`}
                 value={newFee}
                 onChange={(e) => setNewFee(e.target.value)}
                 className="bg-gray-800 border-gray-700 text-white font-mono"
@@ -373,7 +391,7 @@ const Treasure = () => {
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
               ) : (
                 <span className="flex items-center">
-                  Withdraw {treasureAmount} ETH{" "}
+                  Withdraw {treasureAmount} {nativeSymbol}{" "}
                   <ChevronRight className="ml-2 h-4 w-4" />
                 </span>
               )}

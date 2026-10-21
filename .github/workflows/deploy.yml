@@ -60,6 +60,8 @@ jobs:
         env:
           BASE_PATH: ${{ steps.pages.outputs.base_path }}
           VITE_CONTRACT_ADDRESS_11155111: ${{ secrets.VITE_CONTRACT_ADDRESS_11155111 }}
+          VITE_CONTRACT_ADDRESS_63: ${{ secrets.VITE_CONTRACT_ADDRESS_63 }}
+          VITE_CONTRACT_ADDRESS_80002: ${{ secrets.VITE_CONTRACT_ADDRESS_80002 }}
           # Ethereum Classic and Polygon are deliberately not injected. Both
           # still run the v1 contract, which stores payloads on-chain as strings
           # and has no key registry, so it does not match this ABI. The app

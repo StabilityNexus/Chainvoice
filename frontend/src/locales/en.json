@@ -92,6 +92,14 @@
     "description": "Something on this page failed to load. Your invoices on-chain are not affected. Reload to try again, or open another section from the menu.",
     "reload": "Reload page"
   },
+  "unsupportedNetwork": {
+    "title": "Unsupported network",
+    "description": "Chainvoice isn't deployed on the network your wallet is connected to. Switch to a supported network to continue.",
+    "noDeployments": "Chainvoice isn't deployed on the network your wallet is connected to, and this build has no supported network configured.",
+    "switchTo": "Switch to {{name}}",
+    "switching": "Switching…",
+    "switchFailed": "Failed to switch network: {{reason}}"
+  },
   "keySafety": {
     "mismatchError": "This account already has a different encryption key registered, probably from another wallet app or site. Registering a new one would make invoices sent to the old key unreadable. Use \"Replace key\" on Received Invoices only if you no longer use the old key.",
     "readFailed": "Couldn't check your encryption key on-chain. Check your connection and try again.",

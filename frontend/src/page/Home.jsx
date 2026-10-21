@@ -19,6 +19,7 @@ import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { FileStackIcon, Menu, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import PageErrorBoundary from "@/components/PageErrorBoundary";
+import SupportedNetworkGuard from "@/components/SupportedNetworkGuard";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import { useTermsOfUse } from "@/hooks/useTermsOfUse";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -29,30 +30,35 @@ const MENU_ITEMS = [
     text: "Send Invoice",
     icon: <AddCircleOutlineIcon />,
     route: "create",
+    needsContract: true,
     color: "#f472b6",
   },
   {
     text: "Send Multiple Invoices",
     icon: <FileStackIcon />,
     route: "batch-invoice",
+    needsContract: true,
     color: "#22c55e",
   },
   {
     text: "Sent Invoices",
     icon: <MailOutlineIcon />,
     route: "sent",
+    needsContract: true,
     color: "#4ade80",
   },
   {
     text: "Request Invoices",
     icon: <LinkIcon />,
     route: "generate-link",
+    needsContract: true,
     color: "#a78bfa",
   },
   {
     text: "Received Invoices",
     icon: <DraftsIcon />,
     route: "pending",
+    needsContract: true,
     color: "#60a5fa",
   },
   {
@@ -209,8 +215,8 @@ export default function Home() {
     MENU_ITEMS.find((item) => location.pathname.includes(item.route))?.route ??
     "create";
 
-  const activeLabel =
-    MENU_ITEMS.find((item) => item.route === activeRoute)?.text ?? "Dashboard";
+  const activeItem = MENU_ITEMS.find((item) => item.route === activeRoute);
+  const activeLabel = activeItem?.text ?? "Dashboard";
 
   // Navigating from the drawer has to close it, or the overlay stays parked
   // over the page the user just asked for.
@@ -360,7 +366,13 @@ export default function Home() {
               description={tPageError("description")}
               reloadLabel={tPageError("reload")}
             >
-              <Outlet />
+              {activeItem?.needsContract ? (
+                <SupportedNetworkGuard>
+                  <Outlet />
+                </SupportedNetworkGuard>
+              ) : (
+                <Outlet />
+              )}
             </PageErrorBoundary>
           </Box>
         </Box>
