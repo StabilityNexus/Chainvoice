@@ -379,6 +379,7 @@ function CreateInvoicesBatch() {
   // Token verification
   const verifyToken = async (address) => {
     const isCurrent = beginTokenRequest();
+    setVerifiedToken(null);
     if (address.toLowerCase() === ethers.ZeroAddress && nativeToken) {
       setSelectedToken(nativeToken);
       setUseCustomToken(false);

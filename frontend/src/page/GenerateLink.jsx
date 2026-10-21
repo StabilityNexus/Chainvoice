@@ -92,6 +92,7 @@ const GenerateLink = () => {
 
   const verifyToken = async (address) => {
     const isCurrent = beginTokenRequest();
+    setVerifiedToken(null);
     if (address.toLowerCase() === ethers.ZeroAddress && nativeToken) {
       setSelectedToken(nativeToken);
       setUseCustomToken(false);
@@ -99,7 +100,10 @@ const GenerateLink = () => {
       setTokenVerificationState("idle");
       return;
     }
-    if (!walletClient) return;
+    if (!walletClient) {
+      setTokenVerificationState("error");
+      return;
+    }
     setTokenVerificationState("verifying");
 
     try {
