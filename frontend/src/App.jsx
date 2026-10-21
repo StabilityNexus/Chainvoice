@@ -10,7 +10,7 @@ import {
   sepolia,
 } from "wagmi/chains";
 
-import { HashRouter as Router, Route, Routes } from "react-router-dom";
+import { HashRouter as Router, Navigate, Route, Routes } from "react-router-dom";
 
 import { lazy, Suspense } from "react";
 import Landing from "./page/Landing";
@@ -95,6 +95,7 @@ function App() {
                   <Route path="/" element={<Applayout />}>
                     <Route index element={<Landing />} />
                     <Route path="dashboard" element={<Home />}>
+                      <Route index element={<Navigate to="create" replace />} />
                       <Route path="create" element={<CreateInvoice />} />
                       <Route path="sent" element={<SentInvoice />} />
                       <Route path="pending" element={<ReceivedInvoice />} />
