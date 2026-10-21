@@ -25,6 +25,16 @@ import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
 
+const validateTokenDecimals = (decimals) => {
+  const value = Number(decimals);
+
+  if (!Number.isInteger(value) || value < 0 || value > 255) {
+    throw new Error(`Unsupported ERC-20 decimals value: ${decimals}`);
+  }
+
+  return value;
+};
+
 const GenerateLink = () => {
   const { address, isConnected, chainId } = useAccount();
   const { data: walletClient } = useWalletClient();
@@ -54,6 +64,15 @@ const GenerateLink = () => {
   const generateLink = () => {
     const tokenToUse = useCustomToken ? verifiedToken : selectedToken;
 
+    // Never generate a default-token link when custom-token verification
+    // is pending or has failed.
+    if (
+      useCustomToken &&
+      (!verifiedToken || tokenVerificationState !== "success")
+    ) {
+      return "";
+    }
+
     // The app is not always at the origin root — a PR preview is served from a
     // subdirectory — and BASE_URL is the path the bundle was built for. Built
     // the same way as the share links in services/share.
@@ -81,8 +100,18 @@ const GenerateLink = () => {
   };
 
   const copyToClipboard = async () => {
+    if (
+      useCustomToken &&
+      (!verifiedToken || tokenVerificationState !== "success")
+    ) {
+      return;
+    }
+
     try {
-      await navigator.clipboard.writeText(generateLink());
+      const link = generateLink();
+      if (!link) return;
+
+      await navigator.clipboard.writeText(link);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
@@ -110,11 +139,13 @@ const GenerateLink = () => {
       const provider = new BrowserProvider(walletClient);
       const contract = new ethers.Contract(address, ERC20_ABI, provider);
 
-      const [symbol, name, decimals] = await Promise.all([
+      const [symbol, name, rawDecimals] = await Promise.all([
         contract.symbol().catch(() => "UNKNOWN"),
         contract.name().catch(() => "Unknown Token"),
         contract.decimals(),
       ]);
+      const decimals = validateTokenDecimals(rawDecimals);
+
       if (!isCurrent()) return;
       setVerifiedToken({ address, symbol, name, decimals });
       setTokenVerificationState("success");
@@ -456,7 +487,11 @@ const GenerateLink = () => {
             />
             <Button
               onClick={copyToClipboard}
-              disabled={!isConnected}
+              disabled={
+                !isConnected ||
+                (useCustomToken &&
+                  (!verifiedToken || tokenVerificationState !== "success"))
+              }
               className="bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2 px-4 py-2 transition-colors w-full sm:w-auto"
             >
               {copied ? (

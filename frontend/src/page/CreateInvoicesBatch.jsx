@@ -89,6 +89,15 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
   5115: "https://rpc.testnet.citrea.xyz",
 };
 
+// ERC-20 decimals are uint8 values. Reject malformed or unsupported values.
+const validateTokenDecimals = (decimals) => {
+  const value = Number(decimals);
+  if (!Number.isInteger(value) || value < 0 || value > 255) {
+    throw new Error(`Unsupported ERC-20 decimals value: ${decimals}`);
+  }
+  return value;
+};
+
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
   const { isConnected, chainId } = useAccount();
@@ -188,7 +197,7 @@ function CreateInvoicesBatch() {
 
         const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
         const decimals = await contract.decimals();
-        return Number(decimals);
+        return validateTokenDecimals(decimals);
       } catch (error) {
         console.warn("Failed to resolve token decimals:", error);
         return null;
@@ -379,7 +388,6 @@ function CreateInvoicesBatch() {
   // Token verification
   const verifyToken = async (address) => {
     const isCurrent = beginTokenRequest();
-    setVerifiedToken(null);
     if (address.toLowerCase() === ethers.ZeroAddress && nativeToken) {
       setSelectedToken(nativeToken);
       setUseCustomToken(false);
@@ -394,11 +402,12 @@ function CreateInvoicesBatch() {
         const provider = new BrowserProvider(window.ethereum);
         const contract = new ethers.Contract(address, ERC20_ABI, provider);
 
-        const [symbol, name, decimals] = await Promise.all([
+        const [symbol, name, rawDecimals] = await Promise.all([
           contract.symbol().catch(() => "UNKNOWN"),
           contract.name().catch(() => "Unknown Token"),
           contract.decimals(),
         ]);
+        const decimals = validateTokenDecimals(rawDecimals);
 
         if (!isCurrent()) return;
         setVerifiedToken({ address, symbol, name, decimals });
@@ -412,6 +421,7 @@ function CreateInvoicesBatch() {
     } catch (error) {
       if (!isCurrent()) return;
       console.error("Verification failed:", error);
+      setVerifiedToken(null);
       setTokenVerificationState("error");
       toast.error("Token verification failed. Please check the address.");
     }
@@ -504,6 +514,14 @@ function CreateInvoicesBatch() {
       const provider = new BrowserProvider(walletClient);
       const signer = await provider.getSigner();
 
+      if (
+        useCustomToken &&
+        (!verifiedToken || tokenVerificationState !== "success")
+      ) {
+        toast.error("Verify the custom token before creating invoices");
+        return;
+      }
+
       const paymentToken = useCustomToken ? verifiedToken : selectedToken;
 
       if (!paymentToken) {
@@ -511,8 +529,14 @@ function CreateInvoicesBatch() {
         return;
       }
 
-      const tokenDecimals = Number(paymentToken?.decimals);
-      if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0) {
+      let tokenDecimals;
+      try {
+        tokenDecimals = validateTokenDecimals(paymentToken.decimals);
+      } catch {
+        toast.error("Selected token has invalid decimals");
+        return;
+      }
+      if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 255) {
         toast.error("Selected token has invalid decimals");
         return;
       }
