@@ -46,6 +46,15 @@ const Treasure = () => {
   const [newFee, setNewFee] = useState("");
 
   useEffect(() => {
+    // Values from another chain would be shown in this chain's currency, and a
+    // slower read from the previous chain could land after this one.
+    let active = true;
+    setTreasureAmount(0);
+    setFee(0);
+    setDev("");
+    setDevFeeReceiver("");
+    setLoading((prev) => ({ ...prev, fetch: false }));
+
     const fetchTreasureAmount = async () => {
       try {
         if (!chainId) {
@@ -70,6 +79,7 @@ const Treasure = () => {
           contract.dev(),
           contract.devFee(),
         ]);
+        if (!active) return;
         setTreasureAmount(ethers.formatUnits(amt));
         setDevFeeReceiver(receiver);
         setDev(devAddress);
@@ -77,11 +87,14 @@ const Treasure = () => {
       } catch (error) {
         console.error("Error fetching treasure amount:", error);
       } finally {
-        setLoading((prev) => ({ ...prev, fetch: false }));
+        if (active) setLoading((prev) => ({ ...prev, fetch: false }));
       }
     };
 
     fetchTreasureAmount();
+    return () => {
+      active = false;
+    };
   }, [walletClient, chainId]);
 
   const handleSetDevFeeReceiver = async () => {

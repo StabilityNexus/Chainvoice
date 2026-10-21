@@ -10,6 +10,7 @@ import { FaEthereum } from "react-icons/fa";
 import { SiBinance, SiPolygon, SiCoinbase } from "react-icons/si";
 import { cn } from "@/lib/utils";
 import { isChainDeployed } from "@/utils/chainConfig";
+import { useTranslation } from "@/hooks/useTranslation";
 import { FaBitcoin } from "react-icons/fa";
 
 const CHAIN_ICONS = {
@@ -32,6 +33,7 @@ export default function NetworkSwitcher() {
   // The wallet's own chain, which may be one the app doesn't support;
   // useChainId() would fall back to a configured chain and hide that.
   const { isConnected, chainId } = useAccount();
+  const { t } = useTranslation("unsupportedNetwork");
 
   useEffect(() => {
     if (error) {
@@ -56,7 +58,7 @@ export default function NetworkSwitcher() {
         >
           <div className="flex items-center gap-2">
             {CHAIN_ICONS[chainId] || <FaEthereum className="h-5 w-5 text-gray-400" />}
-            <span className="truncate">{activeChain?.name || "Unsupported network"}</span>
+            <span className="truncate">{activeChain?.name || t("title")}</span>
           </div>
           <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
