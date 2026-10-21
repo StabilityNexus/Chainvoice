@@ -4,7 +4,7 @@ import { createEmptyInvoiceItem } from "../../src/utils/productCatalogInvoiceHel
 const SENDER = "0x1111111111111111111111111111111111111111";
 const RECIPIENT = "0x2222222222222222222222222222222222222222";
 
-/** The shape CreateInvoice and CreateInvoicesBatch send. */
+/** The shape CreateInvoice and CreateInvoicesBatch send over the relay. */
 const makePayload = (overrides = {}) => ({
   amountDue: "125.5",
   dueDate: "2026-10-31",
@@ -26,6 +26,14 @@ describe("getPayloadShapeError", () => {
         })
       )
     ).toBeNull();
+  });
+
+  test("accepts the sender's stored copy, which keeps Date objects", () => {
+    const payload = makePayload({
+      issueDate: new Date("2026-10-01T09:30:00Z"),
+      dueDate: new Date("2026-10-31T00:00:00Z"),
+    });
+    expect(getPayloadShapeError(payload)).toBeNull();
   });
 
   test("accepts numbers in item amounts and missing optional fields", () => {
@@ -54,6 +62,7 @@ describe("getPayloadShapeError", () => {
     ["a number as an item description", { items: [{ description: 5 }] }, "items"],
     ["batch info that is a string", { batchInfo: "batch" }, "batchInfo"],
     ["an object as the due date", { dueDate: { y: 2026 } }, "dueDate"],
+    ["an invalid Date as the issue date", { issueDate: new Date("not a date") }, "issueDate"],
     ["an object as the amount", { amountDue: { value: "1" } }, "amountDue"],
     ["a token without an address", { paymentToken: { symbol: "USDC", decimals: 6 } }, "paymentToken"],
   ])("rejects %s", (_, overrides, field) => {

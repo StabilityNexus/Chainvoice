@@ -33,6 +33,12 @@ const isTextOrAbsent = (value) => isAbsent(value) || typeof value === "string";
 const isTextNumberOrAbsent = (value) =>
   isAbsent(value) || typeof value === "string" || typeof value === "number";
 
+// The create pages store the sender's copy with the date pickers' Date objects;
+// they only become strings in the JSON the relay delivers.
+const isDateOrAbsent = (value) =>
+  isTextNumberOrAbsent(value) ||
+  (value instanceof Date && !Number.isNaN(value.getTime()));
+
 /** A flat object whose named text fields are strings and the rest primitives. */
 function isFlatRecord(value, textFields) {
   if (!isPlainObject(value)) return false;
@@ -50,8 +56,8 @@ function isFlatRecord(value, textFields) {
 export function getPayloadShapeError(payload) {
   if (!isPlainObject(payload)) return "payload";
   if (!isTextNumberOrAbsent(payload.amountDue)) return "amountDue";
-  if (!isTextNumberOrAbsent(payload.issueDate)) return "issueDate";
-  if (!isTextNumberOrAbsent(payload.dueDate)) return "dueDate";
+  if (!isDateOrAbsent(payload.issueDate)) return "issueDate";
+  if (!isDateOrAbsent(payload.dueDate)) return "dueDate";
 
   const token = payload.paymentToken;
   if (
