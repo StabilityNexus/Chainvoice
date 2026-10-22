@@ -6,12 +6,14 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import { getWagmiChainInfo } from "../utils/wagmiChainHelpers";
 import ImageWithFallback from "./ImageWithFallback";
+import { useTranslation } from "@/hooks/useTranslation";
 
 const InvoicePreview = ({
   invoice,
   fee = null,
   cancelledMessage = null,
 }) => {
+  const { t } = useTranslation("invoiceDetails");
   if (!invoice) return null;
 
   const formatFee = (feeValue) => {
@@ -245,12 +247,12 @@ const InvoicePreview = ({
               {invoice.paymentToken && (
                 <div className="mt-1.5 flex flex-wrap gap-2 sm:gap-3 text-xs text-gray-600">
                   <span>
-                    <strong className="text-gray-700">Decimals:</strong>{" "}
+                    <strong className="text-gray-700">{t("decimals")}:</strong>{" "}
                     {invoice.paymentToken.decimals}
                   </span>
                   <span>
-                    <strong className="text-gray-700">Chain:</strong>{" "}
-                    {chainInfo?.name ?? "Unknown network"}
+                    <strong className="text-gray-700">{t("chain")}:</strong>{" "}
+                    {chainInfo?.name ?? t("unknownNetwork")}
                   </span>
                 </div>
               )}

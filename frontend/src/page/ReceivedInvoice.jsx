@@ -113,6 +113,7 @@ function ReceivedInvoice() {
   const { t } = useTranslation("invoiceVerification");
   const { t: tReceivedInvoices } = useTranslation("receivedInvoices");
   const { t: tKeySafety } = useTranslation("keySafety");
+  const { t: tInvoiceDetails } = useTranslation("invoiceDetails");
 
   const [anchorEl, setAnchorEl] = useState(null);
   const openExportMenu = Boolean(anchorEl);
@@ -189,6 +190,12 @@ function ReceivedInvoice() {
     open: false,
     selectedInvoice: null,
   });
+
+  // The drawer names the connected chain and pays on its contract, so an
+  // invoice from the previous chain must not stay open after a switch.
+  useEffect(() => {
+    setDrawerState({ open: false, selectedInvoice: null });
+  }, [chainId]);
 
   const {
     filteredAndSortedInvoices,
@@ -2161,10 +2168,13 @@ function ReceivedInvoice() {
                   </div>
                   <div className="mt-2 text-xs text-gray-600">
                     <p>
-                      Decimals:{" "}
+                      {tInvoiceDetails("decimals")}:{" "}
                       {drawerState.selectedInvoice.paymentToken?.decimals}
                     </p>
-                    <p>Chain: {chain?.name ?? `Chain ${chainId}`}</p>
+                    <p>
+                      {tInvoiceDetails("chain")}:{" "}
+                      {chain?.name ?? tInvoiceDetails("unknownNetwork")}
+                    </p>
                   </div>
                 </div>
                 <div className="mb-6">

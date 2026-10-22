@@ -80,12 +80,12 @@ const makePayload = (paymentToken) => ({
   items: [{ description: "Consulting", qty: "1", unitPrice: "125.5" }],
 });
 
-const makeRaw = (payload) => [
+const makeRaw = (payload, { amountDue = 125_500_000n, token = TOKEN } = {}) => [
   7n,
   SENDER,
   RECIPIENT,
-  125_500_000n,
-  TOKEN,
+  amountDue,
+  token,
   false,
   false,
   computeInvoiceHash(payload),
@@ -130,6 +130,29 @@ describe("verifyShareAgainstChain", () => {
 
     expect(result.code).toBe(VERIFY_OK);
     expect(result.fee).toBeNull();
+  });
+
+  test("describes a native invoice from the chain config without a token read", async () => {
+    const payload = makePayload({
+      address: actualEthers.ZeroAddress,
+      symbol: "USDC",
+      decimals: 18,
+    });
+    chain.raw = makeRaw(payload, {
+      amountDue: 125_500_000_000_000_000_000n,
+      token: actualEthers.ZeroAddress,
+    });
+
+    const result = await verify(payload);
+
+    expect(result.code).toBe(VERIFY_OK);
+    expect(result.invoice.paymentToken).toMatchObject({
+      address: actualEthers.ZeroAddress,
+      symbol: "ETH",
+      name: "Ether",
+      decimals: 18,
+    });
+    expect(chain.token.decimals).not.toHaveBeenCalled();
   });
 
   test("rejects a payload whose decimals differ from the token's", async () => {

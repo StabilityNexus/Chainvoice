@@ -74,6 +74,7 @@ import { useInvoiceFilterSort } from "@/hooks/useInvoiceFilterSort";
 import InvoiceFilterBar from "@/components/InvoiceFilterBar";
 import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/hooks/useTranslation";
 
 
 const columns = [
@@ -93,6 +94,7 @@ function SentInvoice() {
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_INVOICE_PAGE_SIZE);
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId, chain } = useAccount();
+  const { t: tInvoiceDetails } = useTranslation("invoiceDetails");
   const nativeSymbol =
     getWagmiChainInfo(chainId)?.nativeCurrency?.symbol ||
     chain?.nativeCurrency?.symbol ||
@@ -526,6 +528,12 @@ function SentInvoice() {
     open: false,
     selectedInvoice: null,
   });
+
+  // The drawer names the connected chain and pays on its contract, so an
+  // invoice from the previous chain must not stay open after a switch.
+  useEffect(() => {
+    setDrawerState({ open: false, selectedInvoice: null });
+  }, [chainId]);
 
   // Invoice currently open in the share dialog, by id. Held as an id rather
   // than the invoice object because the dialog reads the payload it shares
@@ -1327,7 +1335,10 @@ function SentInvoice() {
                   </div>
                 </div>
                 <div className="mt-2 text-xs text-gray-600">
-                  <p>Chain: {chain?.name ?? `Chain ${chainId}`}</p>
+                  <p>
+                    {tInvoiceDetails("chain")}:{" "}
+                    {chain?.name ?? tInvoiceDetails("unknownNetwork")}
+                  </p>
                 </div>
               </div>
 
