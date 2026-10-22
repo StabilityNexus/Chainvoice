@@ -1,42 +1,3 @@
-// Helper to map chainId to human-friendly network name
-const CHAIN_ID_TO_NAME = {
-  1: "Ethereum Mainnet",
-  5: "Goerli Testnet",
-  11155111: "Sepolia Testnet",
-  137: "Polygon Mainnet",
-  80001: "Polygon Mumbai",
-  56: "BNB Smart Chain",
-  97: "BSC Testnet",
-  8453: "Base Mainnet",
-  84531: "Base Goerli",
-  534352: "Scroll Mainnet",
-  534351: "Scroll Sepolia",
-  42161: "Arbitrum One",
-  421613: "Arbitrum Goerli",
-  10: "Optimism Mainnet",
-  420: "Optimism Goerli",
-  11155420: "Optimism Sepolia",
-  5000: "Mantle Mainnet",
-  5001: "Mantle Testnet",
-  59144: "Linea Mainnet",
-  59140: "Linea Goerli",
-  59141: "Linea Sepolia",
-  1111: "WEMIX3.0 Testnet",
-  1112: "WEMIX3.0 Mainnet",
-  61: "Ethereum Classic",
-  63: "Mordor Testnet",
-  80002: "Polygon Amoy",
-  5115: "Citrea Testnet",
-  // Add more as needed
-};
-
-function getNetworkName(chainId) {
-  if (!chainId) return "Unknown network";
-  const id = Number(chainId);
-  return CHAIN_ID_TO_NAME[id] || "Unknown network";
-}
-
-
 import { ethers } from "ethers";
 import { Chip, Typography } from "@mui/material";
 import PaidIcon from "@mui/icons-material/CheckCircle";
@@ -48,7 +9,7 @@ import ImageWithFallback from "./ImageWithFallback";
 
 const InvoicePreview = ({
   invoice,
-  fee = 0,
+  fee = null,
   cancelledMessage = null,
 }) => {
   if (!invoice) return null;
@@ -61,7 +22,7 @@ const InvoicePreview = ({
     }
   };
 
-  const networkFee = formatFee(fee);
+  const networkFee = fee === null ? null : formatFee(fee);
   const chainId =
     invoice.paymentToken?.chainId ?? invoice.chainId;
 
@@ -276,21 +237,20 @@ const InvoicePreview = ({
                 </span>
               </p>
               <p className="text-xs text-gray-500 font-mono mt-0.5">
-                {invoice.paymentToken?.address
+                {invoice.paymentToken?.address &&
+                invoice.paymentToken.address !== ethers.ZeroAddress
                   ? `${invoice.paymentToken.address.substring(0, 10)}......${invoice.paymentToken.address.substring(33)}`
                   : "Native Currency"}
               </p>
-              {invoice.paymentToken?.address && (
+              {invoice.paymentToken && (
                 <div className="mt-1.5 flex flex-wrap gap-2 sm:gap-3 text-xs text-gray-600">
                   <span>
                     <strong className="text-gray-700">Decimals:</strong>{" "}
-                    {invoice.paymentToken.decimals || 18}
+                    {invoice.paymentToken.decimals}
                   </span>
                   <span>
                     <strong className="text-gray-700">Chain:</strong>{" "}
-                    {getNetworkName(
-                      invoice.paymentToken?.chainId || invoice.chainId
-                    )}
+                    {chainInfo?.name ?? "Unknown network"}
                   </span>
                 </div>
               )}
@@ -425,14 +385,16 @@ const InvoicePreview = ({
                 {invoice.amountDue} {tokenSymbol}
               </span>
             </div>
-            <div className="flex justify-between items-center py-1">
-              <span className="text-xs sm:text-sm font-medium text-gray-600">
-                Network Fee:
-              </span>
-              <span className="text-xs sm:text-sm font-semibold text-gray-900">
-                {networkFee} {nativeSymbol}
-              </span>
-            </div>
+            {networkFee !== null && (
+              <div className="flex justify-between items-center py-1">
+                <span className="text-xs sm:text-sm font-medium text-gray-600">
+                  Network Fee:
+                </span>
+                <span className="text-xs sm:text-sm font-semibold text-gray-900">
+                  {networkFee} {nativeSymbol}
+                </span>
+              </div>
+            )}
             <div className="border-t-2 border-gray-300 pt-2 mt-1">
               <div className="flex justify-between items-center">
                 <span className="text-sm sm:text-base font-bold text-gray-900">
@@ -445,7 +407,9 @@ const InvoicePreview = ({
                       ethers.parseUnits(String(networkFee || "0"), 18),
                       18
                     )} ${nativeSymbol}`
-                    : `${invoice.amountDue} ${tokenSymbol} + ${networkFee} ${nativeSymbol}`}
+                    : networkFee === null
+                      ? `${invoice.amountDue} ${tokenSymbol}`
+                      : `${invoice.amountDue} ${tokenSymbol} + ${networkFee} ${nativeSymbol}`}
                 </span>
               </div>
             </div>

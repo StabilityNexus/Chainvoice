@@ -153,6 +153,17 @@ function SentInvoice() {
   } = useInvoiceFilterSort(sentInvoices, { isSent: true });
 
   useEffect(() => {
+    setSelectedExportInvoices((prev) => {
+      const visibleIds = new Set(
+        filteredAndSortedInvoices.map((invoice) => String(invoice.id))
+      );
+      const pruned = new Set([...prev].filter((id) => visibleIds.has(id)));
+      if (pruned.size === prev.size) return prev;
+      return pruned;
+    });
+  }, [filteredAndSortedInvoices]);
+
+  useEffect(() => {
     setPage(0);
   }, [filters.status, filters.fromDate, filters.toDate, filters.token, filters.minAmount, filters.maxAmount, filters.sortBy, filters.sortDir]);
 
@@ -590,16 +601,16 @@ function SentInvoice() {
   };
 
   const handleSelectAllForExport = () => {
-    if (selectedExportInvoices.size === sentInvoices.length) {
+    if (selectedExportInvoices.size === filteredAndSortedInvoices.length) {
       setSelectedExportInvoices(new Set());
     } else {
       setSelectedExportInvoices(
-        new Set(sentInvoices.map((invoice) => String(invoice.id)))
+        new Set(filteredAndSortedInvoices.map((invoice) => String(invoice.id)))
       );
     }
   };
 
-  const selectedExportInvoiceList = sentInvoices.filter((invoice) =>
+  const selectedExportInvoiceList = filteredAndSortedInvoices.filter((invoice) =>
     selectedExportInvoices.has(String(invoice.id))
   );
 
@@ -772,12 +783,12 @@ function SentInvoice() {
                               <Checkbox
                                 size="small"
                                 checked={
-                                  sentInvoices.length > 0 &&
-                                  selectedExportInvoices.size === sentInvoices.length
+                                  filteredAndSortedInvoices.length > 0 &&
+                                  selectedExportInvoices.size === filteredAndSortedInvoices.length
                                 }
                                 indeterminate={
                                   selectedExportInvoices.size > 0 &&
-                                  selectedExportInvoices.size < sentInvoices.length
+                                  selectedExportInvoices.size < filteredAndSortedInvoices.length
                                 }
                                 onChange={handleSelectAllForExport}
                               />
@@ -1302,7 +1313,9 @@ function SentInvoice() {
                       {")"}
                     </p>
                     <p className="text-xs text-gray-600">
-                      {drawerState.selectedInvoice.paymentToken?.address
+                      {drawerState.selectedInvoice.paymentToken?.address &&
+                      drawerState.selectedInvoice.paymentToken.address !==
+                        ethers.ZeroAddress
                         ? `${drawerState.selectedInvoice.paymentToken.address.substring(
                           0,
                           10
@@ -1313,11 +1326,9 @@ function SentInvoice() {
                     </p>
                   </div>
                 </div>
-                {drawerState.selectedInvoice.paymentToken?.address && (
-                  <div className="mt-2 text-xs text-gray-600">
-                    <p>Chain: Sepolia Testnet</p>
-                  </div>
-                )}
+                <div className="mt-2 text-xs text-gray-600">
+                  <p>Chain: {chain?.name ?? `Chain ${chainId}`}</p>
+                </div>
               </div>
 
               {/* Date Information */}

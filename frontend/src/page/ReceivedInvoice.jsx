@@ -2146,7 +2146,9 @@ function ReceivedInvoice() {
                         {")"}
                       </p>
                       <p className="text-xs text-gray-600">
-                        {drawerState.selectedInvoice.paymentToken?.address
+                        {drawerState.selectedInvoice.paymentToken?.address &&
+                        drawerState.selectedInvoice.paymentToken.address !==
+                          ethers.ZeroAddress
                           ? `${drawerState.selectedInvoice.paymentToken.address.substring(
                             0,
                             10
@@ -2157,15 +2159,13 @@ function ReceivedInvoice() {
                       </p>
                     </div>
                   </div>
-                  {drawerState.selectedInvoice.paymentToken?.address && (
-                    <div className="mt-2 text-xs text-gray-600">
-                      <p>
-                        Decimals:{" "}
-                        {drawerState.selectedInvoice.paymentToken.decimals}
-                      </p>
-                      <p>Chain: Sepolia Testnet</p>
-                    </div>
-                  )}
+                  <div className="mt-2 text-xs text-gray-600">
+                    <p>
+                      Decimals:{" "}
+                      {drawerState.selectedInvoice.paymentToken?.decimals}
+                    </p>
+                    <p>Chain: {chain?.name ?? `Chain ${chainId}`}</p>
+                  </div>
                 </div>
                 <div className="mb-6">
                   <div className="flex justify-between text-sm text-gray-500 mb-2">
