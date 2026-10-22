@@ -2,8 +2,14 @@ import { ethers } from 'ethers';
 import { chainConfig, getContractAddress } from '../../utils/chainConfig.js';
 import { ChainvoiceABI } from '../../contractsABI/ChainvoiceABI.js';
 import {
+  buildChainInvoice,
+  createTokenMetadataReader,
+} from '../../utils/chainInvoice.js';
+import {
   evaluateOnChainInvoice,
+  VERIFY_FIELD_MISMATCH,
   VERIFY_NOT_FOUND,
+  VERIFY_OK,
   VERIFY_UNREACHABLE,
   VERIFY_UNSUPPORTED_CHAIN,
 } from './invoiceShareMatch.js';
@@ -65,7 +71,11 @@ export function getPublicProvider(chainId) {
  * @param {string} params.invoiceId
  * @param {number|string} params.chainId
  * @param {Object} params.invoiceData - payload from the token
- * @returns {Promise<{code: string, onChain?: Object, error?: Error}>}
+ * @returns {Promise<{code: string, onChain?: Object, invoice?: Object, fee?: bigint|null, error?: Error}>}
+ *   `invoice` is set when `code` is ok: the invoice as the invoice pages build
+ *   it, with the token's symbol and decimals read from the token contract.
+ *   `fee` is the contract's current `devFee` in wei, or null if it couldn't
+ *   be read
  */
 export async function verifyShareAgainstChain({ invoiceId, chainId, invoiceData }) {
   const chain = findChain(chainId);
@@ -79,24 +89,53 @@ export async function verifyShareAgainstChain({ invoiceId, chainId, invoiceData 
     return { code: VERIFY_UNSUPPORTED_CHAIN, chainName: chain.name };
   }
 
-  let raw;
   try {
     const contract = new ethers.Contract(contractAddress, ChainvoiceABI, provider);
-    raw = await contract.getInvoice(invoiceId);
-  } catch (err) {
-    // A revert means the id does not exist on this contract; anything else is
-    // the RPC being unreachable. The two need different wording — one is a bad
-    // link, the other is "try again in a minute".
-    const isRevert =
-      err?.code === 'CALL_EXCEPTION' || err?.code === 'BAD_DATA';
-    return {
-      code: isRevert ? VERIFY_NOT_FOUND : VERIFY_UNREACHABLE,
-      chainName: chain.name,
-      error: err,
-    };
+    let raw;
+    try {
+      raw = await contract.getInvoice(invoiceId);
+    } catch (err) {
+      // A revert means the id does not exist on this contract; anything else is
+      // the RPC being unreachable. The two need different wording — one is a bad
+      // link, the other is "try again in a minute".
+      const isRevert =
+        err?.code === 'CALL_EXCEPTION' || err?.code === 'BAD_DATA';
+      return {
+        code: isRevert ? VERIFY_NOT_FOUND : VERIFY_UNREACHABLE,
+        chainName: chain.name,
+        error: err,
+      };
+    }
+
+    const result = evaluateOnChainInvoice(raw, invoiceData);
+    if (result.code !== VERIFY_OK) return { ...result, chainName: chain.name };
+
+    // The hash proves the sender wrote this payload, not that its token symbol
+    // and decimals are the token's. Build the preview the way the invoice
+    // pages do, from the token contract.
+    const token = await createTokenMetadataReader({
+      runner: provider,
+      nativeCurrency: chain.nativeCurrency,
+    })(raw[4]);
+    const invoice = buildChainInvoice(raw, invoiceData, token);
+    // Null means the token's decimals couldn't be read, so no amount is safe
+    // to show.
+    if (!invoice) return { code: VERIFY_UNREACHABLE, chainName: chain.name };
+    if (invoice._payloadMismatch) {
+      return {
+        code: VERIFY_FIELD_MISMATCH,
+        onChain: result.onChain,
+        mismatch: invoice._payloadMismatch,
+        chainName: chain.name,
+      };
+    }
+
+    // Only the preview's fee line depends on this, so a failed read hides
+    // that line instead of failing the import.
+    const fee = await contract.devFee().catch(() => null);
+
+    return { ...result, invoice, fee, chainName: chain.name };
   } finally {
     provider.destroy?.();
   }
-
-  return { ...evaluateOnChainInvoice(raw, invoiceData), chainName: chain.name };
 }

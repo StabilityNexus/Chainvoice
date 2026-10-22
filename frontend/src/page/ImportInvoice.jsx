@@ -318,12 +318,11 @@ const ImportInvoice = () => {
 
   /** The invoice object InvoicePreview expects, built from verified pieces. */
   const previewInvoice = useMemo(() => {
-    if (!decoded || !verification?.onChain) return null;
+    if (!decoded || !verification?.invoice) return null;
     return {
-      ...decoded.invoiceData,
+      ...verification.invoice,
       id: decoded.invoiceId,
-      isPaid: verification.onChain.isPaid,
-      isCancelled: verification.onChain.isCancelled,
+      chainId: decoded.chainId,
     };
   }, [decoded, verification]);
 
@@ -575,7 +574,10 @@ const ImportInvoice = () => {
             transition={{ duration: 0.35, ease: "easeOut" }}
             className="mt-3 lg:mt-0 [&_#invoice-print]:my-0 lg:[&_#invoice-print]:p-6"
           >
-            <InvoicePreview invoice={previewInvoice} />
+            <InvoicePreview
+              invoice={previewInvoice}
+              fee={verification.fee}
+            />
           </motion.div>
         )}
       </div>

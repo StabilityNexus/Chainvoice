@@ -74,6 +74,7 @@ import { useInvoiceFilterSort } from "@/hooks/useInvoiceFilterSort";
 import InvoiceFilterBar from "@/components/InvoiceFilterBar";
 import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
+import { useTranslation } from "@/hooks/useTranslation";
 
 
 const columns = [
@@ -93,6 +94,7 @@ function SentInvoice() {
   const [rowsPerPage, setRowsPerPage] = useState(DEFAULT_INVOICE_PAGE_SIZE);
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId, chain } = useAccount();
+  const { t: tInvoiceDetails } = useTranslation("invoiceDetails");
   const nativeSymbol =
     getWagmiChainInfo(chainId)?.nativeCurrency?.symbol ||
     chain?.nativeCurrency?.symbol ||
@@ -151,6 +153,17 @@ function SentInvoice() {
     clearFilters,
     hasActiveFilters,
   } = useInvoiceFilterSort(sentInvoices, { isSent: true });
+
+  useEffect(() => {
+    setSelectedExportInvoices((prev) => {
+      const visibleIds = new Set(
+        filteredAndSortedInvoices.map((invoice) => String(invoice.id))
+      );
+      const pruned = new Set([...prev].filter((id) => visibleIds.has(id)));
+      if (pruned.size === prev.size) return prev;
+      return pruned;
+    });
+  }, [filteredAndSortedInvoices]);
 
   useEffect(() => {
     setPage(0);
@@ -516,6 +529,12 @@ function SentInvoice() {
     selectedInvoice: null,
   });
 
+  // The drawer names the connected chain and pays on its contract, so an
+  // invoice from the previous chain must not stay open after a switch.
+  useEffect(() => {
+    setDrawerState({ open: false, selectedInvoice: null });
+  }, [chainId]);
+
   // Invoice currently open in the share dialog, by id. Held as an id rather
   // than the invoice object because the dialog reads the payload it shares
   // from IndexedDB — the object rendered here has been enriched with token
@@ -590,16 +609,16 @@ function SentInvoice() {
   };
 
   const handleSelectAllForExport = () => {
-    if (selectedExportInvoices.size === sentInvoices.length) {
+    if (selectedExportInvoices.size === filteredAndSortedInvoices.length) {
       setSelectedExportInvoices(new Set());
     } else {
       setSelectedExportInvoices(
-        new Set(sentInvoices.map((invoice) => String(invoice.id)))
+        new Set(filteredAndSortedInvoices.map((invoice) => String(invoice.id)))
       );
     }
   };
 
-  const selectedExportInvoiceList = sentInvoices.filter((invoice) =>
+  const selectedExportInvoiceList = filteredAndSortedInvoices.filter((invoice) =>
     selectedExportInvoices.has(String(invoice.id))
   );
 
@@ -772,12 +791,12 @@ function SentInvoice() {
                               <Checkbox
                                 size="small"
                                 checked={
-                                  sentInvoices.length > 0 &&
-                                  selectedExportInvoices.size === sentInvoices.length
+                                  filteredAndSortedInvoices.length > 0 &&
+                                  selectedExportInvoices.size === filteredAndSortedInvoices.length
                                 }
                                 indeterminate={
                                   selectedExportInvoices.size > 0 &&
-                                  selectedExportInvoices.size < sentInvoices.length
+                                  selectedExportInvoices.size < filteredAndSortedInvoices.length
                                 }
                                 onChange={handleSelectAllForExport}
                               />
@@ -1302,7 +1321,9 @@ function SentInvoice() {
                       {")"}
                     </p>
                     <p className="text-xs text-gray-600">
-                      {drawerState.selectedInvoice.paymentToken?.address
+                      {drawerState.selectedInvoice.paymentToken?.address &&
+                      drawerState.selectedInvoice.paymentToken.address !==
+                        ethers.ZeroAddress
                         ? `${drawerState.selectedInvoice.paymentToken.address.substring(
                           0,
                           10
@@ -1313,11 +1334,12 @@ function SentInvoice() {
                     </p>
                   </div>
                 </div>
-                {drawerState.selectedInvoice.paymentToken?.address && (
-                  <div className="mt-2 text-xs text-gray-600">
-                    <p>Chain: Sepolia Testnet</p>
-                  </div>
-                )}
+                <div className="mt-2 text-xs text-gray-600">
+                  <p>
+                    {tInvoiceDetails("chain")}:{" "}
+                    {chain?.name ?? tInvoiceDetails("unknownNetwork")}
+                  </p>
+                </div>
               </div>
 
               {/* Date Information */}
