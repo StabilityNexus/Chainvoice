@@ -1,5 +1,22 @@
 import { ZeroAddress } from "ethers";
 
+export function validateTokenDecimals(decimals) {
+  const value = Number(decimals);
+
+  if (
+    decimals === null ||
+    decimals === undefined ||
+    (typeof decimals === "string" && decimals.trim() === "") ||
+    !Number.isInteger(value) ||
+    value < 0 ||
+    value > 80
+  ) {
+    throw new Error(`Unsupported ERC-20 decimals value: ${decimals}`);
+  }
+
+  return value;
+}
+
 export function getNativeToken(chain) {
   if (!chain?.nativeCurrency) return null;
   return {

@@ -14,6 +14,7 @@ import {
   getChainName,
   getLinkChainMismatch,
   resolveTokenDecimals as resolvePaymentTokenDecimals,
+  validateTokenDecimals,
 } from "../utils/paymentToken.js";
 import { useTranslation } from "../hooks/useTranslation";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
@@ -206,6 +207,7 @@ function CreateInvoice() {
    */
   const verifyToken = useCallback(async (address, chainIdForRpc) => {
     const isCurrent = beginTokenRequest();
+
     if (address.toLowerCase() === ethers.ZeroAddress && nativeToken) {
       setSelectedToken(nativeToken);
       setUseCustomToken(false);
@@ -213,20 +215,21 @@ function CreateInvoice() {
       setTokenVerificationState("idle");
       return;
     }
+
     setTokenVerificationState("verifying");
     setVerifiedToken(null);
 
     try {
       let provider;
-      const rpcUrl = chainIdForRpc && CHAIN_ID_TO_PUBLIC_RPC[chainIdForRpc];
+      const rpcUrl =
+        chainIdForRpc && CHAIN_ID_TO_PUBLIC_RPC[Number(chainIdForRpc)];
+
       if (rpcUrl) {
         provider = new JsonRpcProvider(rpcUrl);
       } else if (typeof window !== "undefined" && window.ethereum) {
         provider = new BrowserProvider(window.ethereum);
       } else {
-        console.error("No Ethereum provider found");
-        setTokenVerificationState("error");
-        return;
+        throw new Error("No Ethereum provider found");
       }
 
       const contract = new ethers.Contract(address, ERC20_ABI, provider);
@@ -237,19 +240,36 @@ function CreateInvoice() {
       ]);
 
       if (!isCurrent()) return;
+
       const symbolStr = typeof symbol === "string" ? symbol.trim() : "";
       if (!symbolStr || symbolStr === "UNKNOWN") {
-        setTokenVerificationState("error");
-        return;
+        throw new Error("Unable to read a valid token symbol");
       }
-      setVerifiedToken({ address, symbol: symbolStr, name, decimals });
+
+      const validatedDecimals = validateTokenDecimals(decimals);
+
+      setVerifiedToken({
+        address,
+        symbol: symbolStr,
+        name,
+        decimals: validatedDecimals,
+      });
       setTokenVerificationState("success");
     } catch (error) {
       if (!isCurrent()) return;
+
       console.error("Verification failed:", error);
+      setVerifiedToken(null);
       setTokenVerificationState("error");
     }
-  }, [beginTokenRequest, nativeToken, setSelectedToken, setUseCustomToken, setVerifiedToken, setTokenVerificationState]);
+  }, [
+    beginTokenRequest,
+    nativeToken,
+    setSelectedToken,
+    setUseCustomToken,
+    setVerifiedToken,
+    setTokenVerificationState,
+  ]);
 
   const resolveTokenDecimals = useCallback(
     async (tokenAddress, fallbackDecimals) => {
@@ -584,9 +604,11 @@ function CreateInvoice() {
       return;
     }
 
-    const tokenDecimals = Number(paymentToken?.decimals);
-    if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0) {
-      toast.error("Selected token has invalid decimals");
+    let tokenDecimals;
+    try {
+      tokenDecimals = validateTokenDecimals(paymentToken?.decimals);
+    } catch {
+      toast.error("Selected token has invalid decimals (supported range: 0–80).");
       return;
     }
 
