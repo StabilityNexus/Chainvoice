@@ -19,6 +19,7 @@ const { encryptPayload, decryptPayload } = await import(
 );
 const {
   sendEncryptedInvoice,
+  sendWithRateLimitRetry,
   fetchInvoiceMessages,
   pollInvoiceMessages,
   toMailboxAddress,
@@ -171,6 +172,56 @@ describe("sendEncryptedInvoice", () => {
       })
     ).rejects.toThrow(/public key/i);
     expect(relayApi.send).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendWithRateLimitRetry", () => {
+  const message = { to: "0xto", from: "0xfrom", payload: "ciphertext" };
+  const rateLimited = (retryAfter) =>
+    Object.assign(new Error("Rate limit exceeded"), { statusCode: 429, retryAfter });
+
+  it("waits out a 429 and sends again", async () => {
+    const sleep = jest.fn().mockResolvedValue();
+    relayApi.send
+      .mockRejectedValueOnce(rateLimited(5))
+      .mockResolvedValueOnce({ id: "m1" });
+
+    await expect(sendWithRateLimitRetry(message, sleep)).resolves.toEqual({ id: "m1" });
+    expect(sleep).toHaveBeenCalledWith(5000);
+    expect(relayApi.send).toHaveBeenCalledTimes(2);
+    expect(relayApi.send).toHaveBeenLastCalledWith(message);
+  });
+
+  it("keeps the wait between 1 and 60 seconds", async () => {
+    const sleep = jest.fn().mockResolvedValue();
+    relayApi.send
+      .mockRejectedValueOnce(rateLimited(3600))
+      .mockRejectedValueOnce(rateLimited(0))
+      .mockResolvedValueOnce({ id: "m1" });
+
+    await sendWithRateLimitRetry(message, sleep);
+    expect(sleep.mock.calls).toEqual([[60_000], [1000]]);
+  });
+
+  it("gives up after two retries", async () => {
+    const sleep = jest.fn().mockResolvedValue();
+    relayApi.send.mockRejectedValue(rateLimited(1));
+
+    await expect(sendWithRateLimitRetry(message, sleep)).rejects.toMatchObject({
+      statusCode: 429,
+    });
+    expect(relayApi.send).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not retry other failures, which may have been delivered", async () => {
+    const sleep = jest.fn();
+    relayApi.send.mockRejectedValue(
+      Object.assign(new Error("Request timeout"), { statusCode: 0 })
+    );
+
+    await expect(sendWithRateLimitRetry(message, sleep)).rejects.toThrow("Request timeout");
+    expect(relayApi.send).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
   });
 });
 
