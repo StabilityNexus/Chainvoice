@@ -170,6 +170,7 @@ function ReceivedInvoice() {
   // Batch payment states
   const [selectedInvoices, setSelectedInvoices] = useState(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
+  const singlePaymentInFlight = Object.values(paymentLoading).some(Boolean);
   const [batchSuggestions, setBatchSuggestions] = useState([]);
 
   // Identifies the list on screen, so a payment handler can tell whether the
@@ -432,6 +433,13 @@ function ReceivedInvoice() {
       return;
     }
 
+    // The same invoice could be in both, and the second transaction would
+    // revert after its approval was already spent.
+    if (batchLoading) {
+      toast.error(tReceivedInvoices("waitForBatch"));
+      return;
+    }
+
     // Captured before the transaction so the result can be matched against
     // the list that is on screen when it resolves.
     const contextKey = pageContextRef.current;
@@ -532,7 +540,6 @@ function ReceivedInvoice() {
           )
         );
       }
-      setRefreshTrigger((p) => p + 1);
     } catch (error) {
       console.error("Payment failed:", error);
       const errorMsg = getDetailedErrorMessage(error);
@@ -541,6 +548,9 @@ function ReceivedInvoice() {
       toast.error("Payment failed. Check error details for more information.");
     } finally {
       setPaymentLoading((prev) => ({ ...prev, [invoiceId]: false }));
+      // Refetched on failure too: someone may have paid or cancelled it in the
+      // meantime, and the row would otherwise keep offering a doomed payment.
+      setRefreshTrigger((p) => p + 1);
     }
   };
 
@@ -564,9 +574,18 @@ function ReceivedInvoice() {
       return;
     }
 
+    if (singlePaymentInFlight) {
+      toast.error(tReceivedInvoices("waitForPayment"));
+      return;
+    }
+
     // Paid, cancelled and mismatched invoices can stay selected for export;
     // the contract would revert the whole batch for any one of them.
     const grouped = getGroupedInvoices(payableSelected);
+    // One transaction per token, so a later group can fail after earlier
+    // ones were paid.
+    let paidCount = 0;
+    let failedSymbol = null;
 
     setBatchLoading(true);
     setPaymentError("");
@@ -615,6 +634,7 @@ function ReceivedInvoice() {
       // Process payments
       for (const [, group] of grouped.entries()) {
         const { tokenAddress, symbol, totalBaseUnits, invoices } = group;
+        failedSymbol = symbol;
         const invoiceIds = invoices.map((inv) => BigInt(inv.id));
 
         if (invoiceIds.length > 50) {
@@ -656,6 +676,7 @@ function ReceivedInvoice() {
             value: totalFee,
           });
           await tx.wait();
+          paidCount += invoices.length;
           toast.success(
             `Successfully paid ${invoices.length} invoices with ${symbol}!`
           );
@@ -664,6 +685,7 @@ function ReceivedInvoice() {
             value: totalBaseUnits + totalFee,
           });
           await tx.wait();
+          paidCount += invoices.length;
           toast.success(
             `Successfully paid ${invoices.length} invoices with ${nativeSymbol}!`
           );
@@ -678,7 +700,13 @@ function ReceivedInvoice() {
       setPaymentError(errorMsg);
       setShowPaymentError(true);
       toast.error(
-        "Batch payment failed. Check error details for more information."
+        paidCount > 0
+          ? tReceivedInvoices("batchPartlyPaid", {
+              paid: paidCount,
+              total: payableSelected.length,
+              symbol: failedSymbol,
+            })
+          : "Batch payment failed. Check error details for more information."
       );
     } finally {
       setBatchLoading(false);
@@ -1451,7 +1479,7 @@ function ReceivedInvoice() {
                     variant="contained"
                     color="success"
                     size="large"
-                    disabled={batchLoading}
+                    disabled={batchLoading || singlePaymentInFlight}
                     startIcon={
                       batchLoading ? (
                         <CircularProgress size={20} color="inherit" />
@@ -1792,7 +1820,9 @@ function ReceivedInvoice() {
                                     variant="contained"
                                     size="small"
                                     onClick={() => payInvoice(invoice)}
-                                    disabled={paymentLoading[invoice.id]}
+                                    disabled={
+                                      paymentLoading[invoice.id] || batchLoading
+                                    }
                                     sx={{
                                       bgcolor: paymentLoading[invoice.id]
                                         ? "grey.400"

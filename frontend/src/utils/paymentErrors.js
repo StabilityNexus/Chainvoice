@@ -103,6 +103,29 @@ export function decodeContractError(error) {
 const WALLET_REJECTION_MESSAGE =
   /user (rejected|denied|cancel(?:l)?ed)|request (?:was )?cancel(?:l)?ed|rejected the request/i;
 
+const CANCEL_ERROR_KEYS = {
+  InvoiceNotCancellable: "notCancellable",
+  NotInvoiceCreator: "notCreator",
+};
+
+/**
+ * Chooses the message for a failed cancellation.
+ *
+ * @param {unknown} error - anything thrown while cancelling
+ * @returns {string} a key under `cancelInvoice.errors`
+ */
+export function getCancelErrorKey(error) {
+  const message = typeof error?.message === "string" ? error.message : "";
+  if (
+    error?.code === "ACTION_REJECTED" ||
+    error?.code === 4001 ||
+    WALLET_REJECTION_MESSAGE.test(message)
+  ) {
+    return "walletCancelled";
+  }
+  return CANCEL_ERROR_KEYS[decodeContractError(error)?.name] ?? "generic";
+}
+
 /**
  * Chooses the message for a failed payment.
  *

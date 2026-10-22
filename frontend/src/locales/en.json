@@ -57,7 +57,10 @@
       "gas": "Transaction failed due to gas estimation error. Please try again",
       "reverted": "The network rejected this transaction without giving a reason. Check that your balance covers the payment and the network fee and that the invoice can still be paid, then try again.",
       "generic": "Payment failed. Please try again or contact support"
-    }
+    },
+    "waitForBatch": "Wait for the batch payment to finish.",
+    "waitForPayment": "Wait for the current payment to finish.",
+    "batchPartlyPaid": "Paid {{paid}} of {{total}} invoices, then the {{symbol}} payment failed. Check error details for more information."
   },
   "tokenPicker": {
     "testnetNotice": "Select the native coin or use Input Custom Token for testnet ERC-20 tokens.",
@@ -169,5 +172,13 @@
     "decimals": "Decimals",
     "chain": "Chain",
     "unknownNetwork": "Unknown network"
+  },
+  "cancelInvoice": {
+    "errors": {
+      "notCancellable": "This invoice was already paid or cancelled, so it can't be cancelled.",
+      "notCreator": "Only the wallet that created this invoice can cancel it. Switch to that wallet and try again.",
+      "walletCancelled": "You declined the cancellation in your wallet.",
+      "generic": "Failed to cancel the invoice. Please try again."
+    }
   }
 }

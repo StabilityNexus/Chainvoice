@@ -75,6 +75,7 @@ import InvoiceFilterBar from "@/components/InvoiceFilterBar";
 import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/hooks/useTranslation";
+import { getCancelErrorKey } from "@/utils/paymentErrors";
 
 
 const columns = [
@@ -95,6 +96,7 @@ function SentInvoice() {
   const { data: walletClient } = useWalletClient();
   const { address, isConnected, chainId, chain } = useAccount();
   const { t: tInvoiceDetails } = useTranslation("invoiceDetails");
+  const { t: tCancelInvoice } = useTranslation("cancelInvoice");
   const nativeSymbol =
     getWagmiChainInfo(chainId)?.nativeCurrency?.symbol ||
     chain?.nativeCurrency?.symbol ||
@@ -110,6 +112,9 @@ function SentInvoice() {
   const [fee, setFee] = useState(0);
   const [error, setError] = useState(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
+  // Ids with a cancel transaction in flight, so a second click can't send
+  // another one.
+  const [cancellingIds, setCancellingIds] = useState(() => new Set());
   const [invoiceToCancel, setInvoiceToCancel] = useState(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -634,6 +639,10 @@ function SentInvoice() {
   };
 
   const handleCancelInvoice = async (invoiceId) => {
+    const key = String(invoiceId);
+    if (cancellingIds.has(key)) return;
+    setCancellingIds((prev) => new Set(prev).add(key));
+
     // Captured before the transaction so its result can be matched against the
     // list that is on screen when it resolves.
     const contextKey = pageContextRef.current;
@@ -663,12 +672,19 @@ function SentInvoice() {
           )
         );
       }
-      setRefreshTrigger((p) => p + 1);
 
       toast.success("Invoice cancelled successfully");
     } catch (error) {
       console.error("Cancellation failed:", error);
-      toast.error("Failed to cancel invoice");
+      toast.error(tCancelInvoice(`errors.${getCancelErrorKey(error)}`));
+    } finally {
+      setCancellingIds((prev) => {
+        const next = new Set(prev);
+        next.delete(key);
+        return next;
+      });
+      // Refetched on failure too: the client may have paid it meanwhile.
+      setRefreshTrigger((p) => p + 1);
     }
   };
 
@@ -971,24 +987,30 @@ function SentInvoice() {
                               <div className="flex space-x-5">
                                 {!invoice.isPaid && !invoice.isCancelled && (
                                   <Tooltip title="Cancel Invoice">
-                                    <IconButton
-                                      size="small"
-                                      onClick={() => {
-                                        setInvoiceToCancel(invoice);
-                                        setCancelConfirmOpen(true);
-                                      }}
-                                      sx={{
-                                        backgroundColor: "#fee2e2",
-                                        "&:hover": {
-                                          backgroundColor: "#fecaca",
-                                        },
-                                      }}
-                                    >
-                                      <CancelIcon
-                                        fontSize="small"
-                                        sx={{ color: "#dc2626" }}
-                                      />
-                                    </IconButton>
+                                    {/* MUI needs an enabled child to show a tooltip on a disabled button. */}
+                                    <span>
+                                      <IconButton
+                                        size="small"
+                                        disabled={cancellingIds.has(
+                                          String(invoice.id)
+                                        )}
+                                        onClick={() => {
+                                          setInvoiceToCancel(invoice);
+                                          setCancelConfirmOpen(true);
+                                        }}
+                                        sx={{
+                                          backgroundColor: "#fee2e2",
+                                          "&:hover": {
+                                            backgroundColor: "#fecaca",
+                                          },
+                                        }}
+                                      >
+                                        <CancelIcon
+                                          fontSize="small"
+                                          sx={{ color: "#dc2626" }}
+                                        />
+                                      </IconButton>
+                                    </span>
                                   </Tooltip>
                                 )}
                                 {/* Always offered whenever the payload is on
@@ -1584,7 +1606,7 @@ function SentInvoice() {
             Confirm Invoice Cancellation
           </DialogTitle>
           <DialogContent>
-            <DialogContentText id="alert-dialog-description">
+            <DialogContentText id="alert-dialog-description" component="div">
               <Typography variant="body1" className="mb-3">
                 You&apos;re about to cancel this invoice sent to{" "}
                 <span className="font-medium">
