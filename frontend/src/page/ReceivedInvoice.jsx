@@ -294,44 +294,89 @@ function ReceivedInvoice() {
     return suggestions;
   };
 
+  // ESTIMATED GAS FOR THE TRANSACTIONS A PAYMENT WILL SEND
+  // One estimator per transaction; the batch flow sends one per token group.
+  const estimateGasCost = async (signer, estimators) => {
+    let feeData;
+    try {
+      feeData = await signer.provider.getFeeData();
+    } catch {
+      // Without a gas price there is nothing to add; the balance check still
+      // covers the amounts and the dev fees.
+      return 0n;
+    }
+    const gasPrice = feeData.maxFeePerGas ?? feeData.gasPrice;
+    if (!gasPrice) return 0n;
+
+    let total = 0n;
+    for (const estimate of estimators) {
+      try {
+        const gasLimit = await estimate();
+        // +20% absorbs the gas-price drift between this estimate and the
+        // moment the wallet signs.
+        total += (gasLimit * BigInt(gasPrice) * 120n) / 100n;
+      } catch {
+        // Estimation reverts for reasons that do not mean the payment will
+        // fail - most often an ERC-20 whose approval is still pending, so the
+        // simulated call trips the allowance check. Skipping this
+        // transaction's gas keeps a payable invoice payable rather than
+        // blocking it on a failed simulation.
+        continue;
+      }
+    }
+    return total;
+  };
+
   // UNIFORM BALANCE CHECK
-  const checkBalance = async (
-    { tokenAddress, amount, decimals, symbol },
-    signer
-  ) => {
+  // Takes every group the payment will send (one per token), because the
+  // contract charges the dev fee per invoice - devFee * invoiceCount - and the
+  // native requirement of every group is paid out of the same balance.
+  const checkBalances = async (groups, signer, feePerInvoice, estimatedGas = 0n) => {
     const userAddress = await signer.getAddress();
+    const devFee = BigInt(feePerInvoice);
 
-    if (tokenAddress === ethers.ZeroAddress) {
-      const balance = await signer.provider.getBalance(userAddress);
-      const totalRequired = amount + BigInt(fee);
+    let totalAmount = 0n;
+    let totalDevFee = 0n;
+    let requiredNative = estimatedGas;
 
-      if (balance < totalRequired) {
-        const requiredNative = ethers.formatEther(totalRequired);
-        const availableNative = ethers.formatEther(balance);
-        throw new Error(
-          `Insufficient ${nativeSymbol} balance. Required: ${requiredNative} ${nativeSymbol}, Available: ${availableNative} ${nativeSymbol}`
-        );
+    for (const { tokenAddress, amount, decimals, symbol, invoiceCount } of groups) {
+      const groupFee = devFee * BigInt(invoiceCount);
+      totalDevFee += groupFee;
+      requiredNative += groupFee;
+
+      if (tokenAddress === ethers.ZeroAddress) {
+        totalAmount += amount;
+        requiredNative += amount;
+      } else {
+        const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
+        const balance = await tokenContract.balanceOf(userAddress);
+
+        if (balance < amount) {
+          const requiredFormatted = ethers.formatUnits(amount, decimals);
+          const availableFormatted = ethers.formatUnits(balance, decimals);
+          const shortfall = ethers.formatUnits(amount - balance, decimals);
+          throw new Error(
+            `Insufficient ${symbol} balance. Required: ${requiredFormatted} ${symbol}, Available: ${availableFormatted} ${symbol}, Short by: ${shortfall} ${symbol}`
+          );
+        }
       }
-    } else {
-      const tokenContract = new Contract(tokenAddress, ERC20_ABI, signer);
-      const balance = await tokenContract.balanceOf(userAddress);
+    }
 
-      if (balance < amount) {
-        const requiredFormatted = ethers.formatUnits(amount, decimals);
-        const availableFormatted = ethers.formatUnits(balance, decimals);
-        throw new Error(
-          `Insufficient ${symbol} balance. Required: ${requiredFormatted} ${symbol}, Available: ${availableFormatted} ${symbol}`
-        );
-      }
-
-      const ethBalance = await signer.provider.getBalance(userAddress);
-      if (ethBalance < BigInt(fee)) {
-        const requiredNativeFee = ethers.formatEther(fee);
-        const availableNative = ethers.formatEther(ethBalance);
-        throw new Error(
-          `Insufficient ${nativeSymbol} for fees. Required: ${requiredNativeFee} ${nativeSymbol}, Available: ${availableNative} ${nativeSymbol}`
-        );
-      }
+    const nativeBalance = await signer.provider.getBalance(userAddress);
+    if (nativeBalance < requiredNative) {
+      throw new Error(
+        `Insufficient ${nativeSymbol} balance. Amount: ${ethers.formatEther(
+          totalAmount
+        )} ${nativeSymbol}, Dev fee: ${ethers.formatEther(
+          totalDevFee
+        )} ${nativeSymbol}, Estimated gas: ${ethers.formatEther(
+          estimatedGas
+        )} ${nativeSymbol}, Required: ${ethers.formatEther(
+          requiredNative
+        )} ${nativeSymbol}, Available: ${ethers.formatEther(
+          nativeBalance
+        )} ${nativeSymbol}`
+      );
     }
   };
 
@@ -470,10 +515,30 @@ function ReceivedInvoice() {
       const isNativeToken = tokenAddress === ethers.ZeroAddress;
 
       // BALANCE CHECK (same as batch)
+      const paymentValue = isNativeToken
+        ? amountDue + BigInt(fee)
+        : BigInt(fee);
+
       try {
-        await checkBalance(
-          { tokenAddress, amount: amountDue, decimals, symbol: tokenSymbol },
-          signer
+        const estimatedGas = await estimateGasCost(signer, [
+          () =>
+            contract.payInvoice.estimateGas(BigInt(invoiceId), {
+              value: paymentValue,
+            }),
+        ]);
+        await checkBalances(
+          [
+            {
+              tokenAddress,
+              amount: amountDue,
+              decimals,
+              symbol: tokenSymbol,
+              invoiceCount: 1,
+            },
+          ],
+          signer,
+          fee,
+          estimatedGas
         );
         toast.success("Balance check passed! Processing payment...");
       } catch (balanceError) {
@@ -502,7 +567,7 @@ function ReceivedInvoice() {
 
         toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
-          value: fee,
+          value: paymentValue,
         });
         toast(
           "Payment transaction submitted. Please wait for confirmation..."
@@ -510,11 +575,9 @@ function ReceivedInvoice() {
         await tx.wait();
         toast.success(`Payment successful! Paid with ${tokenSymbol}`);
       } else {
-        const total = amountDue + BigInt(fee);
-
         toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
-          value: total,
+          value: paymentValue,
         });
         toast(
           "Payment transaction submitted. Please wait for confirmation..."
@@ -588,26 +651,41 @@ function ReceivedInvoice() {
       // BALANCE CHECK (same as individual)
       toast("Checking balances...");
 
-      for (const [, group] of grouped.entries()) {
-        try {
-          await checkBalance(
-            {
-              tokenAddress: group.tokenAddress,
-              amount: group.totalBaseUnits,
-              decimals: group.decimals,
-              symbol: group.symbol,
-            },
-            signer
-          );
-        } catch (error) {
-          setPaymentError(error.message);
-          setShowPaymentError(true);
-          toast.error(
-            "Balance check failed. Check error details for more information."
-          );
-          setBatchLoading(false);
-          return;
-        }
+      const feePerInvoice = await contract.devFee();
+      const paymentGroups = [...grouped.values()].map((group) => ({
+        tokenAddress: group.tokenAddress,
+        amount: group.totalBaseUnits,
+        decimals: group.decimals,
+        symbol: group.symbol,
+        invoiceCount: group.invoices.length,
+        invoiceIds: group.invoices.map((inv) => BigInt(inv.id)),
+      }));
+
+      try {
+        // One transaction is sent per token group, so each group's gas is
+        // estimated and the whole native requirement is compared once.
+        const estimatedGas = await estimateGasCost(
+          signer,
+          paymentGroups.map((group) => () => {
+            const groupFee = BigInt(feePerInvoice) * BigInt(group.invoiceCount);
+            const value =
+              group.tokenAddress === ethers.ZeroAddress
+                ? group.amount + groupFee
+                : groupFee;
+            return contract.payInvoicesBatch.estimateGas(group.invoiceIds, {
+              value,
+            });
+          })
+        );
+        await checkBalances(paymentGroups, signer, feePerInvoice, estimatedGas);
+      } catch (error) {
+        setPaymentError(error.message);
+        setShowPaymentError(true);
+        toast.error(
+          "Balance check failed. Check error details for more information."
+        );
+        setBatchLoading(false);
+        return;
       }
 
       toast.success("Balance checks passed! Processing payments...");
@@ -623,8 +701,7 @@ function ReceivedInvoice() {
           );
         }
 
-        const feePerInvoice = await contract.devFee();
-        const totalFee = feePerInvoice * BigInt(invoiceIds.length);
+        const totalFee = BigInt(feePerInvoice) * BigInt(invoiceIds.length);
         const isNativeToken = tokenAddress === ethers.ZeroAddress;
 
         if (!isNativeToken) {
