@@ -112,9 +112,10 @@ function SentInvoice() {
   const [fee, setFee] = useState(0);
   const [error, setError] = useState(null);
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
-  // Ids with a cancel transaction in flight, so a second click can't send
-  // another one.
+  // Invoices with a cancel transaction in flight, so a second click can't send
+  // another one. Keyed by chain and wallet too: ids repeat across them.
   const [cancellingIds, setCancellingIds] = useState(() => new Set());
+  const cancelKey = (invoiceId) => `${chainId}:${address}:${invoiceId}`;
   const [invoiceToCancel, setInvoiceToCancel] = useState(null);
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -639,7 +640,7 @@ function SentInvoice() {
   };
 
   const handleCancelInvoice = async (invoiceId) => {
-    const key = String(invoiceId);
+    const key = cancelKey(invoiceId);
     if (cancellingIds.has(key)) return;
     setCancellingIds((prev) => new Set(prev).add(key));
 
@@ -992,7 +993,7 @@ function SentInvoice() {
                                       <IconButton
                                         size="small"
                                         disabled={cancellingIds.has(
-                                          String(invoice.id)
+                                          cancelKey(invoice.id)
                                         )}
                                         onClick={() => {
                                           setInvoiceToCancel(invoice);
