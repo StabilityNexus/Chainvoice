@@ -1,0 +1,1 @@
+import{aB as e}from"./index-Ccy3Fl6V.js";function a(n){if(!(!e||!e.chains))return e.chains.find(i=>i.id===Number(n))}function r(n){const i=a(n);return(i==null?void 0:i.name)||void 0}function f(n){return a(n)||{}}export{r as a,f as g};
