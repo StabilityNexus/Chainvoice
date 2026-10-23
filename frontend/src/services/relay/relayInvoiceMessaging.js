@@ -4,6 +4,53 @@ import { encryptPayload, tryDecryptPayload } from './invoiceCrypto.js';
 const DEFAULT_POLL_INTERVAL_MS = 15_000;
 const ENVELOPE_TYPE = 'invoice';
 
+// The relay limits requests per IP per minute, so a batch to many clients, or
+// the Sent page's resend sweep right after one, runs into it.
+const RATE_LIMIT_RETRIES = 2;
+const MAX_RATE_LIMIT_WAIT_S = 60;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// When the relay will accept sends again. Shared by every send, because the
+// limit is per IP: after one 429 the others would only collect more of them.
+let resumeAt = 0;
+
+/**
+ * Post a message, waiting out the relay's rate limit instead of failing.
+ *
+ * Safe to repeat: a 429 means the relay stored nothing, unlike a timeout,
+ * which the client deliberately never retries for a POST.
+ *
+ * @param {Object} message - `{to, from, payload}` for `RelayClient.send`
+ * @param {Object} [clock]
+ * @param {(ms: number) => Promise<void>} [clock.sleep]
+ * @param {() => number} [clock.now]
+ * @returns {Promise<import('@aossie-org/thrubox-client').Message>}
+ */
+export async function sendWithRateLimitRetry(
+  message,
+  { sleep = wait, now = Date.now } = {}
+) {
+  for (let attempt = 0; ; attempt++) {
+    const pause = resumeAt - now();
+    if (pause > 0) await sleep(pause);
+    try {
+      return await getRelayClient().send(message);
+    } catch (err) {
+      if (err?.statusCode !== 429 || attempt >= RATE_LIMIT_RETRIES) throw err;
+      const seconds = Number.isFinite(err.retryAfter)
+        ? Math.min(Math.max(err.retryAfter, 1), MAX_RATE_LIMIT_WAIT_S)
+        : MAX_RATE_LIMIT_WAIT_S;
+      resumeAt = Math.max(resumeAt, now() + seconds * 1000);
+    }
+  }
+}
+
+/** Forget a rate-limit pause. Only useful in tests. */
+export function resetRateLimitPause() {
+  resumeAt = 0;
+}
+
 /**
  * Normalise an address for relay addressing.
  *
@@ -84,7 +131,7 @@ export async function sendEncryptedInvoice({
   const envelope = buildEnvelope(invoiceData, chainId, invoiceId);
   const payload = encryptPayload(receiverPublicKey, envelope);
 
-  return getRelayClient().send({
+  return sendWithRateLimitRetry({
     to: toMailboxAddress(receiverAddress),
     from: toMailboxAddress(senderAddress),
     payload,
