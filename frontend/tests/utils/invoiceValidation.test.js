@@ -94,6 +94,55 @@ describe("invoiceValidation.validateSingleInvoiceData", () => {
     );
   });
 
+  test("blocks a fixed discount greater than the line subtotal", () => {
+    const result = validateSingleInvoiceData({
+      ...validBasePayload,
+      clientAddress: CLIENT_1,
+      itemData: [
+        {
+          ...validItem,
+          qty: "10",
+          unitPrice: "10",
+          discount: "101",
+          discountType: "amount",
+          tax: "20",
+          taxType: "amount",
+        },
+      ],
+      totalAmountDue: "19",
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+    });
+
+    expect(result.isValid).toBe(false);
+    expect(result.fieldErrors.item_0.discount).toBe(
+      "Cannot exceed line subtotal"
+    );
+  });
+
+  test("allows a fixed discount equal to the line subtotal", () => {
+    const result = validateSingleInvoiceData({
+      ...validBasePayload,
+      clientAddress: CLIENT_1,
+      itemData: [
+        {
+          ...validItem,
+          qty: "10",
+          unitPrice: "10",
+          discount: "100",
+          discountType: "amount",
+          tax: "20",
+          taxType: "amount",
+        },
+      ],
+      totalAmountDue: "20",
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+    });
+
+    expect(result.isValid).toBe(true);
+  });
+
   test("blocks negative quantity/unit price/discount/tax", () => {
     const byField = [
       { field: "qty", expected: "Cannot be negative" },
@@ -330,6 +379,35 @@ describe("invoiceValidation.validateBatchInvoiceData", () => {
     expect(result.errorMessage).toBe("Please fix the required fields");
     expect(result.itemErrors["1_0"].amount).toBe(
       "Amount cannot be negative. Reduce discount or update values"
+    );
+  });
+
+  test("blocks a fixed discount greater than the line subtotal in a batch row", () => {
+    const result = validateBatchInvoiceData({
+      rows: [
+        makeRow({
+          itemData: [
+            {
+              ...validItem,
+              qty: "10",
+              unitPrice: "10",
+              discount: "101",
+              discountType: "amount",
+              tax: "20",
+              taxType: "amount",
+            },
+          ],
+          totalAmountDue: "19",
+        }),
+      ],
+      paymentToken: { symbol: "USDT", decimals: 6 },
+      ownerAddress: OWNER,
+      userInfo: { userFname: "Admin", userEmail: "admin@example.com" },
+    });
+
+    expect(result.isValid).toBe(false);
+    expect(result.itemErrors["0_0"].discount).toBe(
+      "Cannot exceed line subtotal"
     );
   });
 
