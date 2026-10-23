@@ -6,6 +6,7 @@ import {
   PAYMENT_ERROR_KEYS,
   decodeContractError,
   findRevertData,
+  getCancelErrorKey,
   getPaymentErrorMessage,
 } from "../../src/utils/paymentErrors.js";
 
@@ -338,5 +339,40 @@ describe("the message catalogue", () => {
       expect(typeof messages[key]).toBe("string");
     }
     expect(Object.keys(messages).sort()).toEqual([...keys].sort());
+  });
+});
+
+describe("getCancelErrorKey", () => {
+  it("explains a cancel of an invoice that is already settled", () => {
+    expect(getCancelErrorKey(callException(selectorOf("InvoiceNotCancellable")))).toBe(
+      "notCancellable"
+    );
+  });
+
+  it("explains a cancel from a wallet that didn't create the invoice", () => {
+    expect(getCancelErrorKey(callException(selectorOf("NotInvoiceCreator")))).toBe(
+      "notCreator"
+    );
+  });
+
+  it("treats a declined wallet prompt as the user's choice", () => {
+    expect(getCancelErrorKey({ code: "ACTION_REJECTED" })).toBe("walletCancelled");
+    expect(getCancelErrorKey({ code: 4001 })).toBe("walletCancelled");
+    expect(getCancelErrorKey(new Error("User rejected the request."))).toBe(
+      "walletCancelled"
+    );
+  });
+
+  it("falls back to a generic message", () => {
+    expect(getCancelErrorKey(new Error("network down"))).toBe("generic");
+    expect(getCancelErrorKey(callException(selectorOf("InvoiceAlreadyPaid")))).toBe(
+      "generic"
+    );
+  });
+
+  it("has a message for every key it returns", () => {
+    for (const key of ["notCancellable", "notCreator", "walletCancelled", "generic"]) {
+      expect(typeof en.cancelInvoice.errors[key]).toBe("string");
+    }
   });
 });
