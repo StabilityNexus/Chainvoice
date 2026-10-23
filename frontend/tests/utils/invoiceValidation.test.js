@@ -116,7 +116,7 @@ describe("invoiceValidation.validateSingleInvoiceData", () => {
 
     expect(result.isValid).toBe(false);
     expect(result.fieldErrors.item_0.discount).toBe(
-      "Cannot exceed line subtotal"
+      "invoiceValidation.fixedDiscountExceedsSubtotal"
     );
   });
 
@@ -407,7 +407,7 @@ describe("invoiceValidation.validateBatchInvoiceData", () => {
 
     expect(result.isValid).toBe(false);
     expect(result.itemErrors["0_0"].discount).toBe(
-      "Cannot exceed line subtotal"
+      "invoiceValidation.fixedDiscountExceedsSubtotal"
     );
   });
 

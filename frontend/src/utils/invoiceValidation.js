@@ -88,7 +88,7 @@ const getLineItemError = (lineLabel, item) => {
   } else if (item.discountType === "percentage" && discountWei > HUNDRED_PERCENT_WEI) {
     errors.discount = "Cannot exceed 100%";
   } else if (valid && item.discountType !== "percentage" && discountWei > lineTotalWei) {
-    errors.discount = "Cannot exceed line subtotal";
+    errors.discount = "invoiceValidation.fixedDiscountExceedsSubtotal";
   }
   
   if (taxRateWei < 0n) {
