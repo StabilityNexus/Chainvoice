@@ -20,6 +20,7 @@ const { encryptPayload, decryptPayload } = await import(
 const {
   sendEncryptedInvoice,
   sendWithRateLimitRetry,
+  resetRateLimitPause,
   fetchInvoiceMessages,
   pollInvoiceMessages,
   toMailboxAddress,
@@ -180,46 +181,72 @@ describe("sendWithRateLimitRetry", () => {
   const rateLimited = (retryAfter) =>
     Object.assign(new Error("Rate limit exceeded"), { statusCode: 429, retryAfter });
 
+  // A frozen clock: every pause is then measured from 0, and the fake sleep
+  // records it without waiting.
+  let sleep;
+  const clock = () => ({ sleep, now: () => 0 });
+
+  beforeEach(() => {
+    resetRateLimitPause();
+    sleep = jest.fn().mockResolvedValue();
+  });
+
   it("waits out a 429 and sends again", async () => {
-    const sleep = jest.fn().mockResolvedValue();
     relayApi.send
       .mockRejectedValueOnce(rateLimited(5))
       .mockResolvedValueOnce({ id: "m1" });
 
-    await expect(sendWithRateLimitRetry(message, sleep)).resolves.toEqual({ id: "m1" });
+    await expect(sendWithRateLimitRetry(message, clock())).resolves.toEqual({ id: "m1" });
     expect(sleep).toHaveBeenCalledWith(5000);
     expect(relayApi.send).toHaveBeenCalledTimes(2);
     expect(relayApi.send).toHaveBeenLastCalledWith(message);
   });
 
   it("keeps the wait between 1 and 60 seconds", async () => {
-    const sleep = jest.fn().mockResolvedValue();
     relayApi.send
       .mockRejectedValueOnce(rateLimited(3600))
-      .mockRejectedValueOnce(rateLimited(0))
       .mockResolvedValueOnce({ id: "m1" });
+    await sendWithRateLimitRetry(message, clock());
 
-    await sendWithRateLimitRetry(message, sleep);
+    resetRateLimitPause();
+    relayApi.send
+      .mockRejectedValueOnce(rateLimited(0))
+      .mockResolvedValueOnce({ id: "m2" });
+    await sendWithRateLimitRetry(message, clock());
+
     expect(sleep.mock.calls).toEqual([[60_000], [1000]]);
   });
 
+  it("holds back other sends until the limit resets", async () => {
+    relayApi.send
+      .mockRejectedValueOnce(rateLimited(5))
+      .mockResolvedValue({ id: "ok" });
+
+    await sendWithRateLimitRetry(message, clock());
+    await sendWithRateLimitRetry({ ...message, to: "0xother" }, clock());
+
+    // The second send waited for the same window instead of being sent into it.
+    expect(sleep.mock.calls).toEqual([[5000], [5000]]);
+    expect(relayApi.send).toHaveBeenCalledTimes(3);
+  });
+
   it("gives up after two retries", async () => {
-    const sleep = jest.fn().mockResolvedValue();
     relayApi.send.mockRejectedValue(rateLimited(1));
 
-    await expect(sendWithRateLimitRetry(message, sleep)).rejects.toMatchObject({
+    await expect(sendWithRateLimitRetry(message, clock())).rejects.toMatchObject({
       statusCode: 429,
     });
     expect(relayApi.send).toHaveBeenCalledTimes(3);
   });
 
   it("does not retry other failures, which may have been delivered", async () => {
-    const sleep = jest.fn();
     relayApi.send.mockRejectedValue(
       Object.assign(new Error("Request timeout"), { statusCode: 0 })
     );
 
-    await expect(sendWithRateLimitRetry(message, sleep)).rejects.toThrow("Request timeout");
+    await expect(sendWithRateLimitRetry(message, clock())).rejects.toThrow(
+      "Request timeout"
+    );
     expect(relayApi.send).toHaveBeenCalledTimes(1);
     expect(sleep).not.toHaveBeenCalled();
   });

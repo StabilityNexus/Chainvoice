@@ -11,6 +11,10 @@ const MAX_RATE_LIMIT_WAIT_S = 60;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// When the relay will accept sends again. Shared by every send, because the
+// limit is per IP: after one 429 the others would only collect more of them.
+let resumeAt = 0;
+
 /**
  * Post a message, waiting out the relay's rate limit instead of failing.
  *
@@ -18,11 +22,18 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
  * which the client deliberately never retries for a POST.
  *
  * @param {Object} message - `{to, from, payload}` for `RelayClient.send`
- * @param {(ms: number) => Promise<void>} [sleep]
+ * @param {Object} [clock]
+ * @param {(ms: number) => Promise<void>} [clock.sleep]
+ * @param {() => number} [clock.now]
  * @returns {Promise<import('@aossie-org/thrubox-client').Message>}
  */
-export async function sendWithRateLimitRetry(message, sleep = wait) {
+export async function sendWithRateLimitRetry(
+  message,
+  { sleep = wait, now = Date.now } = {}
+) {
   for (let attempt = 0; ; attempt++) {
+    const pause = resumeAt - now();
+    if (pause > 0) await sleep(pause);
     try {
       return await getRelayClient().send(message);
     } catch (err) {
@@ -30,9 +41,14 @@ export async function sendWithRateLimitRetry(message, sleep = wait) {
       const seconds = Number.isFinite(err.retryAfter)
         ? Math.min(Math.max(err.retryAfter, 1), MAX_RATE_LIMIT_WAIT_S)
         : MAX_RATE_LIMIT_WAIT_S;
-      await sleep(seconds * 1000);
+      resumeAt = Math.max(resumeAt, now() + seconds * 1000);
     }
   }
+}
+
+/** Forget a rate-limit pause. Only useful in tests. */
+export function resetRateLimitPause() {
+  resumeAt = 0;
 }
 
 /**
