@@ -20,6 +20,7 @@ function Navbar() {
   const [hasConnected, setHasConnected] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const showShareButton = !isConnected && location.pathname === "/";
 
   // Improved active route detection
   const isActive = (path) => {
@@ -209,6 +210,7 @@ function Navbar() {
                   )}
                 </motion.div>
               ))}
+            {showShareButton && <div data-social-share></div>}
             {publicItems.map((item) => (
               <motion.div
                 key={item.name}
@@ -322,6 +324,12 @@ function Navbar() {
                     </div>
                   </Link>
                 ))}
+
+                {showShareButton && (
+                  <div className="px-4 py-2">
+                    <div data-social-share></div>
+                  </div>
+                )}
 
                 <div className="px-4 py-2 flex items-center gap-4">
                   <NetworkSwitcher />
