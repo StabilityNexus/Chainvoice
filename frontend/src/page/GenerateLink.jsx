@@ -24,20 +24,13 @@ import { BrowserProvider, ethers } from "ethers";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
-
-const validateTokenDecimals = (decimals) => {
-  const value = Number(decimals);
-
-  if (!Number.isInteger(value) || value < 0 || value > 255) {
-    throw new Error(`Unsupported ERC-20 decimals value: ${decimals}`);
-  }
-
-  return value;
-};
+import toast from "react-hot-toast";
+import { verifyTokenContract } from "../utils/paymentToken.js";
 
 const GenerateLink = () => {
   const { address, isConnected, chainId } = useAccount();
   const { data: walletClient } = useWalletClient();
+
   const [copied, setCopied] = useState(false);
   const [amount] = useState("");
   const [description] = useState("");
@@ -46,16 +39,25 @@ const GenerateLink = () => {
   // Token selection state
   const {
     nativeToken,
-    selectedToken, setSelectedToken,
-    customTokenAddress, setCustomTokenAddress,
-    useCustomToken, setUseCustomToken,
-    tokenVerificationState, setTokenVerificationState,
-    verifiedToken, setVerifiedToken,
+    selectedToken,
+    setSelectedToken,
+    customTokenAddress,
+    setCustomTokenAddress,
+    useCustomToken,
+    setUseCustomToken,
+    tokenVerificationState,
+    setTokenVerificationState,
+    verifiedToken,
+    setVerifiedToken,
     beginTokenRequest,
   } = usePaymentToken(chainId || 1);
+
   const [loading] = useState(false);
 
-  // const TESTNET_TOKEN = ["0xB5E9C6e57C9d312937A059089B547d0036c155C7"];
+  // Compute this condition once and reuse it.
+  const customTokenUnverified =
+    useCustomToken &&
+    (!verifiedToken || tokenVerificationState !== "success");
 
   useEffect(() => {
     setShowWalletAlert(!isConnected);
@@ -64,18 +66,10 @@ const GenerateLink = () => {
   const generateLink = () => {
     const tokenToUse = useCustomToken ? verifiedToken : selectedToken;
 
-    // Never generate a default-token link when custom-token verification
-    // is pending or has failed.
-    if (
-      useCustomToken &&
-      (!verifiedToken || tokenVerificationState !== "success")
-    ) {
-      return "";
-    }
+    // Never generate a link using an unverified custom token.
+    if (customTokenUnverified) return "";
 
-    // The app is not always at the origin root — a PR preview is served from a
-    // subdirectory — and BASE_URL is the path the bundle was built for. Built
-    // the same way as the share links in services/share.
+    // Support deployments served from a subdirectory.
     const appRoot = `${window.location.origin}${import.meta.env.BASE_URL}`;
 
     if (!tokenToUse) {
@@ -92,6 +86,7 @@ const GenerateLink = () => {
     if (amount) {
       params.append("amount", amount);
     }
+
     if (description) {
       params.append("description", description);
     }
@@ -100,59 +95,72 @@ const GenerateLink = () => {
   };
 
   const copyToClipboard = async () => {
-    if (
-      useCustomToken &&
-      (!verifiedToken || tokenVerificationState !== "success")
-    ) {
-      return;
-    }
-
     try {
       const link = generateLink();
+
+      // generateLink() returns an empty string when verification fails.
       if (!link) return;
 
       await navigator.clipboard.writeText(link);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy: ", err);
+    } catch (error) {
+      console.error("Failed to copy:", error);
+      toast.error("Failed to copy the link. Please try again.");
     }
   };
 
   const verifyToken = async (address) => {
     const isCurrent = beginTokenRequest();
+
+    // Clear any previously verified token before starting a new request.
     setVerifiedToken(null);
-    if (address.toLowerCase() === ethers.ZeroAddress && nativeToken) {
+
+    if (
+      address.toLowerCase() === ethers.ZeroAddress &&
+      nativeToken
+    ) {
       setSelectedToken(nativeToken);
       setUseCustomToken(false);
       setVerifiedToken(null);
       setTokenVerificationState("idle");
       return;
     }
+
     if (!walletClient) {
       setTokenVerificationState("error");
+      toast.error(
+        "Connect your wallet before verifying a custom token."
+      );
       return;
     }
+
     setTokenVerificationState("verifying");
 
     try {
       const provider = new BrowserProvider(walletClient);
-      const contract = new ethers.Contract(address, ERC20_ABI, provider);
+      const contract = new ethers.Contract(
+        address,
+        ERC20_ABI,
+        provider
+      );
 
-      const [symbol, name, rawDecimals] = await Promise.all([
-        contract.symbol().catch(() => "UNKNOWN"),
-        contract.name().catch(() => "Unknown Token"),
-        contract.decimals(),
-      ]);
-      const decimals = validateTokenDecimals(rawDecimals);
-
-      if (!isCurrent()) return;
-      setVerifiedToken({ address, symbol, name, decimals });
-      setTokenVerificationState("success");
+      await verifyTokenContract({
+        contract,
+        address,
+        isCurrent,
+        setVerifiedToken,
+        setTokenVerificationState,
+      });
     } catch (error) {
       if (!isCurrent()) return;
+
       console.error("Verification failed:", error);
+      setVerifiedToken(null);
       setTokenVerificationState("error");
+      toast.error(
+        "Token verification failed. Please check the address."
+      );
     }
   };
 
@@ -166,7 +174,12 @@ const GenerateLink = () => {
         />
       </div>
 
-      <div className={cn(PAGE_CONTAINER, "space-y-4 transition-all duration-300")}>
+      <div
+        className={cn(
+          PAGE_CONTAINER,
+          "space-y-4 transition-all duration-300"
+        )}
+      >
         <div className="mb-6 sm:mb-8">
           <h2 className="text-xl sm:text-2xl font-bold text-white mb-2 flex items-center gap-2 sm:gap-3">
             <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
@@ -174,6 +187,7 @@ const GenerateLink = () => {
             </div>
             Request Invoices
           </h2>
+
           <p className="text-gray-300 text-sm">
             Create a shareable link that pre-fills the invoice form with your
             details.
@@ -186,37 +200,49 @@ const GenerateLink = () => {
             <Wallet className="h-4 w-4 text-gray-600" />
             How it works
           </h4>
+
           <div className="space-y-2 text-xs sm:text-sm text-gray-600">
             <div className="flex items-start gap-2">
               <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-xs font-medium text-green-600">1</span>
+                <span className="text-xs font-medium text-green-600">
+                  1
+                </span>
               </div>
               <span>Fill your details</span>
             </div>
+
             <div className="flex items-start gap-2">
               <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-xs font-medium text-green-600">1</span>
+                <span className="text-xs font-medium text-green-600">
+                  2
+                </span>
               </div>
               <span>
                 Copy and share the generated link with your service providers
               </span>
             </div>
+
             <div className="flex items-start gap-2">
               <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-xs font-medium text-green-600">2</span>
+                <span className="text-xs font-medium text-green-600">
+                  3
+                </span>
               </div>
               <span>
-                Service providers can open the link and see a pre-filled invoice
-                form
+                Service providers can open the link and see a pre-filled
+                invoice form
               </span>
             </div>
+
             <div className="flex items-start gap-2">
               <div className="w-5 h-5 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-xs font-medium text-green-600">3</span>
+                <span className="text-xs font-medium text-green-600">
+                  4
+                </span>
               </div>
               <span>
-                They only need to fill in remaining details and connect their
-                wallet to create and send the invoice
+                They only need to fill in the remaining details and connect
+                their wallet to create and send the invoice
               </span>
             </div>
           </div>
@@ -229,6 +255,7 @@ const GenerateLink = () => {
               <Label className="text-sm font-medium text-gray-700 mb-2 block">
                 Your Wallet Address
               </Label>
+
               <Input
                 value={address || "Connect wallet to see address"}
                 readOnly
@@ -260,7 +287,6 @@ const GenerateLink = () => {
               </h3>
 
               <div className="space-y-4">
-                {/* Toggle Switch */}
                 <ToggleSwitch
                   enabled={useCustomToken}
                   onChange={(enabled) => {
@@ -278,6 +304,7 @@ const GenerateLink = () => {
                         <Label className="block text-sm font-medium text-gray-700 mb-2">
                           Choose from Available Tokens
                         </Label>
+
                         <TokenPicker
                           selected={selectedToken}
                           onSelect={(token) => {
@@ -307,25 +334,28 @@ const GenerateLink = () => {
                             <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
                               <Coins className="w-4 h-4 text-blue-600" />
                             </div>
+
                             <div>
                               <h4 className="font-medium text-blue-900 mb-1">
                                 Custom Token Setup
                               </h4>
+
                               <p className="text-sm text-blue-700 mb-2">
                                 Enter the contract address of the ERC-20 token
                                 you want to use for payments.
                               </p>
+
                               <ul className="text-xs text-blue-600 space-y-1">
                                 <li>
-                                  • Make sure the token contract is deployed and
+                                  Make sure the token contract is deployed and
                                   verified
                                 </li>
                                 <li>
-                                  • Address should start with &quot;0x&quot; followed by
-                                  40 characters
+                                  Address should start with &quot;0x&quot;
+                                  followed by 40 characters
                                 </li>
                                 <li>
-                                  • Token will be verified automatically after
+                                  Token will be verified automatically after
                                   entering
                                 </li>
                               </ul>
@@ -340,10 +370,11 @@ const GenerateLink = () => {
                             beginTokenRequest();
                             const address = e.target.value;
                             setCustomTokenAddress(address);
+
                             if (!address || !ethers.isAddress(address)) {
                               setTokenVerificationState("idle");
                               setVerifiedToken(null);
-                            } else if (ethers.isAddress(address)) {
+                            } else {
                               verifyToken(address);
                             }
                           }}
@@ -366,24 +397,29 @@ const GenerateLink = () => {
                               <div className="bg-green-50 p-4 rounded-lg border border-green-200">
                                 <div className="flex items-start gap-3">
                                   <CheckCircle2 className="h-6 w-6 text-green-500 flex-shrink-0 mt-0.5" />
+
                                   <div className="flex-1">
                                     <div className="flex items-center gap-2 mb-2">
                                       <p className="font-medium text-green-800">
                                         {verifiedToken.name} (
                                         {verifiedToken.symbol})
                                       </p>
+
                                       <Badge className="bg-green-100 text-green-700 text-xs">
                                         Verified ✓
                                       </Badge>
                                     </div>
+
                                     <div className="flex items-center gap-2 mb-2">
                                       <span className="text-sm text-green-600 font-mono">
                                         {verifiedToken.address}
                                       </span>
+
                                       <CopyButton
                                         textToCopy={verifiedToken.address}
                                       />
                                     </div>
+
                                     <p className="text-xs text-green-600">
                                       Decimals: {String(verifiedToken.decimals)}{" "}
                                       • Contract verified and ready to use
@@ -391,6 +427,7 @@ const GenerateLink = () => {
                                   </div>
                                 </div>
                               </div>
+
                               <TokenIntegrationRequest
                                 address={customTokenAddress}
                               />
@@ -401,10 +438,12 @@ const GenerateLink = () => {
                           <div className="bg-red-50 p-3 rounded-lg border border-red-100 mt-3">
                             <div className="flex items-center gap-3">
                               <XCircle className="h-5 w-5 text-red-500" />
+
                               <div>
                                 <p className="text-sm text-red-600 font-medium">
                                   Token verification failed
                                 </p>
+
                                 <p className="text-xs text-red-500 mt-1">
                                   Please check the contract address and try
                                   again. Make sure it&apos;s a valid ERC-20 token.
@@ -474,6 +513,7 @@ const GenerateLink = () => {
             <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-500/20 rounded-lg flex items-center justify-center">
               <Link className="h-3 w-3 sm:h-4 sm:w-4 text-green-500" />
             </div>
+
             <Label className="text-sm font-medium text-gray-700">
               Generated Link
             </Label>
@@ -485,13 +525,10 @@ const GenerateLink = () => {
               readOnly
               className="bg-gray-50 text-gray-600 border-gray-300 text-xs font-mono flex-1"
             />
+
             <Button
               onClick={copyToClipboard}
-              disabled={
-                !isConnected ||
-                (useCustomToken &&
-                  (!verifiedToken || tokenVerificationState !== "success"))
-              }
+              disabled={!isConnected || customTokenUnverified}
               className="bg-green-600 hover:bg-green-700 text-white flex items-center justify-center gap-2 px-4 py-2 transition-colors w-full sm:w-auto"
             >
               {copied ? (

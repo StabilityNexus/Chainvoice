@@ -11,7 +11,11 @@ import {
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
 import { usePaymentToken } from "../hooks/usePaymentToken.js";
-import { resolveTokenDecimals as resolvePaymentTokenDecimals } from "../utils/paymentToken.js";
+import {
+  resolveTokenDecimals as resolvePaymentTokenDecimals,
+  validateTokenDecimals,
+  verifyTokenContract,
+} from "../utils/paymentToken.js";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import {
   Popover,
@@ -46,8 +50,6 @@ import { computeInvoiceHash } from "../services/relay/invoiceHashUtils.js";
 import { sendEncryptedInvoice } from "../services/relay/relayInvoiceMessaging.js";
 import { fetchPublicKeyFromChain } from "../services/relay/relayKeyManager.js";
 
-
-
 import TokenIntegrationRequest from "@/components/TokenIntegrationRequest";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import WalletConnectionAlert from "../components/WalletConnectionAlert";
@@ -69,8 +71,12 @@ import { toInvoiceUserDetails } from "@/utils/userProfile";
 import { useUserProfile } from "@/hooks/useUserProfile";
 import OnboardingProfileDialog from "@/components/OnboardingProfileDialog";
 import SenderSummary from "@/components/SenderSummary";
-import { CARD, PAGE_CONTAINER, PAGE_HEADER, SECTION_GAP } from "@/utils/layout";
-
+import {
+  CARD,
+  PAGE_CONTAINER,
+  PAGE_HEADER,
+  SECTION_GAP,
+} from "@/utils/layout";
 import ProductAutocompleteInput from "@/components/ProductAutocompleteInput";
 import { useProductCatalog } from "@/hooks/useProductCatalog";
 import {
@@ -87,15 +93,6 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
   8453: "https://mainnet.base.org",
   11155111: "https://ethereum-sepolia-rpc.publicnode.com",
   5115: "https://rpc.testnet.citrea.xyz",
-};
-
-// ERC-20 decimals are uint8 values. Reject malformed or unsupported values.
-const validateTokenDecimals = (decimals) => {
-  const value = Number(decimals);
-  if (!Number.isInteger(value) || value < 0 || value > 255) {
-    throw new Error(`Unsupported ERC-20 decimals value: ${decimals}`);
-  }
-  return value;
 };
 
 function CreateInvoicesBatch() {
@@ -388,42 +385,60 @@ function CreateInvoicesBatch() {
   // Token verification
   const verifyToken = async (address) => {
     const isCurrent = beginTokenRequest();
-    if (address.toLowerCase() === ethers.ZeroAddress && nativeToken) {
+
+    if (
+      address.toLowerCase() === ethers.ZeroAddress &&
+      nativeToken
+    ) {
       setSelectedToken(nativeToken);
       setUseCustomToken(false);
       setVerifiedToken(null);
       setTokenVerificationState("idle");
       return;
     }
+
+    setVerifiedToken(null);
     setTokenVerificationState("verifying");
 
     try {
-      if (typeof window !== "undefined" && window.ethereum) {
-        const provider = new BrowserProvider(window.ethereum);
-        const contract = new ethers.Contract(address, ERC20_ABI, provider);
-
-        const [symbol, name, rawDecimals] = await Promise.all([
-          contract.symbol().catch(() => "UNKNOWN"),
-          contract.name().catch(() => "Unknown Token"),
-          contract.decimals(),
-        ]);
-        const decimals = validateTokenDecimals(rawDecimals);
-
-        if (!isCurrent()) return;
-        setVerifiedToken({ address, symbol, name, decimals });
-        setTokenVerificationState("success");
-        toast.success(`Token verified: ${name} (${symbol})`);
-      } else {
-        console.error("No Ethereum provider found");
-        setTokenVerificationState("error");
-        toast.error("No Ethereum provider found");
+      if (
+        typeof window === "undefined" ||
+        !window.ethereum
+      ) {
+        throw new Error("No Ethereum provider found");
       }
+
+      const provider = new BrowserProvider(window.ethereum);
+      const contract = new ethers.Contract(
+        address,
+        ERC20_ABI,
+        provider
+      );
+
+      const token = await verifyTokenContract({
+        contract,
+        address,
+        isCurrent,
+        setVerifiedToken,
+        setTokenVerificationState,
+      });
+
+      if (!token || !isCurrent()) return;
+
+      toast.success(
+        `Token verified: ${token.name} (${token.symbol})`
+      );
     } catch (error) {
       if (!isCurrent()) return;
+
       console.error("Verification failed:", error);
       setVerifiedToken(null);
       setTokenVerificationState("error");
-      toast.error("Token verification failed. Please check the address.");
+      toast.error(
+        error?.message === "No Ethereum provider found"
+          ? "No Ethereum provider found"
+          : "Token verification failed. Please check the address."
+      );
     }
   };
 
@@ -511,9 +526,6 @@ function CreateInvoicesBatch() {
       setLoading(true);
       toast("Starting batch invoice creation...");
 
-      const provider = new BrowserProvider(walletClient);
-      const signer = await provider.getSigner();
-
       if (
         useCustomToken &&
         (!verifiedToken || tokenVerificationState !== "success")
@@ -521,6 +533,9 @@ function CreateInvoicesBatch() {
         toast.error("Verify the custom token before creating invoices");
         return;
       }
+
+      const provider = new BrowserProvider(walletClient);
+      const signer = await provider.getSigner();
 
       const paymentToken = useCustomToken ? verifiedToken : selectedToken;
 
@@ -533,10 +548,6 @@ function CreateInvoicesBatch() {
       try {
         tokenDecimals = validateTokenDecimals(paymentToken.decimals);
       } catch {
-        toast.error("Selected token has invalid decimals");
-        return;
-      }
-      if (!Number.isInteger(tokenDecimals) || tokenDecimals < 0 || tokenDecimals > 255) {
         toast.error("Selected token has invalid decimals");
         return;
       }
