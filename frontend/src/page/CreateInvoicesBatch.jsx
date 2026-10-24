@@ -91,6 +91,14 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
   5115: "https://rpc.testnet.citrea.xyz",
 };
 
+const formatAmountForDisplay = (value) => {
+  const amount = String(value ?? "0");
+
+  if (!amount.includes(".")) return amount;
+
+  return amount.replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
+};
+
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
   const { isConnected, chainId } = useAccount();
@@ -813,9 +821,17 @@ function CreateInvoicesBatch() {
     await createInvoicesRequest();
   };
 
+  // Sum invoice totals using integer base units to avoid floating-point precision loss.
   const totalBatchAmount = invoiceRows.reduce((sum, row) => {
-    return sum + (parseFloat(row.totalAmountDue) || 0);
-  }, 0);
+    try {
+      return sum + ethers.parseUnits(
+        String(row.totalAmountDue ?? "0"),
+        INVOICE_DECIMALS
+      );
+    } catch {
+      return sum;
+    }
+  }, 0n);
 
   const validInvoices = invoiceRows.filter(
     (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
@@ -936,7 +952,7 @@ function CreateInvoicesBatch() {
             </div>
             <div>
               <div className="text-xl sm:text-2xl font-bold">
-                {totalBatchAmount.toFixed(4)}
+                {formatAmountForDisplay(formatUnits(totalBatchAmount, INVOICE_DECIMALS))}
               </div>
               <div className="text-gray-300 text-xs sm:text-sm">
                 Total Amount (
@@ -1186,7 +1202,7 @@ function CreateInvoicesBatch() {
                           : "No client"}
                       </div>
                       <div className="font-semibold text-gray-800">
-                        {parseFloat(row.totalAmountDue).toFixed(4)}{" "}
+                        {formatAmountForDisplay(row.totalAmountDue)}{" "}
                         {useCustomToken
                           ? verifiedToken?.symbol || "TOKEN"
                           : selectedToken?.symbol || "TOKEN"}
@@ -1527,7 +1543,7 @@ function CreateInvoicesBatch() {
                                   Amount
                                 </label>
                                 <div className="bg-gray-100 px-3 py-2 rounded border text-gray-700 font-mono text-sm">
-                                  {item.amount === "" ? "-" : (Number(item.amount) || 0).toFixed(4)}
+                                  {item.amount === "" ? "-" : formatAmountForDisplay(item.amount)}
                                 </div>
                               </div>
                               <div className="md:col-span-1 flex justify-center md:justify-center">
@@ -1578,7 +1594,7 @@ function CreateInvoicesBatch() {
                               Total:
                             </span>
                             <span className="font-bold text-base sm:text-lg text-gray-900">
-                              {parseFloat(row.totalAmountDue).toFixed(4)}{" "}
+                              {formatAmountForDisplay(row.totalAmountDue)}{" "}
                               {useCustomToken
                                 ? verifiedToken?.symbol || "TOKEN"
                                 : selectedToken?.symbol || "TOKEN"}
