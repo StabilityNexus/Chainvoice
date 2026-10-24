@@ -102,6 +102,23 @@ describe("resolveTokenDecimals", () => {
     ).toBe(18);
     expect(readDecimals).toHaveBeenCalledTimes(1);
   });
+
+  it("does not invent decimals when an ERC-20 decimals read fails", async () => {
+    const readDecimals = jest.fn().mockRejectedValue(
+      new Error("decimals call failed")
+    );
+
+    await expect(
+      resolveTokenDecimals(
+        erc20Address,
+        undefined,
+        sepolia.nativeCurrency,
+        readDecimals
+      )
+    ).rejects.toThrow("decimals call failed");
+
+    expect(readDecimals).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("getLinkChainMismatch", () => {
