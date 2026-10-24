@@ -142,6 +142,25 @@ describe("generateInvoicePDF", () => {
     expect(text).toContain("(25 USDC + 0.0005 ETH)");
   });
 
+
+  it("keeps totals and footer separate for a 10-item invoice", async () => {
+    const pdf = await generateInvoicePDF(
+      makeInvoice({ items: makeItems(10) }),
+      FEE_WEI
+    );
+
+    expect(pdf.internal.getNumberOfPages()).toBe(1);
+
+    const text = pdfText(pdf);
+    for (let i = 1; i <= 10; i++) {
+      expect(text).toContain(`(Line item ${i})`);
+    }
+
+    expect(text).toContain("(Subtotal:)");
+    expect(text).toContain("(Network Fee:)");
+    expect(text).toContain("(Page 1 of 1)");
+  });
+
   it("paginates a long item list and numbers every page", async () => {
     const pdf = await generateInvoicePDF(makeInvoice({ items: makeItems(40) }), FEE_WEI);
 
