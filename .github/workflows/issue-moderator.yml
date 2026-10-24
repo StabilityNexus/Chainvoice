@@ -1,8 +1,11 @@
 name: "Issue AI Moderator (Close & Lock)"
 
+# ai-moderator only evaluates newly opened issues, so edits aren't a trigger.
 on:
   issues:
-    types: [opened, edited]
+    types: [opened]
+
+permissions: {}
 
 jobs:
   moderate:
@@ -32,8 +35,7 @@ jobs:
             const labels = issue.labels.map(l => l.name);
             const isSpam = labels.includes('ai-slop') || labels.includes('spam');
 
-            // Edits re-trigger this workflow, so skip issues that were already closed
-            if (isSpam && issue.state === 'open') {
+            if (isSpam) {
               console.log(`Flagged content found on issue #${context.issue.number}. Closing and locking.`);
 
               // 1. Comment on the issue explaining why it's closed
