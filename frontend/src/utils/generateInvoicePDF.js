@@ -406,7 +406,8 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   pdf.text(`Issued: ${issueDate}`, 25, yPos + 5.5);
   pdf.text(`Due: ${dueDate}`, 160, yPos + 5.5);
 
-  yPos += 2;
+  // The date box is 8 mm high; leave the intended 2 mm gap.
+  yPos += 10;
 
   const colPositions = {
     description: 25,
@@ -455,7 +456,13 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
 
   if (invoice.items && invoice.items.length > 0) {
     invoice.items.forEach((item) => {
-      if (yPos + rowHeight > 250) {
+      const totalsSectionHeight = 33; // 5 mm gap + 28 mm totals box
+      const footerTop = 280;
+      const footerSafetyGap = 10;
+      const tableBottomLimit =
+        footerTop - footerSafetyGap - totalsSectionHeight;
+
+      if (yPos + rowHeight > tableBottomLimit) {
         pdf.setDrawColor(...borderGray);
         pdf.setLineWidth(0.5);
         pdf.line(20, yPos, 190, yPos);

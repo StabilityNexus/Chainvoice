@@ -142,23 +142,38 @@ describe("generateInvoicePDF", () => {
     expect(text).toContain("(25 USDC + 0.0005 ETH)");
   });
 
-
-  it("keeps totals and footer separate for a 10-item invoice", async () => {
+  it("keeps totals above the footer for a large invoice", async () => {
     const pdf = await generateInvoicePDF(
-      makeInvoice({ items: makeItems(10) }),
+      makeInvoice({ items: makeItems(32) }),
       FEE_WEI
     );
 
-    expect(pdf.internal.getNumberOfPages()).toBe(1);
+    const pages = pdf.internal.getNumberOfPages();
+    expect(pages).toBeGreaterThan(1);
 
     const text = pdfText(pdf);
-    for (let i = 1; i <= 10; i++) {
+
+    for (let i = 1; i <= 32; i++) {
       expect(text).toContain(`(Line item ${i})`);
     }
 
     expect(text).toContain("(Subtotal:)");
     expect(text).toContain("(Network Fee:)");
-    expect(text).toContain("(Page 1 of 1)");
+
+    for (let page = 1; page <= pages; page++) {
+      expect(text).toContain(`(Page ${page} of ${pages})`);
+    }
+
+    // The totals box must not extend into the footer area.
+    const finalPage = pdf.internal.pages[pages];
+    const pageContent = finalPage.join("\n");
+
+    const totalsTextIndex = pageContent.indexOf("(Subtotal:)");
+    const footerTextIndex = pageContent.indexOf(`(Page ${pages} of ${pages})`);
+
+    expect(totalsTextIndex).toBeGreaterThanOrEqual(0);
+    expect(footerTextIndex).toBeGreaterThanOrEqual(0);
+    expect(totalsTextIndex).toBeLessThan(footerTextIndex);
   });
 
   it("paginates a long item list and numbers every page", async () => {
