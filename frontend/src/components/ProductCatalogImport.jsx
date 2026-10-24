@@ -327,7 +327,7 @@ export default function ProductCatalogImport() {
                 variant="outline"
                 onClick={handleRefresh}
                 disabled={isProcessing || !hasSavedUrlSource}
-                className="shrink-0 text-gray-700 border-gray-400 hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60"
+                className="shrink-0 disabled:opacity-60"
                 title={hasSavedUrlSource ? (isLocalCatalogActive ? 'Load saved URL data (replaces active local file in search)' : 'Refresh products from saved URL') : 'Load from URL first to enable refresh'}
               >
                 <RefreshCw className={`w-4 h-4 ${isProcessing ? 'animate-spin' : ''}`} />
