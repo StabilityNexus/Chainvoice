@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { FiShield, FiLock, FiZap } from "react-icons/fi";
+import { FiShield, FiLock, FiKey, FiCheckCircle } from "react-icons/fi";
 import { SiEthereum } from "react-icons/si";
 import TokenCarousel from "@/components/TokenCarousel";
 import Footer from "@/components/Footer";
@@ -30,8 +30,8 @@ function Landing() {
               </motion.h1>
 
               <p className="text-xl text-gray-300 leading-relaxed">
-                End-to-end encrypted, multi-chain invoicing
-                and support for 1000+ ERC20 tokens.
+                Invoices recorded on-chain, delivered end-to-end encrypted,
+                and paid in a native coin or any ERC-20 token.
               </p>
 
               <div className="flex flex-col space-y-6">
@@ -46,7 +46,7 @@ function Landing() {
                   </div>
                   <div className="flex items-center space-x-2 bg-black/30 px-3 py-1.5 rounded-full">
                     <FiLock className="text-green-400" />
-                    <span>End-to-End Security</span>
+                    <span>Non-Custodial</span>
                   </div>
                 </div>
               </div>
@@ -94,7 +94,7 @@ function Landing() {
               viewport={{ once: true }}
               className="text-4xl font-bold mb-6"
             >
-              <span className="text-green-400">Military-Grade Security</span>
+              <span className="text-green-400">Private by Design</span>
             </motion.h2>
           </div>
 
@@ -102,21 +102,21 @@ function Landing() {
             {[
               {
                 icon: <FiShield className="w-8 h-8" />,
-                title: "Decentralized Encryption",
+                title: "End-to-End Encryption",
                 description:
-                  "Invoice data is encrypted using a distributed key management system, ensuring no single party can access sensitive information without proper authorization.",
+                  "Invoice details are encrypted in your browser for the recipient's key (ECIES over secp256k1 with AES-256-GCM). The relay that delivers them only ever sees ciphertext.",
               },
               {
-                icon: <FiLock className="w-8 h-8" />,
-                title: "Conditional Access",
+                icon: <FiKey className="w-8 h-8" />,
+                title: "Keys From Your Wallet",
                 description:
-                  "Define precise access conditions using blockchain parameters. Payments automatically decrypt invoice details when conditions are met.",
+                  "Your messaging key is derived from a wallet signature, and its public half is registered on-chain. There are no accounts or passwords to manage.",
               },
               {
-                icon: <FiZap className="w-8 h-8" />,
-                title: "Cross-Chain Compatibility",
+                icon: <FiCheckCircle className="w-8 h-8" />,
+                title: "Verified Against the Chain",
                 description:
-                  "Our encryption integration works seamlessly across all supported chains, maintaining security consistency throughout the ecosystem.",
+                  "Only a hash of the details is stored on-chain. Every invoice you open is checked against it, so edited or forged details are flagged.",
               },
             ].map((feature, index) => (
               <motion.div
@@ -153,7 +153,7 @@ function Landing() {
               Universal <span className="text-green-400">Token Support</span>
             </motion.h2>
             <p className="text-xl text-gray-400 max-w-2xl mx-auto leading-relaxed">
-              encryption and security
+              Bill and get paid in the coins and tokens you already use
             </p>
           </div>
 
@@ -172,28 +172,27 @@ function Landing() {
               </motion.h3>
 
               <p className="text-gray-400 mb-6 leading-relaxed">
-                Chainvoice&apos;s smart contract architecture automatically handles
-                token conversions and verifications, while end-to-end encryption ensures
-                all payment details remain secure until settlement. Our
-                system supports:
+                Each invoice names one payment token, and the smart contract only
+                marks it paid when the exact amount arrives. Chainvoice
+                supports:
               </p>
 
               <ul className="space-y-3 text-gray-300">
                 <li className="flex items-start">
                   <span className="text-green-400 mr-2">✓</span>
-                  <span>All standard ERC20 tokens across EVM chains</span>
+                  <span>Any standard ERC-20 token, from the token list or by contract address</span>
                 </li>
                 <li className="flex items-start">
                   <span className="text-green-400 mr-2">✓</span>
-                  <span>Native chain currencies (ETH, MATIC, etc.)</span>
+                  <span>The chain&apos;s native coin, such as ETH or ETC</span>
                 </li>
                 <li className="flex items-start">
                   <span className="text-green-400 mr-2">✓</span>
-                  <span>Stablecoins with automatic price feeds</span>
+                  <span>Paying several invoices in one transaction</span>
                 </li>
                 <li className="flex items-start">
                   <span className="text-green-400 mr-2">✓</span>
-                  <span>Custom token whitelisting for enterprise clients</span>
+                  <span>Blocking payments that would arrive short, such as fee-on-transfer tokens</span>
                 </li>
               </ul>
             </div>
@@ -210,7 +209,7 @@ function Landing() {
                 className="rounded-xl border border-gray-700/50 shadow-xl"
               />
               <div className="absolute -bottom-4 -left-4 bg-[#1E2029] px-3 py-1.5 rounded-lg border border-gray-700/50 shadow-sm flex gap-3 items-center">
-                <span className="text-xs font-bold"> 1000+ ERC20 Tokens</span>
+                <span className="text-xs font-bold">Any ERC-20 Token</span>
               </div>
             </motion.div>
           </div>
@@ -234,9 +233,8 @@ function Landing() {
             </h2>
 
             <p className="text-xl text-gray-400 max-w-3xl mx-auto leading-relaxed">
-              Join thousands of Web3-native businesses already using Chainvoice
-              for secure, encrypted invoicing with support for all major ERC20
-              tokens across multiple chains.
+              Connect a wallet, pick a token, and send your client an encrypted
+              invoice they can pay in one transaction.
             </p>
           </motion.div>
         </div>
