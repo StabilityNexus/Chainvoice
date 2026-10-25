@@ -1,8 +1,9 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { getInputWheelHandler } from "@/utils/numberInputWheel"
 
-const Input = React.forwardRef(({ className, type, ...props }, ref) => {
+const Input = React.forwardRef(({ className, type, onWheel, ...props }, ref) => {
   return (
     (<input
       type={type}
@@ -11,6 +12,7 @@ const Input = React.forwardRef(({ className, type, ...props }, ref) => {
         className
       )}
       ref={ref}
+      onWheel={getInputWheelHandler(type, onWheel)}
       {...props} />)
   );
 })

@@ -25,7 +25,6 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import {
-  Badge,
   CalendarIcon,
   CheckCircle2,
   Coins,
@@ -45,7 +44,7 @@ import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 
 import WalletConnectionAlert from "../components/WalletConnectionAlert";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
-import { CopyButton } from "@/components/ui/copyButton";
+import CustomTokenDetails from "@/components/CustomTokenDetails";
 import CountryPicker from "@/components/CountryPicker";
 import { useTokenList, isTestnet } from "@/hooks/useTokenList";
 import {
@@ -1307,34 +1306,7 @@ function CreateInvoice() {
                         {tokenVerificationState === "success" &&
                           verifiedToken && (
                             <div className="mt-3">
-                              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                                <div className="flex items-start gap-3">
-                                  <CheckCircle2 className="h-6 w-6 text-green-500 flex-shrink-0 mt-0.5" />
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <p className="font-medium text-green-800">
-                                        {verifiedToken.name} (
-                                        {verifiedToken.symbol})
-                                      </p>
-                                      <Badge className="bg-green-100 text-green-700 text-xs">
-                                        Verified ✓
-                                      </Badge>
-                                    </div>
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-sm text-green-600 font-mono">
-                                        {verifiedToken.address}
-                                      </span>
-                                      <CopyButton
-                                        textToCopy={verifiedToken.address}
-                                      />
-                                    </div>
-                                    <p className="text-xs text-green-600">
-                                      Decimals: {String(verifiedToken.decimals)} •
-                                      Contract verified and ready to use
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
+                              <CustomTokenDetails token={verifiedToken} />
                               <TokenIntegrationRequest
                                 address={customTokenAddress}
                               />

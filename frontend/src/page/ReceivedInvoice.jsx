@@ -1788,9 +1788,9 @@ function ReceivedInvoice() {
                                     <div className="mt-1">
                                       <Chip
                                         icon={<LayersIcon />}
-                                        label={`Batch #${invoice.batchInfo.batchId.slice(
-                                          -4
-                                        )} (${invoice.batchInfo.index + 1}/${invoice.batchInfo.batchSize
+                                        label={`Batch #${String(
+                                          invoice.batchInfo.batchId
+                                        ).slice(-4)} (${invoice.batchInfo.index + 1}/${invoice.batchInfo.batchSize
                                           })`}
                                         size="small"
                                         variant="outlined"

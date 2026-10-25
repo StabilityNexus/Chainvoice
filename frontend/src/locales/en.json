@@ -180,5 +180,10 @@
       "walletCancelled": "You declined the cancellation in your wallet.",
       "generic": "Failed to cancel the invoice. Please try again."
     }
+  },
+  "customToken": {
+    "unlisted": "Not in token list",
+    "decimals": "Decimals: {{decimals}}",
+    "checkAddress": "Anyone can deploy a token with any name. Make sure this address belongs to the token you expect before using it."
   }
 }

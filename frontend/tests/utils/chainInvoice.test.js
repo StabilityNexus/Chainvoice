@@ -158,6 +158,22 @@ describe("buildChainInvoice", () => {
     expect(isInvoicePayable(invoice)).toBe(false);
   });
 
+  test.each([
+    ["empty", {}],
+    ["with a numeric id", { batchId: 12345, batchSize: 2, index: 0 }],
+  ])("does not show committed batch info that is %s", (_, batchInfo) => {
+    // The Received page slices batchInfo.batchId when it renders the row.
+    const payload = makePayload({ batchInfo });
+    const invoice = buildChainInvoice(makeRaw({ payload }), payload, usdcToken);
+
+    expect(invoice).toMatchObject({
+      _onChainOnly: true,
+      _hashMismatch: false,
+      _payloadMismatch: "invoice format",
+    });
+    expect(invoice.batchInfo).toBeUndefined();
+  });
+
   test("flags a payload whose decimals differ from the token contract's", () => {
     // Self-consistent at 18 decimals, but the token has 6, so the contract
     // charges 10^12 USDC rather than the 1 USDC the payload shows.

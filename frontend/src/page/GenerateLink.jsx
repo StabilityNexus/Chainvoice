@@ -7,7 +7,6 @@ import {
   Check,
   Wallet,
   Loader2,
-  CheckCircle2,
   XCircle,
   Coins,
 } from "lucide-react";
@@ -18,8 +17,7 @@ import { Label } from "../components/ui/label";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
 import TokenIntegrationRequest from "@/components/TokenIntegrationRequest";
 import TokenPicker, { ToggleSwitch } from "@/components/TokenPicker";
-import { CopyButton } from "@/components/ui/copyButton";
-import { Badge } from "@/components/ui/badge";
+import CustomTokenDetails from "@/components/CustomTokenDetails";
 import { BrowserProvider, ethers } from "ethers";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import { PAGE_CONTAINER } from "@/utils/layout";
@@ -69,18 +67,22 @@ const GenerateLink = () => {
     // Never generate a link using an unverified custom token.
     if (customTokenUnverified) return "";
 
+    // The link bills the connected wallet on its chain; without one it would
+    // carry an empty address and a guessed chain.
+    if (!isConnected || !address || !chainId) return "";
+
     // Support deployments served from a subdirectory.
     const appRoot = `${window.location.origin}${import.meta.env.BASE_URL}`;
 
     if (!tokenToUse) {
-      return `${appRoot}#/dashboard/create?clientAddress=${address || ""}`;
+      return `${appRoot}#/dashboard/create?clientAddress=${address}`;
     }
 
     const params = new URLSearchParams({
-      clientAddress: address || "",
+      clientAddress: address,
       tokenAddress: tokenToUse.address || tokenToUse.contract_address,
       customToken: useCustomToken ? "true" : "false",
-      chain: chainId?.toString() || "1",
+      chain: chainId.toString(),
     });
 
     if (amount) {
@@ -394,39 +396,7 @@ const GenerateLink = () => {
                         {tokenVerificationState === "success" &&
                           verifiedToken && (
                             <div className="mt-3">
-                              <div className="bg-green-50 p-4 rounded-lg border border-green-200">
-                                <div className="flex items-start gap-3">
-                                  <CheckCircle2 className="h-6 w-6 text-green-500 flex-shrink-0 mt-0.5" />
-
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <p className="font-medium text-green-800">
-                                        {verifiedToken.name} (
-                                        {verifiedToken.symbol})
-                                      </p>
-
-                                      <Badge className="bg-green-100 text-green-700 text-xs">
-                                        Verified ✓
-                                      </Badge>
-                                    </div>
-
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-sm text-green-600 font-mono">
-                                        {verifiedToken.address}
-                                      </span>
-
-                                      <CopyButton
-                                        textToCopy={verifiedToken.address}
-                                      />
-                                    </div>
-
-                                    <p className="text-xs text-green-600">
-                                      Decimals: {String(verifiedToken.decimals)}{" "}
-                                      • Contract verified and ready to use
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
+                              <CustomTokenDetails token={verifiedToken} />
 
                               <TokenIntegrationRequest
                                 address={customTokenAddress}
@@ -522,6 +492,7 @@ const GenerateLink = () => {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-3">
             <Input
               value={generateLink()}
+              placeholder="Connect your wallet to generate a link"
               readOnly
               className="bg-gray-50 text-gray-600 border-gray-300 text-xs font-mono flex-1"
             />

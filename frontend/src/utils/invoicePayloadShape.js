@@ -48,6 +48,23 @@ function isFlatRecord(value, textFields) {
 }
 
 /**
+ * Batch metadata as CreateInvoicesBatch writes it. The Received page slices
+ * `batchId` and does arithmetic on `index`, so a flat object is not enough.
+ */
+function isBatchInfo(value) {
+  return (
+    isFlatRecord(value, ["batchId", "batchType"]) &&
+    typeof value.batchId === "string" &&
+    value.batchId !== "" &&
+    Number.isInteger(value.batchSize) &&
+    value.batchSize >= 1 &&
+    Number.isInteger(value.index) &&
+    value.index >= 0 &&
+    value.index < value.batchSize
+  );
+}
+
+/**
  * Name the first part of the payload with the wrong shape, or null.
  *
  * @param {*} payload - an invoice payload from the relay, a share link or a backup
@@ -77,7 +94,7 @@ export function getPayloadShapeError(payload) {
     return "items";
   }
 
-  if (!isAbsent(payload.batchInfo) && !isFlatRecord(payload.batchInfo, [])) {
+  if (!isAbsent(payload.batchInfo) && !isBatchInfo(payload.batchInfo)) {
     return "batchInfo";
   }
 
