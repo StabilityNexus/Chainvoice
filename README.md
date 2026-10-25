@@ -197,7 +197,13 @@ npm run dev
 ### Frontend Configuration (`frontend/.env`)  
 ```.env
 #Ethereum Sepolia (11155111)
-VITE_CONTRACT_ADDRESS_11155111=0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b
+VITE_CONTRACT_ADDRESS_11155111=0xff10Cda545E10656C2DcBEAB6C9eC375E136363a
+#Mordor Testnet (63)
+VITE_CONTRACT_ADDRESS_63=0xeF6669DDEd0078A8Cfdd758A40D194b1cC2120d2
+#Polygon Amoy (80002)
+VITE_CONTRACT_ADDRESS_80002=0xeF6669DDEd0078A8Cfdd758A40D194b1cC2120d2
+#Base (8453) — blank until deployed
+VITE_CONTRACT_ADDRESS_8453=
 #Ethereum Classic (61) — blank until redeployed, see note below
 VITE_CONTRACT_ADDRESS_61=
 #Polygon Mainnet (137) — blank until redeployed, see note below
@@ -206,8 +212,8 @@ VITE_CONTRACT_ADDRESS_137=
 
 > ⚠️ Renaming the key registry functions changed their selectors, so only a
 > contract deployed from the current `contracts/src/Chainvoice.sol` will answer.
-> The Sepolia address above is such a deployment — see
-> [Deployments.md](./Deployments.md). Keys registered against an earlier
+> The addresses above are such deployments, and
+> [Deployments.md](./Deployments.md) is the record of every deployment. Keys registered against an earlier
 > deployment do not carry over; those users must register again.
 >
 > ⚠️ Ethereum Classic and Polygon are left blank on purpose. Both still run the
@@ -237,9 +243,17 @@ VITE_RELAY_TIMEOUT_MS=
 
 ### Current (hash-based invoice storage)
 Stores only `keccak256` of the invoice data on-chain and exposes the public key
-registry. Addresses are tracked in [Deployments.md](./Deployments.md).
+registry. [Deployments.md](./Deployments.md) is the full record, including
+constructor parameters and retired addresses.
 - Ethereum Sepolia (11155111)
-```0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b```
+```0xff10Cda545E10656C2DcBEAB6C9eC375E136363a```
+- Mordor Testnet (63)
+```0xeF6669DDEd0078A8Cfdd758A40D194b1cC2120d2```
+- Polygon Amoy (80002)
+```0xeF6669DDEd0078A8Cfdd758A40D194b1cC2120d2```
+
+Retired, kept for reference: Ethereum Sepolia ```0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b```
+(older ABI with `owner` and `fee`, which the current frontend cannot use).
 
 ### v1 (Mainnet Deployment — Jan 1)
 Stores the invoice payload on-chain as strings. Superseded, kept for reference.
