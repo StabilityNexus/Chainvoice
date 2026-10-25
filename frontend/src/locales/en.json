@@ -185,5 +185,8 @@
     "unlisted": "Not in token list",
     "decimals": "Decimals: {{decimals}}",
     "checkAddress": "Anyone can deploy a token with any name. Make sure this address belongs to the token you expect before using it."
+  },
+  "generateLink": {
+    "connectWalletPlaceholder": "Connect your wallet to generate a link"
   }
 }

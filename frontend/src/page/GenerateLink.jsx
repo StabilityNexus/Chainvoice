@@ -24,10 +24,12 @@ import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { verifyTokenContract } from "../utils/paymentToken.js";
+import { useTranslation } from "../hooks/useTranslation";
 
 const GenerateLink = () => {
   const { address, isConnected, chainId } = useAccount();
   const { data: walletClient } = useWalletClient();
+  const { t } = useTranslation("generateLink");
 
   const [copied, setCopied] = useState(false);
   const [amount] = useState("");
@@ -492,7 +494,7 @@ const GenerateLink = () => {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-3">
             <Input
               value={generateLink()}
-              placeholder="Connect your wallet to generate a link"
+              placeholder={t("connectWalletPlaceholder")}
               readOnly
               className="bg-gray-50 text-gray-600 border-gray-300 text-xs font-mono flex-1"
             />
