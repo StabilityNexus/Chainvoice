@@ -68,25 +68,25 @@ function About() {
       icon: <FiShield className="w-8 h-8 text-green-400" />,
       title: "Decentralized & Secure",
       description:
-        "Your financial data is stored on the blockchain, ensuring immutability and resistance to censorship.",
+        "Each invoice's parties, amount, token and a hash of its details are recorded on-chain, so no one can quietly change them. The details themselves travel encrypted.",
     },
     {
       icon: <FiZap className="w-8 h-8 text-green-400" />,
       title: "Instant Settlements",
       description:
-        "Bypass traditional banking delays. Payments are processed in seconds directly to your wallet.",
+        "Bypass traditional banking delays. A payment goes straight to the issuer's wallet in a single transaction.",
     },
     {
       icon: <FiGlobe className="w-8 h-8 text-green-400" />,
       title: "Global Reach",
       description:
-        "Send and receive invoices anywhere in the world without worrying about currency conversion fees or borders.",
+        "Send and receive invoices anywhere in the world, with no bank or border in between.",
     },
     {
       icon: <FiCode className="w-8 h-8 text-green-400" />,
       title: "Smart Invoicing",
       description:
-        "Automated logic via smart contracts ensures correct payment amounts and transparent transaction history.",
+        "The smart contract only marks an invoice paid when the exact amount arrives, leaving a public payment history.",
     },
   ];
 
@@ -255,9 +255,14 @@ function About() {
                 The Chainvoice smart contracts are fully open-source and
                 auditable.
               </p>
-              <div className="px-4 py-2 bg-black/30 rounded font-mono text-xs text-green-400 break-all">
-                0x...ContractAddress
-              </div>
+              <a
+                href="https://github.com/StabilityNexus/Chainvoice/blob/main/Deployments.md"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center px-4 py-2 bg-black/30 rounded font-mono text-xs text-green-400 hover:text-green-300 transition-colors"
+              >
+                Deployed addresses <FiArrowRight className="ml-2" />
+              </a>
             </motion.div>
 
             {/* Desktop View: Full Code Block */}
@@ -273,7 +278,7 @@ function About() {
                   <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                   <div className="w-3 h-3 rounded-full bg-green-500"></div>
                 </div>
-                <span className="text-gray-500">Invoice.sol</span>
+                <span className="text-gray-500">Chainvoice.sol</span>
               </div>
               <div className="p-6 space-y-2 text-[#d4d4d4]">
                 <p>
@@ -281,48 +286,36 @@ function About() {
                   <span className="text-[#DCDCAA]">createInvoice</span>(
                 </p>
                 <p className="pl-4">
-                  <span className="text-[#4EC9B0]">address</span>{" "}
-                  <span className="text-[#9CDCFE]">_recipient</span>,
+                  <span className="text-[#4EC9B0]">address</span> <span className="text-[#9CDCFE]">to</span>,
                 </p>
                 <p className="pl-4">
-                  <span className="text-[#4EC9B0]">uint256</span>{" "}
-                  <span className="text-[#9CDCFE]">_amount</span>,
+                  <span className="text-[#4EC9B0]">uint256</span> <span className="text-[#9CDCFE]">amountDue</span>,
                 </p>
                 <p className="pl-4">
-                  <span className="text-[#4EC9B0]">string</span>{" "}
-                  <span className="text-[#C586C0]">memory</span>{" "}
-                  <span className="text-[#9CDCFE]">_metadata</span>
+                  <span className="text-[#4EC9B0]">address</span> <span className="text-[#9CDCFE]">tokenAddress</span>,
+                </p>
+                <p className="pl-4">
+                  <span className="text-[#4EC9B0]">bytes32</span> <span className="text-[#9CDCFE]">invoiceDataHash</span>
                 </p>
                 <p>
-                  ) <span className="text-[#C586C0]">public</span>{" "}
-                  <span className="text-[#C586C0]">returns</span> (
-                  <span className="text-[#4EC9B0]">uint256</span>) {"{"}
-                </p>
-                <p className="pl-4 text-[#6A9955]">{"// Verify inputs"}</p>
-                <p className="pl-4">
-                  <span className="text-[#DCDCAA]">require</span>(_amount {">"}{" "}
-                  <span className="text-[#B5CEA8]">0</span>,{" "}
-                  <span className="text-[#CE9178]">&quot;Invalid amount&quot;</span>);
+                  ) <span className="text-[#C586C0]">external</span> {"{"}
                 </p>
                 <p className="pl-4">
-                  <span className="text-[#DCDCAA]">require</span>(_recipient !=
-                  <span className="text-[#4EC9B0]">address</span>(
-                  <span className="text-[#B5CEA8]">0</span>),{" "}
-                  <span className="text-[#CE9178]">&quot;Invalid address&quot;</span>);
+                  <span className="text-[#C586C0]">if</span> (to == <span className="text-[#4EC9B0]">address</span>(<span className="text-[#B5CEA8]">0</span>)){" "}
+                  <span className="text-[#C586C0]">revert</span> <span className="text-[#DCDCAA]">ZeroAddress</span>();
                 </p>
-                <p className="pl-4">&nbsp;</p>
+                <p className="pl-4">
+                  <span className="text-[#C586C0]">if</span> (amountDue == <span className="text-[#B5CEA8]">0</span>){" "}
+                  <span className="text-[#C586C0]">revert</span> <span className="text-[#DCDCAA]">InvalidAmount</span>();
+                </p>
                 <p className="pl-4 text-[#6A9955]">
-                  {"// Emit event for indexers"}
+                  {"// Only a hash of the invoice details goes on-chain"}
                 </p>
+                <p className="pl-4 text-[#6A9955]">{"// ..."}</p>
                 <p className="pl-4">
                   <span className="text-[#C586C0]">emit</span>{" "}
-                  <span className="text-[#4EC9B0]">InvoiceCreated</span>
-                  (msg.<span className="text-[#9CDCFE]">sender</span>,
-                  _recipient, _amount);
-                </p>
-                <p className="pl-4">&nbsp;</p>
-                <p className="pl-4">
-                  <span className="text-[#C586C0]">return</span> invoiceId;
+                  <span className="text-[#4EC9B0]">InvoiceCreated</span>(invoiceId, msg.<span className="text-[#9CDCFE]">sender</span>,
+                  to, tokenAddress);
                 </p>
                 <p>{"}"}</p>
               </div>
