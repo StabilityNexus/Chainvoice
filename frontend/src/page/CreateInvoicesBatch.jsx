@@ -41,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "@/hooks/useTranslation";
 import toast from "react-hot-toast";
 import { storeInvoice } from "../services/invoiceStorage/invoiceDB.js";
 import { useTranslation } from "@/hooks/useTranslation";
@@ -97,6 +98,7 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
 };
 
 function CreateInvoicesBatch() {
+  const { t } = useTranslation();
   const { data: walletClient } = useWalletClient();
   const { isConnected, chainId } = useAccount();
   const account = useAccount();
@@ -1476,7 +1478,7 @@ function CreateInvoicesBatch() {
                                 <Input
                                   type="number"
                                   placeholder={item.discountType === "percentage" ? "0" : "Flat amount"}
-                                  className="w-full border-gray-300 text-black"
+                                  className={`w-full border-gray-300 text-black ${rowItemErrors[`${rowIndex}_${itemIndex}`]?.discount ? "border-red-500" : ""}`}
                                   name="discount"
                                   min="0"
                                   step="any"
@@ -1490,6 +1492,9 @@ function CreateInvoicesBatch() {
                                     }
                                   }}
                                 />
+                                {rowItemErrors[`${rowIndex}_${itemIndex}`]?.discount && (
+                                  <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{t(rowItemErrors[`${rowIndex}_${itemIndex}`].discount, { defaultValue: rowItemErrors[`${rowIndex}_${itemIndex}`].discount })}</span></div>
+                                )}
                               </div>
                               <div className="md:col-span-3">
                                 <label className="text-xs font-medium text-gray-600 mb-1 flex items-center justify-between md:hidden">

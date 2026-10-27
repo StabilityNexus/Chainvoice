@@ -37,6 +37,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Label } from "../components/ui/label";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { useTranslation } from "@/hooks/useTranslation";
 
 
 import TokenIntegrationRequest from "@/components/TokenIntegrationRequest";
@@ -93,6 +94,7 @@ const CHAIN_ID_TO_PUBLIC_RPC = {
 };
 
 function CreateInvoice() {
+  const { t } = useTranslation();
   const { data: walletClient } = useWalletClient();
   const { isConnected } = useAccount();
   const account = useAccount();
@@ -1512,7 +1514,7 @@ function CreateInvoice() {
                           <Input
                             type="number"
                             placeholder={itemData[index]?.discountType === "percentage" ? "0" : "Flat amount"}
-                            className="w-full border-gray-300 text-black"
+                            className={`w-full border-gray-300 text-black ${itemErrors[index]?.discount ? "border-red-500" : ""}`}
                             name="discount"
                             min="0"
                             step="any"
@@ -1524,6 +1526,9 @@ function CreateInvoice() {
                               }
                             }}
                           />
+                          {itemErrors[index]?.discount && (
+                            <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{t(itemErrors[index].discount, { defaultValue: itemErrors[index].discount })}</span></div>
+                          )}
                         </div>
                         <div>
                           <Label className="text-xs font-medium text-gray-600 mb-1 flex items-center justify-between">
@@ -1648,7 +1653,7 @@ function CreateInvoice() {
                         <Input
                           type="number"
                           placeholder={itemData[index]?.discountType === "percentage" ? "0" : "Flat amount"}
-                          className="w-full border-gray-300 text-black py-2"
+                          className={`w-full border-gray-300 text-black py-2 ${itemErrors[index]?.discount ? "border-red-500" : ""}`}
                           name="discount"
                           min="0"
                           step="any"
@@ -1660,6 +1665,9 @@ function CreateInvoice() {
                             }
                           }}
                         />
+                        {itemErrors[index]?.discount && (
+                          <div className="mt-1 flex items-center gap-1 text-xs text-red-600"><AlertCircle className="h-3 w-3 shrink-0" /><span>{t(itemErrors[index].discount, { defaultValue: itemErrors[index].discount })}</span></div>
+                        )}
                       </div>
                       <div className="col-span-3">
                         <Input
