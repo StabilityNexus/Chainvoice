@@ -4,7 +4,7 @@ All deployments of contracts in this repo, including test/beta versions, are doc
 This file lists the addresses of the contracts that have been deployed
 as well as the constructor parameters that have been used.
 
-### v2
+## v2
 
 Invoice details are stored off-chain, encrypted, with only a `bytes32` hash on-chain, and the contract has a public key registry. Every v2 contract is built from the same commit and verified with an exact match on [Sourcify](https://sourcify.dev).
 
@@ -17,7 +17,7 @@ Invoice details are stored off-chain, encrypted, with only a `bytes32` hash on-c
 | Mordor | 63 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0x9b306924Eef2f021E1BC8a54202E90057E3988d8` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Testnet (Ethereum Classic). Block 17271021. [Blockscout](https://etc-mordor.blockscout.com/address/0x9b306924Eef2f021E1BC8a54202E90057E3988d8). |
 | Polygon Amoy | 80002 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0xBee456a4eF315273E9b6bC1C9eE0737aefD461e0` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Testnet. Block 51281057. [Polygonscan](https://amoy.polygonscan.com/address/0xBee456a4eF315273E9b6bC1C9eE0737aefD461e0). |
 
-### v1
+## v1
 
 Invoice payloads stored on-chain as strings, with no key registry. Superseded and kept for reference.
 
