@@ -204,10 +204,10 @@ VITE_CONTRACT_ADDRESS_11155111=0x6E5Ac5C2c10b4eD34909CFf0DF776832504E9677
 VITE_CONTRACT_ADDRESS_63=0x9b306924Eef2f021E1BC8a54202E90057E3988d8
 #Polygon Amoy (80002)
 VITE_CONTRACT_ADDRESS_80002=0xBee456a4eF315273E9b6bC1C9eE0737aefD461e0
+#Polygon Mainnet (137)
+VITE_CONTRACT_ADDRESS_137=0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1
 #Ethereum Classic (61) — blank until redeployed, see note below
 VITE_CONTRACT_ADDRESS_61=
-#Polygon Mainnet (137) — blank until redeployed, see note below
-VITE_CONTRACT_ADDRESS_137=
 ```
 
 > ⚠️ Renaming the key registry functions changed their selectors, so only a
@@ -216,11 +216,11 @@ VITE_CONTRACT_ADDRESS_137=
 > [Deployments.md](./Deployments.md) is the record of every deployment. Keys registered against an earlier
 > deployment do not carry over; those users must register again.
 >
-> ⚠️ Ethereum Classic and Polygon are left blank on purpose. Both still run the
-> v1 contract, which stores invoice payloads on-chain as strings and has no
-> public key registry, so it does not match the current ABI. The app treats any
-> non-empty address as supported, so filling these in would send calls those
-> contracts cannot decode. Populate them only after redeploying.
+> ⚠️ Ethereum Classic is left blank on purpose. It still runs only the v1
+> contract, which stores invoice payloads on-chain as strings and has no public
+> key registry, so it does not match the current ABI. The app treats any
+> non-empty address as supported, so filling it in would send calls that
+> contract cannot decode. Populate it only after a v2 deployment.
 >
 > ⚠️ **Security Note:** Never commit `.env` files to version control. Keep your private keys secure.
 
@@ -246,6 +246,8 @@ Stores only `keccak256` of the invoice data on-chain and exposes the public key
 registry. [Deployments.md](./Deployments.md) is the full record, including
 constructor parameters and deployment blocks.
 - Base (8453), mainnet
+```0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1```
+- Polygon (137), mainnet
 ```0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1```
 - Ethereum Sepolia (11155111), testnet
 ```0x6E5Ac5C2c10b4eD34909CFf0DF776832504E9677```

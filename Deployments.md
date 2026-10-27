@@ -11,6 +11,7 @@ Invoice details are stored off-chain, encrypted, with only a `bytes32` hash on-c
 | Network | Network ID | Version | Contract `Chainvoice.sol` Address | Contract `Chainvoice.sol` Parameters | Comments |
 |---|---|---|---|---|---|
 | Base | 8453 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1` | `devFee = 0.000005 ether`, `dev = 0xB75aAfaC6c2CF4aebc613A30730950f201a65C62`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Mainnet. Block 53156201. [Basescan](https://basescan.org/address/0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1). `dev` is the deployer until the fee is settled, then it is handed to `devFeeReceiver` with `proposeDev` / `acceptDev`. |
+| Polygon | 137 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1` | `devFee = 0.1 ether` (0.1 POL), `dev = 0xB75aAfaC6c2CF4aebc613A30730950f201a65C62`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Mainnet. Block 96265768. Same address as on Base (same deployer and nonce). [Polygonscan](https://polygonscan.com/address/0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1). `dev` is handed over the same way as on Base. |
 | Ethereum Sepolia | 11155111 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0x6E5Ac5C2c10b4eD34909CFf0DF776832504E9677` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Testnet. The deployment the frontend targets. Block 12003349. |
 | Ethereum Sepolia | 11155111 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0xDDE8e379f57f6D5C75afC6A1e71C6524a33446B3` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Testnet. PR previews only (`frontend/.env.preview`), so they share no keys or invoices with production. Block 12003361. |
 | Mordor | 63 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0x9b306924Eef2f021E1BC8a54202E90057E3988d8` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Testnet (Ethereum Classic). Block 17271021. [Blockscout](https://etc-mordor.blockscout.com/address/0x9b306924Eef2f021E1BC8a54202E90057E3988d8). |
@@ -29,8 +30,9 @@ Invoice payloads stored on-chain as strings, with no key registry. Superseded an
 > ⚠️ **v1 contracts are incompatible with the current frontend.** v2 added the
 > key registry (`registerPublicKey` / `getPublicKey`) and moved invoice payloads
 > off-chain behind a `bytes32` hash, so only the v2 rows match the ABI in this
-> repo. Ethereum Classic and Polygon mainnet still run v1 and need a v2
-> deployment before those networks can be enabled.
+> repo. On Polygon mainnet the v2 contract replaces v1 in the frontend.
+> Ethereum Classic mainnet still runs only v1 and needs a v2 deployment before
+> it can be enabled.
 
 ---
 **Note to Developers:** After making a new deployment, please:
