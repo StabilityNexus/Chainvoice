@@ -406,7 +406,8 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   pdf.text(`Issued: ${issueDate}`, 25, yPos + 5.5);
   pdf.text(`Due: ${dueDate}`, 160, yPos + 5.5);
 
-  yPos += 12;
+  // The date box is 8 mm high; leave the intended 2 mm gap.
+  yPos += 10;
 
   const colPositions = {
     description: 25,
@@ -455,17 +456,21 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
 
   if (invoice.items && invoice.items.length > 0) {
     invoice.items.forEach((item) => {
-      if (yPos > 250) {
+      const totalsSectionHeight = 33; // 5 mm gap + 28 mm totals box
+      const footerTop = 280;
+      const footerSafetyGap = 10;
+      const tableBottomLimit =
+        footerTop - footerSafetyGap - totalsSectionHeight;
+
+      if (yPos + rowHeight > tableBottomLimit) {
         pdf.setDrawColor(...borderGray);
         pdf.setLineWidth(0.5);
         pdf.line(20, yPos, 190, yPos);
         pdf.line(20, tableStartY, 20, yPos);
         pdf.line(190, tableStartY, 190, yPos);
-        
         pdf.addPage();
         yPos = 20;
         tableStartY = yPos;
-        
         pdf.setDrawColor(...borderGray);
         pdf.setLineWidth(0.5);
         pdf.rect(20, yPos, 170, headerHeight, "D");
@@ -480,23 +485,19 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
         });
         yPos += headerHeight;
       }
-
       pdf.setDrawColor(...borderGray);
       pdf.setLineWidth(0.5);
       pdf.line(20, yPos, 190, yPos);
-
       const unitPriceStr = String(item.unitPrice || "");
-      const unitPriceDisplay = unitPriceStr.includes(tokenSymbol) 
-        ? unitPriceStr 
+      const unitPriceDisplay = unitPriceStr.includes(tokenSymbol)
+        ? unitPriceStr
         : `${item.unitPrice || 0} ${tokenSymbol}`;
-
       pdf.setTextColor(...darkGray);
       pdf.text(item.description || "N/A", colPositions.description, yPos + 6, { maxWidth: 65 });
       pdf.text(String(item.qty || 0), colPositions.qty, yPos + 6, { align: "right" });
       pdf.text(unitPriceDisplay, colPositions.price, yPos + 6, { align: "right" });
       pdf.text(String(item.discount || "0"), colPositions.discount, yPos + 6, { align: "right" });
       pdf.text(String(item.tax || "0%"), colPositions.tax, yPos + 6, { align: "right" });
-      
       pdf.setFont("helvetica", "bold");
       pdf.text(
         `${item.amount || 0} ${tokenSymbol}`,
@@ -505,17 +506,14 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
         { align: "right" }
       );
       pdf.setFont("helvetica", "normal");
-      
       yPos += rowHeight;
       tableEndY = yPos;
     });
-    
     pdf.setDrawColor(...borderGray);
     pdf.setLineWidth(0.5);
     pdf.line(20, tableEndY, 190, tableEndY);
     pdf.line(20, tableStartY, 20, tableEndY);
-    pdf.line(190, tableStartY, 190, tableEndY);
-  } else {
+    pdf.line(190, tableStartY, 190, tableEndY);  } else {
     pdf.setDrawColor(...borderGray);
     pdf.setLineWidth(0.5);
     pdf.rect(20, yPos, 170, rowHeight, "D");
