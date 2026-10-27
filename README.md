@@ -202,6 +202,8 @@ VITE_CONTRACT_ADDRESS_8453=0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1
 VITE_CONTRACT_ADDRESS_11155111=0x6E5Ac5C2c10b4eD34909CFf0DF776832504E9677
 #Mordor Testnet (63)
 VITE_CONTRACT_ADDRESS_63=0x9b306924Eef2f021E1BC8a54202E90057E3988d8
+#Polygon Amoy (80002)
+VITE_CONTRACT_ADDRESS_80002=0xBee456a4eF315273E9b6bC1C9eE0737aefD461e0
 #Ethereum Classic (61) — blank until redeployed, see note below
 VITE_CONTRACT_ADDRESS_61=
 #Polygon Mainnet (137) — blank until redeployed, see note below
@@ -249,6 +251,8 @@ constructor parameters and deployment blocks.
 ```0x6E5Ac5C2c10b4eD34909CFf0DF776832504E9677```
 - Mordor (63), Ethereum Classic testnet
 ```0x9b306924Eef2f021E1BC8a54202E90057E3988d8```
+- Polygon Amoy (80002), testnet
+```0xBee456a4eF315273E9b6bC1C9eE0737aefD461e0```
 
 ### v1 (Mainnet Deployment — Jan 1)
 Stores the invoice payload on-chain as strings. Superseded, kept for reference.
