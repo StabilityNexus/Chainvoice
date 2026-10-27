@@ -68,14 +68,16 @@ The frontend reads Vite environment variables from `.env`.
 The provided `.env.example` lists the contract addresses per network:
 
 ```env
-VITE_CONTRACT_ADDRESS_11155111=0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b
+VITE_CONTRACT_ADDRESS_8453=0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1
+VITE_CONTRACT_ADDRESS_11155111=0x6E5Ac5C2c10b4eD34909CFf0DF776832504E9677
+VITE_CONTRACT_ADDRESS_63=0x9b306924Eef2f021E1BC8a54202E90057E3988d8
 VITE_CONTRACT_ADDRESS_61=
 VITE_CONTRACT_ADDRESS_137=
 ```
 
 > ⚠️ Renaming the key registry functions changed their selectors, so only a
 > contract deployed from the current `contracts/src/Chainvoice.sol` will answer.
-> The Sepolia address above is such a deployment — see
+> The addresses above are such deployments — see
 > [Deployments.md](../Deployments.md). Keys registered against an earlier
 > deployment do not carry over; those users must register again.
 >
