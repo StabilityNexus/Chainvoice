@@ -1,4 +1,5 @@
-/* SPDX-License-Identifier: Unlicense */
+// SPDX-License-Identifier: UNLICENSED
+// Licensing: see https://github.com/StabilityNexus/Chainvoice
 pragma solidity ^0.8.13;
 
 import {SafeCast} from "openzeppelin-contracts/contracts/utils/math/SafeCast.sol";
@@ -222,6 +223,7 @@ contract ChainvoiceTest is Test {
     event DevProposed(address indexed currentDev, address indexed proposedDev);
     event DevUpdated(address indexed previousDev, address indexed newDev);
     event DevProposalCancelled(address indexed currentDev, address indexed cancelledDev);
+    event DevFeesWithdrawn(address indexed caller, address indexed devFeeReceiver, uint256 amount);
 
     function setUp() public {
         chainvoice = new Chainvoice(INITIAL_FEE, dev, devFeeReceiver);
@@ -540,6 +542,65 @@ contract ChainvoiceTest is Test {
         chainvoice.payInvoicesBatch{value: totalPrincipal + totalFee}(ids);
     }
 
+    function _twoNativeInvoicesToBob() private returns (uint256[] memory ids) {
+        vm.startPrank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("first-1"));
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("first-2"));
+        vm.stopPrank();
+
+        ids = new uint256[](2);
+        ids[0] = 0;
+        ids[1] = 1;
+    }
+
+    function testPayInvoicesBatch_RevertIfFirstIdInvalid() public {
+        uint256[] memory ids = _twoNativeInvoicesToBob();
+        ids[0] = 2;
+
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.InvalidInvoiceId.selector);
+        chainvoice.payInvoicesBatch{value: 2 ether + 2 * INITIAL_FEE}(ids);
+    }
+
+    function testPayInvoicesBatch_RevertIfLaterIdInvalid() public {
+        uint256[] memory ids = _twoNativeInvoicesToBob();
+        ids[1] = 2;
+
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.InvalidInvoiceId.selector);
+        chainvoice.payInvoicesBatch{value: 2 ether + 2 * INITIAL_FEE}(ids);
+    }
+
+    function testPayInvoicesBatch_RevertIfCallerNotPayerOfFirst() public {
+        uint256[] memory ids = _twoNativeInvoicesToBob();
+
+        vm.prank(charlie);
+        vm.expectRevert(Chainvoice.NotAuthorizedPayer.selector);
+        chainvoice.payInvoicesBatch{value: 2 ether + 2 * INITIAL_FEE}(ids);
+    }
+
+    function testPayInvoicesBatch_RevertIfFirstAlreadyPaid() public {
+        uint256[] memory ids = _twoNativeInvoicesToBob();
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
+
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.AlreadySettled.selector);
+        chainvoice.payInvoicesBatch{value: 2 ether + 2 * INITIAL_FEE}(ids);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+    }
+
+    function testPayInvoicesBatch_RevertIfFirstCancelled() public {
+        uint256[] memory ids = _twoNativeInvoicesToBob();
+        vm.prank(alice);
+        chainvoice.cancelInvoice(0);
+
+        vm.prank(bob);
+        vm.expectRevert(Chainvoice.AlreadySettled.selector);
+        chainvoice.payInvoicesBatch{value: 2 ether + 2 * INITIAL_FEE}(ids);
+        assertFalse(chainvoice.getInvoice(1).isPaid);
+    }
+
     /* ------------------------------------------------------------ */
     /*                       FUZZ TESTING                           */
     /* ------------------------------------------------------------ */
@@ -593,6 +654,33 @@ contract ChainvoiceTest is Test {
 
         assertEq(devFeeReceiver.balance, INITIAL_FEE);
         assertEq(charlie.balance, charlieBefore);
+    }
+
+    function testWithdrawFees_EmitsDevFeesWithdrawn() public {
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("withdraw-event"));
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
+
+        vm.expectEmit(true, true, false, true, address(chainvoice));
+        emit DevFeesWithdrawn(charlie, devFeeReceiver, INITIAL_FEE);
+        vm.prank(charlie);
+        chainvoice.withdrawFees();
+    }
+
+    function testWithdrawFees_EventNamesCurrentReceiver() public {
+        address newReceiver = address(0xBEEF);
+        vm.prank(alice);
+        chainvoice.createInvoice(bob, 1 ether, address(0), keccak256("withdraw-event-2"));
+        vm.prank(bob);
+        chainvoice.payInvoice{value: 1 ether + INITIAL_FEE}(0);
+        vm.prank(dev);
+        chainvoice.setDevFeeReceiver(newReceiver);
+
+        vm.expectEmit(true, true, false, true, address(chainvoice));
+        emit DevFeesWithdrawn(dev, newReceiver, INITIAL_FEE);
+        vm.prank(dev);
+        chainvoice.withdrawFees();
     }
 
     /// The contract deliberately does not check that the devFeeReceiver can receive

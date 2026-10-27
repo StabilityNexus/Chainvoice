@@ -700,6 +700,31 @@ export const ChainvoiceABI = [
   },
   {
     "type": "event",
+    "name": "DevFeesWithdrawn",
+    "inputs": [
+      {
+        "name": "caller",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "devFeeReceiver",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "DevProposalCancelled",
     "inputs": [
       {

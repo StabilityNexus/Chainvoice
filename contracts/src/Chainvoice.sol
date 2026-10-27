@@ -1,4 +1,5 @@
-// SPDX-License-Identifier: Unlicense
+// SPDX-License-Identifier: UNLICENSED
+// Licensing: see https://github.com/StabilityNexus/Chainvoice
 pragma solidity 0.8.19;
 
 import {IERC20} from "openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
@@ -10,15 +11,12 @@ contract Chainvoice {
     using SafeERC20 for IERC20;
 
     // ========== Errors ==========
-    // Existing
     error MixedTokenBatch();
     error InvalidBatchSize();
     error AlreadySettled();
     error NotAuthorizedPayer();
     error IncorrectNativeValue();
     error InsufficientAllowance();
-    
-    // New Custom Errors (Replacing Strings)
     error Unauthorized();
     error Reentrancy();
     error ZeroAddress();
@@ -86,6 +84,7 @@ contract Chainvoice {
     event DevProposed(address indexed currentDev, address indexed proposedDev);
     event DevProposalCancelled(address indexed currentDev, address indexed cancelledDev);
     event DevUpdated(address indexed previousDev, address indexed newDev);
+    event DevFeesWithdrawn(address indexed caller, address indexed devFeeReceiver, uint256 amount);
 
     /// @param _devFee Native fee charged per paid invoice; must be non-zero.
     /// @param _dev Address that sets devFee and devFeeReceiver; must not be zero.
@@ -326,15 +325,11 @@ contract Chainvoice {
     function payInvoicesBatch(uint256[] calldata invoiceIds) external payable nonReentrant {
         uint256 n = invoiceIds.length;
         if (n == 0 || n > MAX_BATCH) revert InvalidBatchSize();
-        // Establish token for batch & initial checks
+        // The first invoice sets the batch token; the loop below checks every
+        // id, the first included.
         uint256 firstId = invoiceIds[0];
-        
         if (firstId >= invoices.length) revert InvalidInvoiceId();
-        
-        InvoiceDetails storage inv0 = invoices[firstId];
-        if (msg.sender != inv0.to) revert NotAuthorizedPayer();
-        if (inv0.isPaid || inv0.isCancelled) revert AlreadySettled();
-        address token = inv0.tokenAddress;
+        address token = invoices[firstId].tokenAddress;
 
         uint256 totalAmounts = 0;
         uint256 totalNativeFee = devFee * n;
@@ -530,10 +525,12 @@ contract Chainvoice {
 
         uint256 amount = accumulatedDevFees;
         accumulatedDevFees = 0;
+        address receiver = devFeeReceiver;
+        emit DevFeesWithdrawn(msg.sender, receiver, amount);
 
         // Destination is always devFeeReceiver, so a permissionless trigger is safe.
         // slither-disable-next-line arbitrary-send-eth
-        (bool success, ) = payable(devFeeReceiver).call{value: amount}("");
+        (bool success, ) = payable(receiver).call{value: amount}("");
         if (!success) revert WithdrawFailed();
     }
 }
