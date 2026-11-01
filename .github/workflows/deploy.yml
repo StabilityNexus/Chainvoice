@@ -63,12 +63,13 @@ jobs:
           VITE_CONTRACT_ADDRESS_63: ${{ secrets.VITE_CONTRACT_ADDRESS_63 }}
           VITE_CONTRACT_ADDRESS_80002: ${{ secrets.VITE_CONTRACT_ADDRESS_80002 }}
           VITE_CONTRACT_ADDRESS_8453: ${{ secrets.VITE_CONTRACT_ADDRESS_8453 }}
-          # Ethereum Classic and Polygon are deliberately not injected. Both
-          # still run the v1 contract, which stores payloads on-chain as strings
-          # and has no key registry, so it does not match this ABI. The app
-          # treats any non-empty address as a supported network, so a populated
-          # secret here would publish a build that sends undecodable calls.
-          # Restore these once those chains are redeployed.
+          VITE_CONTRACT_ADDRESS_137: ${{ secrets.VITE_CONTRACT_ADDRESS_137 }}
+          # Ethereum Classic is deliberately not injected. It still runs only the
+          # v1 contract, which stores payloads on-chain as strings and has no key
+          # registry, so it does not match this ABI. The app treats any non-empty
+          # address as a supported network, so a populated secret here would
+          # publish a build that sends undecodable calls. Restore it once Ethereum
+          # Classic has a v2 deployment.
           # Vite inlines these at build time, so an unset VITE_RELAY_URL bakes
           # in the localhost fallback, which the browser then blocks as mixed
           # content from the Pages origin. Either an https URL (needs CORS on

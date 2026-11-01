@@ -4,23 +4,35 @@ All deployments of contracts in this repo, including test/beta versions, are doc
 This file lists the addresses of the contracts that have been deployed
 as well as the constructor parameters that have been used.
 
+## v2
+
+Invoice details are stored off-chain, encrypted, with only a `bytes32` hash on-chain, and the contract has a public key registry. Every v2 contract is built from the same commit and verified with an exact match on [Sourcify](https://sourcify.dev).
+
+| Network | Network ID | Version | Contract `Chainvoice.sol` Address | Contract `Chainvoice.sol` Parameters | Comments |
+|---|---|---|---|---|---|
+| Base | 8453 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1` | `devFee = 0.000005 ether`, `dev = 0xB75aAfaC6c2CF4aebc613A30730950f201a65C62`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Mainnet. Block 53156201. [Basescan](https://basescan.org/address/0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1). `dev` is the deployer until the fee is settled, then it is handed to `devFeeReceiver` with `proposeDev` / `acceptDev`. |
+| Polygon | 137 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1` | `devFee = 0.1 ether` (0.1 POL), `dev = 0xB75aAfaC6c2CF4aebc613A30730950f201a65C62`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Mainnet. Block 96265768. Same address as on Base (same deployer and nonce). [Polygonscan](https://polygonscan.com/address/0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1). `dev` is handed over the same way as on Base. |
+| Ethereum Sepolia | 11155111 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0x6E5Ac5C2c10b4eD34909CFf0DF776832504E9677` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Testnet. The deployment the frontend targets. Block 12003349. |
+| Ethereum Sepolia | 11155111 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0xDDE8e379f57f6D5C75afC6A1e71C6524a33446B3` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Testnet. PR previews only (`frontend/.env.preview`), so they share no keys or invoices with production. Block 12003361. |
+| Mordor | 63 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0x9b306924Eef2f021E1BC8a54202E90057E3988d8` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Testnet (Ethereum Classic). Block 17271021. [Blockscout](https://etc-mordor.blockscout.com/address/0x9b306924Eef2f021E1BC8a54202E90057E3988d8). |
+| Polygon Amoy | 80002 | [v2.0.0](https://github.com/StabilityNexus/Chainvoice/releases/tag/v2.0.0), `main` at `4f1a92c7` | `0xBee456a4eF315273E9b6bC1C9eE0737aefD461e0` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0xf53dF1e1418c3Ca289377463DEc62bC5D5AE59A2` | Testnet. Block 51281057. [Polygonscan](https://amoy.polygonscan.com/address/0xBee456a4eF315273E9b6bC1C9eE0737aefD461e0). |
+
+## v1
+
+Invoice payloads stored on-chain as strings, with no key registry. Superseded and kept for reference.
+
 | Network | Network ID | Version | Contract `Chainvoice.sol` Address | Contract `Chainvoice.sol` Parameters | Comments |
 |---|---|---|---|---|---|
 | Ethereum Classic | 61 | [v1](https://github.com/StabilityNexus/Chainvoice/releases/tag/v1) | `0xD044A85a5daC307217B9bF313A90E8a60AF7DdCe` | None — constructor takes no arguments (`owner = msg.sender`, `fee` hardcoded to `0.0005 ether`) | Mainnet |
 | Polygon | 137 | [v1](https://github.com/StabilityNexus/Chainvoice/releases/tag/v1) | `0xD044A85a5daC307217B9bF313A90E8a60AF7DdCe` | None — constructor takes no arguments (`owner = msg.sender`, `fee` hardcoded to `0.0005 ether`) | Mainnet |
 | Ethereum Sepolia | 11155111 | [v1](https://github.com/StabilityNexus/Chainvoice/releases/tag/v1) | `0x54a542dCDC306eE281b5De4613EcEfe6e6ABc562` | None — constructor takes no arguments (`owner = msg.sender`, `fee` hardcoded to `0.0005 ether`) | Testnet |
-| Ethereum Sepolia | 11155111 | Public key registry (`registerPublicKey` / `getPublicKey`), hash-based invoice storage | `0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b` | None — constructor takes no arguments (`owner = msg.sender`, `fee` hardcoded to `0.0005 ether`) | Testnet. Retired 2026-10-19, replaced by `0xff10…363a`. |
-| Ethereum Sepolia | 11155111 | `main` at `7b9f0405` (`dev` / `devFee` / `devFeeReceiver`) | `0x094642FEbF43d17C44dbe07b74AE3A18fEdC7390` | `devFee = 0.0005 ether`, `dev = devFeeReceiver = 0x69fF0f180e74112cF707DdDEC729095631c4B809` | Testnet. PR previews only (`frontend/.env.preview`), so they share no keys or invoices with production. |
-| Ethereum Sepolia | 11155111 | `main` at `eab000f6` (`dev` / `devFee` / `devFeeReceiver`) | `0xff10Cda545E10656C2DcBEAB6C9eC375E136363a` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0x6F7458D1c14F4153A4092Af4f3A521111Bc04C59` | Testnet. Current deployment the frontend targets. Block 11947219. |
-| Mordor | 63 | `main` at `5d03804a` (same code as `eab000f6`, comments only) | `0xeF6669DDEd0078A8Cfdd758A40D194b1cC2120d2` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0x6F7458D1c14F4153A4092Af4f3A521111Bc04C59` | Testnet (Ethereum Classic). Block 17230627. Verified on [Blockscout](https://etc-mordor.blockscout.com/address/0xeF6669DDEd0078A8Cfdd758A40D194b1cC2120d2). |
-| Polygon Amoy | 80002 | `main` at `5d03804a` (same code as `eab000f6`, comments only) | `0xeF6669DDEd0078A8Cfdd758A40D194b1cC2120d2` | `devFee = 0.0005 ether`, `dev = 0x69fF0f180e74112cF707DdDEC729095631c4B809`, `devFeeReceiver = 0x6F7458D1c14F4153A4092Af4f3A521111Bc04C59` | Testnet. Block 50745369. Verified on Sourcify. |
 
-> ⚠️ **The v1 rows are incompatible with the current contract.** The key registry
-> functions were renamed (`registerPublicKey` / `getPublicKey`), which changed
-> their selectors, and invoice payloads moved off-chain behind a `bytes32` hash.
-> Only the `dev` / `devFee` / `devFeeReceiver` rows match the ABI in this repo.
-> Ethereum Classic and Polygon mainnet still run v1 and need redeploying before
-> those networks can be enabled.
+> ⚠️ **v1 contracts are incompatible with the current frontend.** v2 added the
+> key registry (`registerPublicKey` / `getPublicKey`) and moved invoice payloads
+> off-chain behind a `bytes32` hash, so only the v2 rows match the ABI in this
+> repo. On Polygon mainnet the v2 contract replaces v1 in the frontend.
+> Ethereum Classic mainnet still runs only v1 and needs a v2 deployment before
+> it can be enabled.
 
 ---
 **Note to Developers:** After making a new deployment, please:

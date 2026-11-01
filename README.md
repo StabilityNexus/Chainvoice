@@ -196,18 +196,18 @@ npm run dev
 
 ### Frontend Configuration (`frontend/.env`)  
 ```.env
+#Base (8453)
+VITE_CONTRACT_ADDRESS_8453=0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1
 #Ethereum Sepolia (11155111)
-VITE_CONTRACT_ADDRESS_11155111=0xff10Cda545E10656C2DcBEAB6C9eC375E136363a
+VITE_CONTRACT_ADDRESS_11155111=0x6E5Ac5C2c10b4eD34909CFf0DF776832504E9677
 #Mordor Testnet (63)
-VITE_CONTRACT_ADDRESS_63=0xeF6669DDEd0078A8Cfdd758A40D194b1cC2120d2
+VITE_CONTRACT_ADDRESS_63=0x9b306924Eef2f021E1BC8a54202E90057E3988d8
 #Polygon Amoy (80002)
-VITE_CONTRACT_ADDRESS_80002=0xeF6669DDEd0078A8Cfdd758A40D194b1cC2120d2
-#Base (8453) — blank until deployed
-VITE_CONTRACT_ADDRESS_8453=
+VITE_CONTRACT_ADDRESS_80002=0xBee456a4eF315273E9b6bC1C9eE0737aefD461e0
+#Polygon Mainnet (137)
+VITE_CONTRACT_ADDRESS_137=0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1
 #Ethereum Classic (61) — blank until redeployed, see note below
 VITE_CONTRACT_ADDRESS_61=
-#Polygon Mainnet (137) — blank until redeployed, see note below
-VITE_CONTRACT_ADDRESS_137=
 ```
 
 > ⚠️ Renaming the key registry functions changed their selectors, so only a
@@ -216,11 +216,11 @@ VITE_CONTRACT_ADDRESS_137=
 > [Deployments.md](./Deployments.md) is the record of every deployment. Keys registered against an earlier
 > deployment do not carry over; those users must register again.
 >
-> ⚠️ Ethereum Classic and Polygon are left blank on purpose. Both still run the
-> v1 contract, which stores invoice payloads on-chain as strings and has no
-> public key registry, so it does not match the current ABI. The app treats any
-> non-empty address as supported, so filling these in would send calls those
-> contracts cannot decode. Populate them only after redeploying.
+> ⚠️ Ethereum Classic is left blank on purpose. It still runs only the v1
+> contract, which stores invoice payloads on-chain as strings and has no public
+> key registry, so it does not match the current ABI. The app treats any
+> non-empty address as supported, so filling it in would send calls that
+> contract cannot decode. Populate it only after a v2 deployment.
 >
 > ⚠️ **Security Note:** Never commit `.env` files to version control. Keep your private keys secure.
 
@@ -241,19 +241,20 @@ VITE_RELAY_TIMEOUT_MS=
 
 ## Deployed Contracts
 
-### Current (hash-based invoice storage)
+### v2 (current)
 Stores only `keccak256` of the invoice data on-chain and exposes the public key
 registry. [Deployments.md](./Deployments.md) is the full record, including
-constructor parameters and retired addresses.
-- Ethereum Sepolia (11155111)
-```0xff10Cda545E10656C2DcBEAB6C9eC375E136363a```
-- Mordor Testnet (63)
-```0xeF6669DDEd0078A8Cfdd758A40D194b1cC2120d2```
-- Polygon Amoy (80002)
-```0xeF6669DDEd0078A8Cfdd758A40D194b1cC2120d2```
-
-Retired, kept for reference: Ethereum Sepolia ```0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b```
-(older ABI with `owner` and `fee`, which the current frontend cannot use).
+constructor parameters and deployment blocks.
+- Base (8453), mainnet
+```0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1```
+- Polygon (137), mainnet
+```0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1```
+- Ethereum Sepolia (11155111), testnet
+```0x6E5Ac5C2c10b4eD34909CFf0DF776832504E9677```
+- Mordor (63), Ethereum Classic testnet
+```0x9b306924Eef2f021E1BC8a54202E90057E3988d8```
+- Polygon Amoy (80002), testnet
+```0xBee456a4eF315273E9b6bC1C9eE0737aefD461e0```
 
 ### v1 (Mainnet Deployment — Jan 1)
 Stores the invoice payload on-chain as strings. Superseded, kept for reference.

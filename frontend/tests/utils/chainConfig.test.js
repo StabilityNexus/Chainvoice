@@ -5,7 +5,7 @@ import {
   isChainDeployed,
 } from "../../src/utils/chainConfig.js";
 
-const SEPOLIA_ADDRESS = "0xff10Cda545E10656C2DcBEAB6C9eC375E136363a";
+const SEPOLIA_ADDRESS = "0x6E5Ac5C2c10b4eD34909CFf0DF776832504E9677";
 const ETC_ADDRESS = "0x0000000000000000000000000000000000000061";
 
 describe("Ethereum Classic chain config", () => {

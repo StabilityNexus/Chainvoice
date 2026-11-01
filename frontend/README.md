@@ -68,21 +68,24 @@ The frontend reads Vite environment variables from `.env`.
 The provided `.env.example` lists the contract addresses per network:
 
 ```env
-VITE_CONTRACT_ADDRESS_11155111=0x65eb0ca96f972c5a0cdaa623a5b54650e499df5b
+VITE_CONTRACT_ADDRESS_8453=0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1
+VITE_CONTRACT_ADDRESS_11155111=0x6E5Ac5C2c10b4eD34909CFf0DF776832504E9677
+VITE_CONTRACT_ADDRESS_63=0x9b306924Eef2f021E1BC8a54202E90057E3988d8
+VITE_CONTRACT_ADDRESS_80002=0xBee456a4eF315273E9b6bC1C9eE0737aefD461e0
+VITE_CONTRACT_ADDRESS_137=0x9b31091AA0b4F287114B2A9a3D239Db04a9A07E1
 VITE_CONTRACT_ADDRESS_61=
-VITE_CONTRACT_ADDRESS_137=
 ```
 
 > ⚠️ Renaming the key registry functions changed their selectors, so only a
 > contract deployed from the current `contracts/src/Chainvoice.sol` will answer.
-> The Sepolia address above is such a deployment — see
+> The addresses above are such deployments — see
 > [Deployments.md](../Deployments.md). Keys registered against an earlier
 > deployment do not carry over; those users must register again.
 >
-> ⚠️ Ethereum Classic and Polygon are left blank on purpose. Both still run the
-> v1 contract, which does not match the current ABI. The app treats any
-> non-empty address as supported, so filling these in would send calls those
-> contracts cannot decode. Populate them only after redeploying.
+> ⚠️ Ethereum Classic is left blank on purpose. It still runs only the v1
+> contract, which does not match the current ABI. The app treats any non-empty
+> address as supported, so filling it in would send calls that contract cannot
+> decode. Populate it only after a v2 deployment.
 ### Relay configuration
 
 Invoice payloads travel encrypted over a [ThruBox](https://github.com/AOSSIE-Org/ThruBox-Server) relay, configured with:
