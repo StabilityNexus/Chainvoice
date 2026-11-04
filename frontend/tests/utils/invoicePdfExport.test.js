@@ -111,6 +111,8 @@ describe("generateInvoicePDF", () => {
     expect(text).toContain("(Bob Payer)");
     expect(text).toContain("(Design work)");
     expect(text).toContain("(Native Currency)");
+    expect(text).toContain("(Issued: Mar 1, 2026)");
+    expect(text).toContain("(Due: Mar 31, 2026)");
     expect(text).toContain("(0.0005 ETH)"); // network fee
     expect(text).toContain("(1.5005 ETH)"); // amount + fee
     expect(text).toContain("(Page 1 of 1)");
@@ -159,6 +161,33 @@ describe("generateInvoicePDF", () => {
     const pdf = await generateInvoicePDF(makeInvoice({ items: [] }), FEE_WEI);
 
     expect(pdfText(pdf)).toContain("(No items in this invoice)");
+  });
+
+  it.each([
+    ["null", null, null],
+    ["undefined", undefined, undefined],
+    ["empty", "", ""],
+    ["invalid", "not-a-date", "2026-99-99"],
+  ])("shows N/A for %s dates", async (_label, issueDate, dueDate) => {
+    const text = pdfText(
+      await generateInvoicePDF(makeInvoice({ issueDate, dueDate }), FEE_WEI)
+    );
+
+    expect(text).toContain("(Issued: N/A)");
+    expect(text).toContain("(Due: N/A)");
+    expect(text).not.toContain("Jan 1, 1970");
+  });
+
+  it("keeps a valid date when the other one is missing", async () => {
+    const text = pdfText(
+      await generateInvoicePDF(
+        makeInvoice({ dueDate: null }),
+        FEE_WEI
+      )
+    );
+
+    expect(text).toContain("(Issued: Mar 1, 2026)");
+    expect(text).toContain("(Due: N/A)");
   });
 
   it("rejects a missing invoice", async () => {
