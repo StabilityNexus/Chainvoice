@@ -5,6 +5,17 @@ import {
   resolveInvoicePaymentContext,
 } from "./invoicePaymentSymbols";
 
+const formatPdfDate = (value) => {
+  if (!value) return "N/A";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "N/A";
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
 /**
  * Load logo image with multiple fallback methods
  * Returns base64 data URL or null
@@ -393,16 +404,8 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   pdf.setTextColor(...darkGray);
   pdf.setFontSize(9);
   pdf.setFont("helvetica", "normal");
-  const issueDate = new Date(invoice.issueDate).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-  const dueDate = new Date(invoice.dueDate).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const issueDate = formatPdfDate(invoice.issueDate);
+  const dueDate = formatPdfDate(invoice.dueDate);
   pdf.text(`Issued: ${issueDate}`, 25, yPos + 5.5);
   pdf.text(`Due: ${dueDate}`, 160, yPos + 5.5);
 
