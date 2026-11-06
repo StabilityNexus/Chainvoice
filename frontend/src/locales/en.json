@@ -1,4 +1,7 @@
 {
+  "invoiceValidation": {
+    "fixedDiscountExceedsSubtotal": "Cannot exceed line subtotal"
+  },
   "filterBar": {
     "status": "Status",
     "allStatuses": "All Statuses",

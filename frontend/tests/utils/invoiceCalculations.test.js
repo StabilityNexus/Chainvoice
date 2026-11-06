@@ -24,7 +24,7 @@ describe("invoiceCalculations.parseNumericInputToWei", () => {
 });
 
 describe("invoiceCalculations.getLineAmountDetails", () => {
-  test("computes amount with discount and tax", () => {
+  test("calculates percentage tax after applying a fixed discount", () => {
     const result = getLineAmountDetails({
       qty: "10",
       unitPrice: "10",
@@ -34,8 +34,35 @@ describe("invoiceCalculations.getLineAmountDetails", () => {
 
     expect(result.valid).toBe(true);
     expect(result.lineTotalWei).toBe(100000000000000000000n);
+    expect(result.taxAmountWei).toBe(9500000000000000000n);
+    expect(result.amountWei).toBe(104500000000000000000n);
+  });
+
+  test("calculates percentage tax after applying a percentage discount", () => {
+    const result = getLineAmountDetails({
+      qty: "10",
+      unitPrice: "10",
+      discount: "10",
+      discountType: "percentage",
+      tax: "10",
+      taxType: "percentage",
+    });
+
+    expect(result.taxAmountWei).toBe(9000000000000000000n);
+    expect(result.amountWei).toBe(99000000000000000000n);
+  });
+
+  test("leaves percentage tax unchanged when the discount is zero", () => {
+    const result = getLineAmountDetails({
+      qty: "10",
+      unitPrice: "10",
+      discount: "0",
+      tax: "10",
+      taxType: "percentage",
+    });
+
     expect(result.taxAmountWei).toBe(10000000000000000000n);
-    expect(result.amountWei).toBe(105000000000000000000n);
+    expect(result.amountWei).toBe(110000000000000000000n);
   });
 
   test("can produce negative line amount when discount is too high", () => {
@@ -74,6 +101,20 @@ describe("invoiceCalculations.getLineAmountDetails", () => {
 
     expect(result.valid).toBe(true);
     expect(result.amountWei).toBe(105000000000000000000n);
+  });
+
+  test("applies a fixed tax once after a fixed discount", () => {
+    const result = getLineAmountDetails({
+      qty: "10",
+      unitPrice: "10",
+      discount: "5",
+      discountType: "amount",
+      tax: "15",
+      taxType: "amount",
+    });
+
+    expect(result.taxAmountWei).toBe(15000000000000000000n);
+    expect(result.amountWei).toBe(110000000000000000000n);
   });
 });
 

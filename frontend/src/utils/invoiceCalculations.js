@@ -61,7 +61,8 @@ export const getLineAmountDetails = (item) => {
 
   let taxAmountWei = 0n;
   if (taxType === "percentage") {
-    taxAmountWei = (lineTotalWei * taxRateWei) / HUNDRED_INVOICE_UNITS;
+    const taxableAmountWei = lineTotalWei - finalDiscountWei;
+    taxAmountWei = (taxableAmountWei * taxRateWei) / HUNDRED_INVOICE_UNITS;
   } else {
     taxAmountWei = taxRateWei;
   }

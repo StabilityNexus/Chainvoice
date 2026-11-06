@@ -59,7 +59,15 @@ const getLineItemError = (lineLabel, item) => {
     errors.description = "Required";
   }
   
-  const { valid, amountWei, qtyWei, unitPriceWei, discountWei, taxRateWei } = getLineAmountDetails(item);
+  const {
+    valid,
+    amountWei,
+    lineTotalWei,
+    qtyWei,
+    unitPriceWei,
+    discountWei,
+    taxRateWei,
+  } = getLineAmountDetails(item);
   
   if (!item.qty || qtyWei === 0n) {
     errors.qty = "Required";
@@ -79,6 +87,8 @@ const getLineItemError = (lineLabel, item) => {
     errors.discount = "Cannot be negative";
   } else if (item.discountType === "percentage" && discountWei > HUNDRED_PERCENT_WEI) {
     errors.discount = "Cannot exceed 100%";
+  } else if (valid && item.discountType !== "percentage" && discountWei > lineTotalWei) {
+    errors.discount = "invoiceValidation.fixedDiscountExceedsSubtotal";
   }
   
   if (taxRateWei < 0n) {
