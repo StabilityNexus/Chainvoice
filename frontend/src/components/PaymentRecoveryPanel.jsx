@@ -45,64 +45,70 @@ function TransactionRow({ transaction }) {
   return (
     <Box
       sx={{
-        display: "flex",
-        flexDirection: { xs: "column", md: "row" },
-        justifyContent: "space-between",
-        alignItems: { xs: "flex-start", md: "center" },
-        gap: 1,
         bgcolor: "white",
         p: 1.5,
         borderRadius: 1,
         border: "1px solid rgba(245, 158, 11, 0.25)",
       }}
     >
-      <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
-        <Chip
-          size="small"
-          label={isApproval ? "Token approval" : "Payment"}
-          color={isApproval ? "info" : "primary"}
-          variant="outlined"
-        />
-        <Chip size="small" label={status.label} color={status.color} />
-        <Typography variant="body2" sx={{ fontWeight: 600, color: "#1e293b" }}>
-          {transaction.invoiceIds.length === 1 ? "Invoice" : "Invoices"}{" "}
-          {transaction.invoiceIds
-            .map((invoiceId) => `#${invoiceId}`)
-            .join(", ")}
-        </Typography>
-      </Box>
-
-      <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
-        <Typography variant="caption" sx={{ color: "#64748b" }}>
-          {chain?.name || `Chain ${transaction.chainId}`} ·{" "}
-          {new Date(transaction.submittedAt).toLocaleString()}
-        </Typography>
-        {explorerUrl ? (
-          <Button
-            component="a"
-            href={explorerUrl}
-            target="_blank"
-            rel="noopener noreferrer"
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", md: "row" },
+          justifyContent: "space-between",
+          alignItems: { xs: "flex-start", md: "center" },
+          flexWrap: "wrap",
+          gap: 1,
+        }}
+      >
+        <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
+          <Chip
             size="small"
-            endIcon={<OpenInNewIcon fontSize="small" />}
-            sx={{ minWidth: "auto", textTransform: "none" }}
-          >
-            Explorer
-          </Button>
-        ) : (
-          <Typography
-            variant="caption"
-            sx={{ fontFamily: "monospace", color: "#64748b" }}
-          >
-            {`${transaction.hash.slice(0, 10)}...${transaction.hash.slice(-6)}`}
+            label={isApproval ? "Token approval" : "Payment"}
+            color={isApproval ? "info" : "primary"}
+            variant="outlined"
+          />
+          <Chip size="small" label={status.label} color={status.color} />
+          <Typography variant="body2" sx={{ fontWeight: 600, color: "#1e293b" }}>
+            {transaction.invoiceIds.length === 1 ? "Invoice" : "Invoices"}{" "}
+            {transaction.invoiceIds
+              .map((invoiceId) => `#${invoiceId}`)
+              .join(", ")}
           </Typography>
-        )}
+        </Box>
+
+        <Box sx={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 1 }}>
+          <Typography variant="caption" sx={{ color: "#64748b" }}>
+            {chain?.name || `Chain ${transaction.chainId}`} ·{" "}
+            {new Date(transaction.submittedAt).toLocaleString()}
+          </Typography>
+          {explorerUrl ? (
+            <Button
+              component="a"
+              href={explorerUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              size="small"
+              endIcon={<OpenInNewIcon fontSize="small" />}
+              sx={{ minWidth: "auto", textTransform: "none" }}
+            >
+              Explorer
+            </Button>
+          ) : (
+            <Typography
+              variant="caption"
+              sx={{ fontFamily: "monospace", color: "#64748b" }}
+            >
+              {`${transaction.hash.slice(0, 10)}...${transaction.hash.slice(-6)}`}
+            </Typography>
+          )}
+        </Box>
       </Box>
 
       {transaction.lastError && (
         <Typography
           variant="caption"
-          sx={{ color: "#64748b", flexBasis: "100%" }}
+          sx={{ color: "#64748b", display: "block", mt: 1 }}
         >
           Last check: {transaction.lastError}
         </Typography>
