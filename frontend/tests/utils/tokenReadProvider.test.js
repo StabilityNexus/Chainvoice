@@ -4,7 +4,9 @@ import { JsonRpcProvider } from "ethers";
 import { chainConfig } from "../../src/utils/chainConfig.js";
 import {
   CHAIN_ID_TO_PUBLIC_RPC,
+  getCheckedTokenReadProvider,
   getTokenReadProvider,
+  TokenRpcWrongNetworkError,
 } from "../../src/utils/tokenReadProvider.js";
 
 const en = JSON.parse(
@@ -61,5 +63,51 @@ describe("getTokenReadProvider", () => {
     expect(en.createInvoice.tokenNetworkUnsupported).toEqual(expect.any(String));
     expect(en.batchInvoice.errors.connectToVerify).toEqual(expect.any(String));
     expect(en.batchInvoice.errors.tokenVerifyFailed).toEqual(expect.any(String));
+    expect(en.createInvoice.tokenRpcWrongNetwork).toEqual(expect.any(String));
+    expect(en.batchInvoice.errors.tokenRpcWrongNetwork).toEqual(expect.any(String));
+  });
+});
+
+describe("getCheckedTokenReadProvider", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  function stubChainIdAnswer(answer) {
+    return jest.spyOn(JsonRpcProvider.prototype, "send").mockImplementation(answer);
+  }
+
+  test("returns the provider when the RPC serves the chain it was asked for", async () => {
+    const send = stubChainIdAnswer(async () => "0xaa36a7");
+
+    const provider = await getCheckedTokenReadProvider("11155111");
+
+    expect(send).toHaveBeenCalledWith("eth_chainId", []);
+    expect(provider).toBeInstanceOf(JsonRpcProvider);
+    provider.destroy();
+  });
+
+  test("rejects with TokenRpcWrongNetworkError when the RPC serves another chain", async () => {
+    stubChainIdAnswer(async () => "0x1");
+
+    await expect(getCheckedTokenReadProvider(11155111)).rejects.toBeInstanceOf(
+      TokenRpcWrongNetworkError
+    );
+  });
+
+  test("passes an RPC failure through without calling it a wrong network", async () => {
+    const down = new Error("connect ECONNREFUSED");
+    stubChainIdAnswer(async () => {
+      throw down;
+    });
+
+    await expect(getCheckedTokenReadProvider(137)).rejects.toBe(down);
+  });
+
+  test("returns null for a chain with no RPC without calling the network", async () => {
+    const send = stubChainIdAnswer(async () => "0x1");
+
+    await expect(getCheckedTokenReadProvider(31337)).resolves.toBeNull();
+    expect(send).not.toHaveBeenCalled();
   });
 });

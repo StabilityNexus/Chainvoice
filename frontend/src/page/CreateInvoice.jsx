@@ -15,7 +15,10 @@ import {
   resolveTokenDecimals as resolvePaymentTokenDecimals,
   validateTokenDecimals,
 } from "../utils/paymentToken.js";
-import { getTokenReadProvider } from "../utils/tokenReadProvider.js";
+import {
+  getCheckedTokenReadProvider,
+  TokenRpcWrongNetworkError,
+} from "../utils/tokenReadProvider.js";
 import { useTranslation } from "../hooks/useTranslation";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import {
@@ -126,6 +129,10 @@ function CreateInvoice() {
     verifiedToken, setVerifiedToken,
     beginTokenRequest,
   } = usePaymentToken(chainIdForTokens);
+  const tokenNetworkMessage = {
+    "unsupported-network": t("tokenNetworkUnsupported"),
+    "rpc-wrong-network": t("tokenRpcWrongNetwork"),
+  }[tokenVerificationState];
 
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   // Holds inline validation error for client wallet address
@@ -199,7 +206,8 @@ function CreateInvoice() {
     setVerifiedToken(null);
 
     try {
-      const provider = getTokenReadProvider(chainIdForRpc);
+      const provider = await getCheckedTokenReadProvider(chainIdForRpc);
+      if (!isCurrent()) return;
       if (!provider) {
         setTokenVerificationState("unsupported-network");
         return;
@@ -233,7 +241,9 @@ function CreateInvoice() {
 
       console.error("Verification failed:", error);
       setVerifiedToken(null);
-      setTokenVerificationState("error");
+      setTokenVerificationState(
+        error instanceof TokenRpcWrongNetworkError ? "rpc-wrong-network" : "error"
+      );
     }
   }, [
     beginTokenRequest,
@@ -248,7 +258,7 @@ function CreateInvoice() {
     async (tokenAddress, fallbackDecimals) => {
       return resolvePaymentTokenDecimals(tokenAddress, fallbackDecimals, nativeToken, async () => {
         try {
-          const provider = getTokenReadProvider(chainIdForTokens);
+          const provider = await getCheckedTokenReadProvider(chainIdForTokens);
           if (!provider) return null;
 
           const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
@@ -1302,12 +1312,12 @@ function CreateInvoice() {
                           </div>
                         )}
 
-                        {tokenVerificationState === "unsupported-network" && (
+                        {tokenNetworkMessage && (
                           <div className="bg-red-50 p-3 rounded-lg border border-red-100 mt-3">
                             <div className="flex items-center gap-3">
                               <XCircle className="h-5 w-5 text-red-500" />
                               <p className="text-sm text-red-600">
-                                {t("tokenNetworkUnsupported")}
+                                {tokenNetworkMessage}
                               </p>
                             </div>
                           </div>
@@ -1326,7 +1336,7 @@ function CreateInvoice() {
                           Your client will need to have sufficient balance of the
                           chosen token to be able to pay your invoice.
                         </>
-                      ) : tokenVerificationState === "unsupported-network" ? null : customTokenAddress ? (
+                      ) : tokenNetworkMessage ? null : customTokenAddress ? (
                         <>
                           <span className="font-medium text-gray-700">Note:</span>{" "}
                           Please wait for token verification to complete before

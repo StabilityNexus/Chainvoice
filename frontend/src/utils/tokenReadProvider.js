@@ -23,3 +23,27 @@ export function getTokenReadProvider(chainId) {
   const rpcUrl = CHAIN_ID_TO_PUBLIC_RPC[id];
   return rpcUrl ? new JsonRpcProvider(rpcUrl, id, { staticNetwork: true }) : null;
 }
+
+/** Thrown when a public RPC answers for a different chain than the one asked for. */
+export class TokenRpcWrongNetworkError extends Error {
+  constructor(expectedChainId, actualChainId) {
+    super(`Token RPC serves chain ${actualChainId}, expected ${expectedChainId}`);
+    this.name = "TokenRpcWrongNetworkError";
+  }
+}
+
+/** getTokenReadProvider after checking the RPC's eth_chainId, which staticNetwork skips. */
+export async function getCheckedTokenReadProvider(chainId) {
+  const provider = getTokenReadProvider(chainId);
+  if (!provider) return null;
+  try {
+    const servedChainId = BigInt(await provider.send("eth_chainId", []));
+    if (servedChainId !== BigInt(Number(chainId))) {
+      throw new TokenRpcWrongNetworkError(Number(chainId), servedChainId);
+    }
+    return provider;
+  } catch (error) {
+    provider.destroy();
+    throw error;
+  }
+}

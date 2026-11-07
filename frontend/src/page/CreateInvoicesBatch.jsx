@@ -15,7 +15,10 @@ import {
   validateTokenDecimals,
   verifyTokenContract,
 } from "../utils/paymentToken.js";
-import { getTokenReadProvider } from "../utils/tokenReadProvider.js";
+import {
+  getCheckedTokenReadProvider,
+  TokenRpcWrongNetworkError,
+} from "../utils/tokenReadProvider.js";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import {
   Popover,
@@ -105,6 +108,10 @@ function CreateInvoicesBatch() {
     verifiedToken, setVerifiedToken,
     beginTokenRequest,
   } = usePaymentToken(chainId || 1);
+  const tokenNetworkMessage = {
+    "unsupported-network": t("errors.connectToVerify"),
+    "rpc-wrong-network": t("errors.tokenRpcWrongNetwork"),
+  }[tokenVerificationState];
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [clientAddressErrors, setClientAddressErrors] = useState({});
   const [rowTotalErrors, setRowTotalErrors] = useState({});
@@ -169,7 +176,7 @@ function CreateInvoicesBatch() {
   const resolveTokenDecimals = async (tokenAddress, fallbackDecimals) => {
     return resolvePaymentTokenDecimals(tokenAddress, fallbackDecimals, nativeToken, async () => {
       try {
-        const provider = getTokenReadProvider(chainId || 1);
+        const provider = await getCheckedTokenReadProvider(chainId || 1);
         if (!provider) return null;
 
         const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
@@ -381,7 +388,8 @@ function CreateInvoicesBatch() {
     setTokenVerificationState("verifying");
 
     try {
-      const provider = getTokenReadProvider(chainId);
+      const provider = await getCheckedTokenReadProvider(chainId);
+      if (!isCurrent()) return;
       if (!provider) {
         setTokenVerificationState("unsupported-network");
         toast.error(t("errors.connectToVerify"));
@@ -412,8 +420,11 @@ function CreateInvoicesBatch() {
 
       console.error("Verification failed:", error);
       setVerifiedToken(null);
-      setTokenVerificationState("error");
-      toast.error(t("errors.tokenVerifyFailed"));
+      const wrongNetwork = error instanceof TokenRpcWrongNetworkError;
+      setTokenVerificationState(wrongNetwork ? "rpc-wrong-network" : "error");
+      toast.error(
+        t(wrongNetwork ? "errors.tokenRpcWrongNetwork" : "errors.tokenVerifyFailed")
+      );
     }
   };
 
@@ -1096,12 +1107,12 @@ function CreateInvoicesBatch() {
                         </div>
                       </div>
                     )}
-                    {tokenVerificationState === "unsupported-network" && (
+                    {tokenNetworkMessage && (
                       <div className="bg-red-50 p-3 rounded-lg border border-red-200 mt-3">
                         <div className="flex items-center gap-2">
                           <XCircle className="h-5 w-5 text-red-500" />
                           <p className="text-sm text-red-600">
-                            {t("errors.connectToVerify")}
+                            {tokenNetworkMessage}
                           </p>
                         </div>
                       </div>

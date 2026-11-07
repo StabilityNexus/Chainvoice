@@ -38,7 +38,7 @@ export default [
           object,
           property: 'ethereum',
           message:
-            'Read through the connected wallet client or getTokenReadProvider (#348).',
+            'Read through the connected wallet client or getCheckedTokenReadProvider (#348).',
         })),
       ],
       'react-refresh/only-export-components': [
