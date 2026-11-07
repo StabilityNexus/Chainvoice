@@ -83,9 +83,6 @@ import {
   createEmptyInvoiceItem,
 } from "@/utils/productCatalogInvoiceHelpers";
 
-const CONNECT_TO_VERIFY =
-  "Connect your wallet to a supported network to verify the token";
-
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
   const { isConnected, chainId } = useAccount();
@@ -172,7 +169,7 @@ function CreateInvoicesBatch() {
   const resolveTokenDecimals = async (tokenAddress, fallbackDecimals) => {
     return resolvePaymentTokenDecimals(tokenAddress, fallbackDecimals, nativeToken, async () => {
       try {
-        const provider = getTokenReadProvider(chainId);
+        const provider = getTokenReadProvider(chainId || 1);
         if (!provider) return null;
 
         const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
@@ -386,7 +383,9 @@ function CreateInvoicesBatch() {
     try {
       const provider = getTokenReadProvider(chainId);
       if (!provider) {
-        throw new Error(CONNECT_TO_VERIFY);
+        setTokenVerificationState("unsupported-network");
+        toast.error(t("errors.connectToVerify"));
+        return;
       }
 
       const contract = new ethers.Contract(
@@ -414,11 +413,7 @@ function CreateInvoicesBatch() {
       console.error("Verification failed:", error);
       setVerifiedToken(null);
       setTokenVerificationState("error");
-      toast.error(
-        error?.message === CONNECT_TO_VERIFY
-          ? CONNECT_TO_VERIFY
-          : "Token verification failed. Please check the address."
-      );
+      toast.error(t("errors.tokenVerifyFailed"));
     }
   };
 
@@ -1098,6 +1093,16 @@ function CreateInvoicesBatch() {
                               Please check the contract address and try again.
                             </p>
                           </div>
+                        </div>
+                      </div>
+                    )}
+                    {tokenVerificationState === "unsupported-network" && (
+                      <div className="bg-red-50 p-3 rounded-lg border border-red-200 mt-3">
+                        <div className="flex items-center gap-2">
+                          <XCircle className="h-5 w-5 text-red-500" />
+                          <p className="text-sm text-red-600">
+                            {t("errors.connectToVerify")}
+                          </p>
                         </div>
                       </div>
                     )}

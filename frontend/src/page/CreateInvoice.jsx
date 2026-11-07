@@ -201,7 +201,8 @@ function CreateInvoice() {
     try {
       const provider = getTokenReadProvider(chainIdForRpc);
       if (!provider) {
-        throw new Error("No Ethereum provider found");
+        setTokenVerificationState("unsupported-network");
+        return;
       }
 
       const contract = new ethers.Contract(address, ERC20_ABI, provider);
@@ -1300,6 +1301,17 @@ function CreateInvoice() {
                             </div>
                           </div>
                         )}
+
+                        {tokenVerificationState === "unsupported-network" && (
+                          <div className="bg-red-50 p-3 rounded-lg border border-red-100 mt-3">
+                            <div className="flex items-center gap-3">
+                              <XCircle className="h-5 w-5 text-red-500" />
+                              <p className="text-sm text-red-600">
+                                {t("tokenNetworkUnsupported")}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -1314,7 +1326,7 @@ function CreateInvoice() {
                           Your client will need to have sufficient balance of the
                           chosen token to be able to pay your invoice.
                         </>
-                      ) : customTokenAddress ? (
+                      ) : tokenVerificationState === "unsupported-network" ? null : customTokenAddress ? (
                         <>
                           <span className="font-medium text-gray-700">Note:</span>{" "}
                           Please wait for token verification to complete before

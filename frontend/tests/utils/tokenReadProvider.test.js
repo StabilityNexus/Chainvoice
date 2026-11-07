@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, jest, test } from "@jest/globals";
+import { readFileSync } from "node:fs";
 import { JsonRpcProvider } from "ethers";
 import { chainConfig } from "../../src/utils/chainConfig.js";
 import {
   CHAIN_ID_TO_PUBLIC_RPC,
   getTokenReadProvider,
 } from "../../src/utils/tokenReadProvider.js";
+
+const en = JSON.parse(
+  readFileSync(new URL("../../src/locales/en.json", import.meta.url), "utf8")
+);
 
 function injectOtherWallet() {
   const request = jest.fn();
@@ -50,5 +55,11 @@ describe("getTokenReadProvider", () => {
     for (const chain of chainConfig) {
       expect(CHAIN_ID_TO_PUBLIC_RPC[chain.id]).toMatch(/^https:\/\//);
     }
+  });
+
+  test("en.json has the token messages both pages show", () => {
+    expect(en.createInvoice.tokenNetworkUnsupported).toEqual(expect.any(String));
+    expect(en.batchInvoice.errors.connectToVerify).toEqual(expect.any(String));
+    expect(en.batchInvoice.errors.tokenVerifyFailed).toEqual(expect.any(String));
   });
 });
