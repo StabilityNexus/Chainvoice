@@ -83,9 +83,6 @@ export function makeTransactionKey({ chainId, wallet, hash }) {
   return `${normalizedChainId}:${normalizedWallet}:${normalizedHash}`;
 }
 
-/**
- * Build the record persisted immediately after the wallet returns a hash.
- */
 export function createTransactionRecord({
   hash,
   chainId,
@@ -144,9 +141,6 @@ export function createTransactionRecord({
   };
 }
 
-/**
- * Whether a stored record is safe to use. Corrupt records are ignored by the UI.
- */
 export function isTransactionRecord(record) {
   if (!record || typeof record !== "object") return false;
   if (!HASH_PATTERN.test(String(record.hash || ""))) return false;
@@ -195,9 +189,6 @@ function serializeReceipt(record, receipt) {
   };
 }
 
-/**
- * Apply an authoritative receipt. Only a status of 1 or 0 settles the record.
- */
 export function applyTransactionReceipt(record, receipt, now = Date.now()) {
   if (!receipt || typeof receipt !== "object") {
     return {
@@ -230,12 +221,6 @@ export function applyTransactionReceipt(record, receipt, now = Date.now()) {
   };
 }
 
-/**
- * Apply an error raised while waiting for a transaction.
- *
- * A generic RPC error leaves the record unresolved. Replaced/dropped is only
- * recorded when ethers supplies TRANSACTION_REPLACED evidence.
- */
 export function applyTransactionError(record, error, now = Date.now()) {
   if (error?.code === "TRANSACTION_REPLACED") {
     const cancelled = error.reason === "cancelled";
@@ -322,10 +307,6 @@ export async function reconcileTransaction(record, provider, now = Date.now()) {
   }
 }
 
-/**
- * Reconcile a batch of records, persisting only the ones that changed.
- * Provider and persistence are injected so the recovery flow is testable.
- */
 export async function reconcileTransactions(
   records,
   { getProvider, save, now = Date.now } = {}
@@ -359,10 +340,6 @@ export async function reconcileTransactions(
   return updatedRecords;
 }
 
-/**
- * Invoice ids that currently have an unresolved payment on this chain.
- * Approval transactions do not block a retry because no payment was submitted.
- */
 export function getUnresolvedPaymentInvoiceIds(transactions, chainId) {
   const ids = new Set();
   const normalizedChainId = normalizeChainId(chainId);

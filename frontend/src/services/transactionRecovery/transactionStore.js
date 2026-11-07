@@ -17,10 +17,6 @@ export async function saveTransaction(record) {
   return record;
 }
 
-/**
- * Transactions for one wallet on one chain, newest first.
- * Corrupt rows are skipped rather than breaking the recovery panel.
- */
 export async function getTransactionsForWallet(chainId, wallet) {
   if (!chainId || !wallet) return [];
 

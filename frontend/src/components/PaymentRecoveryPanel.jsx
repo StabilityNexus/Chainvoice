@@ -117,11 +117,6 @@ function TransactionRow({ transaction }) {
   );
 }
 
-/**
- * Shows locally stored payments/approvals that are still unresolved.
- * These records are informational only; the invoice's on-chain state is the
- * source of truth and recovery never submits another transaction.
- */
 export default function PaymentRecoveryPanel({
   transactions = [],
   isRefreshing = false,

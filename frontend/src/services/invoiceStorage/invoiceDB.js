@@ -29,8 +29,7 @@ async function getDB() {
         if (!store.indexNames.contains('by-chain')) store.createIndex('by-chain', 'chainId');
         if (!store.indexNames.contains('by-invoiceId')) store.createIndex('by-invoiceId', 'invoiceId');
 
-        // Payment transaction recovery records live in the same local database
-        // but in their own store, so invoice backup/restore stays unchanged.
+        // Recovery records use a separate store, so invoice backup/restore is unchanged.
         if (!db.objectStoreNames.contains(TRANSACTION_STORE_NAME)) {
           const transactionStore = db.createObjectStore(TRANSACTION_STORE_NAME, {
             keyPath: 'key',

@@ -88,26 +88,12 @@ export function getDeployedChains(chains = chainConfig, env = import.meta.env) {
   return chains.filter((chain) => isChainDeployed(chain.id, env));
 }
 
-/**
- * The configured chain definition for a chain id.
- *
- * @param {number|string} chainId
- * @param {Array} [chains]
- */
 export function getChainConfig(chainId, chains = chainConfig) {
   const normalizedChainId = Number(chainId);
   if (!Number.isSafeInteger(normalizedChainId)) return null;
   return chains.find((chain) => chain.id === normalizedChainId) || null;
 }
 
-/**
- * Explorer URL for a transaction, built from the configured chain metadata.
- *
- * @param {number|string} chainId
- * @param {string} hash
- * @param {Array} [chains]
- * @returns {string|null} null when the chain or explorer is unknown
- */
 export function getTransactionExplorerUrl(chainId, hash, chains = chainConfig) {
   if (typeof hash !== "string" || !hash) return null;
   const chain = getChainConfig(chainId, chains);

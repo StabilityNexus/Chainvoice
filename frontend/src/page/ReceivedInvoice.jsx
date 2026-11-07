@@ -196,8 +196,7 @@ function ReceivedInvoice() {
     failTransaction,
   } = useTransactionRecovery();
 
-  // A transaction recovered as confirmed may have changed the invoice's
-  // on-chain paid state, so let the normal chain fetch reconcile the row.
+  // A recovered payment may have changed the invoice's on-chain state.
   useEffect(() => {
     if (settledVersion > 0) setRefreshTrigger((previous) => previous + 1);
   }, [settledVersion]);
@@ -265,8 +264,6 @@ function ReceivedInvoice() {
     return tReceivedInvoices(`errors.${key}`, params);
   };
 
-  // Persist the transaction before waiting, then record the authoritative
-  // receipt (or a replacement/revert) when the wait finishes.
   const waitForTrackedTransaction = async (tx, record) => {
     try {
       const receipt = await tx.wait();

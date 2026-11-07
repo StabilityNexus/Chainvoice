@@ -23,10 +23,6 @@ function upsertTransaction(records, record) {
   return next.sort((a, b) => b.submittedAt - a.submittedAt);
 }
 
-/**
- * Persists submitted payment/approval transactions and restores their progress
- * after a refresh. Recovery only reads the original chain; it never resubmits.
- */
 export function useTransactionRecovery() {
   const { address, chainId } = useAccount();
   const [transactions, setTransactions] = useState([]);
@@ -51,8 +47,7 @@ export function useTransactionRecovery() {
       const stored = await getTransactionsForWallet(chainId, address);
       if (requestId !== requestRef.current) return stored;
 
-      // Show stored records before the network round-trip, so duplicate-payment
-      // protection is active even if an RPC is slow or unavailable.
+      // Show stored records first so duplicate-payment protection survives slow RPC.
       setTransactions(stored);
       setLoadedScope(scopeKey);
 
@@ -95,7 +90,6 @@ export function useTransactionRecovery() {
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", handleVisibility);
-      // Invalidate any in-flight load for this wallet/chain.
       requestRef.current += 1;
     };
   }, [refresh]);
