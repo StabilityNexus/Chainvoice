@@ -7,7 +7,6 @@ import {
   Contract,
   ethers,
   formatUnits,
-  JsonRpcProvider,
 } from "ethers";
 import { useAccount, useWalletClient } from "wagmi";
 import { usePaymentToken } from "../hooks/usePaymentToken.js";
@@ -16,6 +15,7 @@ import {
   validateTokenDecimals,
   verifyTokenContract,
 } from "../utils/paymentToken.js";
+import { getTokenReadProvider } from "../utils/tokenReadProvider.js";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import {
   Popover,
@@ -82,19 +82,6 @@ import {
   applyProductToInvoiceItem,
   createEmptyInvoiceItem,
 } from "@/utils/productCatalogInvoiceHelpers";
-
-/** Public RPC URLs by chain ID for token verification when visitor has no wallet. */
-const CHAIN_ID_TO_PUBLIC_RPC = {
-  1: "https://ethereum-rpc.publicnode.com",
-  61: "https://etc.etcdesktop.com",
-  137: "https://polygon-bor-rpc.publicnode.com",
-  56: "https://bsc-dataseed.binance.org",
-  8453: "https://mainnet.base.org",
-  11155111: "https://ethereum-sepolia-rpc.publicnode.com",
-  63: "https://0xrpc.io/mordor",
-  80002: "https://polygon-amoy.drpc.org",
-  5115: "https://rpc.testnet.citrea.xyz",
-};
 
 function CreateInvoicesBatch() {
   const { data: walletClient } = useWalletClient();
@@ -182,16 +169,8 @@ function CreateInvoicesBatch() {
   const resolveTokenDecimals = async (tokenAddress, fallbackDecimals) => {
     return resolvePaymentTokenDecimals(tokenAddress, fallbackDecimals, nativeToken, async () => {
       try {
-        let provider;
-        const rpcUrl = chainId && CHAIN_ID_TO_PUBLIC_RPC[Number(chainId)];
-
-        if (rpcUrl) {
-          provider = new JsonRpcProvider(rpcUrl);
-        } else if (typeof window !== "undefined" && window.ethereum) {
-          provider = new BrowserProvider(window.ethereum);
-        } else {
-          return null;
-        }
+        const provider = getTokenReadProvider(chainId || 1);
+        if (!provider) return null;
 
         const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
         const decimals = await contract.decimals();
@@ -402,14 +381,13 @@ function CreateInvoicesBatch() {
     setTokenVerificationState("verifying");
 
     try {
-      if (
-        typeof window === "undefined" ||
-        !window.ethereum
-      ) {
-        throw new Error("No Ethereum provider found");
+      const provider = getTokenReadProvider(chainId);
+      if (!provider) {
+        setTokenVerificationState("unsupported-network");
+        toast.error(t("errors.connectToVerify"));
+        return;
       }
 
-      const provider = new BrowserProvider(window.ethereum);
       const contract = new ethers.Contract(
         address,
         ERC20_ABI,
@@ -435,11 +413,7 @@ function CreateInvoicesBatch() {
       console.error("Verification failed:", error);
       setVerifiedToken(null);
       setTokenVerificationState("error");
-      toast.error(
-        error?.message === "No Ethereum provider found"
-          ? "No Ethereum provider found"
-          : "Token verification failed. Please check the address."
-      );
+      toast.error(t("errors.tokenVerifyFailed"));
     }
   };
 
@@ -1119,6 +1093,16 @@ function CreateInvoicesBatch() {
                               Please check the contract address and try again.
                             </p>
                           </div>
+                        </div>
+                      </div>
+                    )}
+                    {tokenVerificationState === "unsupported-network" && (
+                      <div className="bg-red-50 p-3 rounded-lg border border-red-200 mt-3">
+                        <div className="flex items-center gap-2">
+                          <XCircle className="h-5 w-5 text-red-500" />
+                          <p className="text-sm text-red-600">
+                            {t("errors.connectToVerify")}
+                          </p>
                         </div>
                       </div>
                     )}

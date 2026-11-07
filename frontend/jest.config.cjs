@@ -9,6 +9,7 @@ module.exports = {
     "src/utils/invoicePagination.js",
     "src/utils/documentMeta.js",
     "src/utils/paymentToken.js",
+    "src/utils/tokenReadProvider.js",
     "src/services/relay/invoiceCrypto.js",
     "src/services/relay/invoiceHashUtils.js",
     "src/services/relay/relayInvoiceMessaging.js",

@@ -32,6 +32,15 @@ export default [
       ...reactHooks.configs.recommended.rules,
       'react/jsx-no-target-blank': 'off',
       'react/prop-types': 'off',
+      'no-restricted-properties': [
+        'error',
+        ...['window', 'globalThis', 'self', 'top', 'parent', 'frames'].map((object) => ({
+          object,
+          property: 'ethereum',
+          message:
+            'Read through the connected wallet client or getTokenReadProvider (#348).',
+        })),
+      ],
       'react-refresh/only-export-components': [
         'warn',
         { allowConstantExport: true },
