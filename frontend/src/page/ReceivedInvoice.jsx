@@ -13,7 +13,7 @@ import TableRow from "@mui/material/TableRow";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { getWagmiChainInfo } from "@/utils/wagmiChainHelpers";
 import { BrowserProvider, Contract, ethers } from "ethers";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
@@ -87,6 +87,7 @@ import TableSortLabel from "@mui/material/TableSortLabel";
 import { useInvoiceFilterSort } from "@/hooks/useInvoiceFilterSort";
 import InvoiceFilterBar from "@/components/InvoiceFilterBar";
 import { PAGE_CONTAINER } from "@/utils/layout";
+import { findBatchSuggestions } from "@/utils/invoiceBatchSuggestions";
 import { cn } from "@/lib/utils";
 
 const columns = [
@@ -98,8 +99,6 @@ const columns = [
   { id: "date", label: "Date", minWidth: 100, sortable: true },
   { id: "actions", label: "Actions", minWidth: 150, sortable: false },
 ];
-
-
 
 function ReceivedInvoice() {
   const [page, setPage] = useState(0);
@@ -171,7 +170,6 @@ function ReceivedInvoice() {
   const [selectedInvoices, setSelectedInvoices] = useState(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
   const singlePaymentInFlight = Object.values(paymentLoading).some(Boolean);
-  const [batchSuggestions, setBatchSuggestions] = useState([]);
 
   // Identifies the list on screen, so a payment handler can tell whether the
   // user paged (or switched wallet/network) while its transaction was pending.
@@ -207,6 +205,13 @@ function ReceivedInvoice() {
     clearFilters,
     hasActiveFilters,
   } = useInvoiceFilterSort(receivedInvoices, { isSent: false });
+
+  // Filtering happens after the page is fetched, so the suggestions must be
+  // rebuilt from what is visible to avoid offering hidden invoices for payment.
+  const batchSuggestions = useMemo(
+    () => findBatchSuggestions(filteredAndSortedInvoices),
+    [filteredAndSortedInvoices]
+  );
 
   useEffect(() => {
     setSelectedInvoices((prev) => {
@@ -255,44 +260,6 @@ function ReceivedInvoice() {
       };
     }
     return null;
-  };
-
-  const findBatchSuggestions = (invoices) => {
-    const suggestions = [];
-    const groups = invoices
-      .filter(isInvoicePayable)
-      .reduce((acc, inv) => {
-        // Undated on-chain-only invoices would otherwise all share the
-        // "Invalid Date" key and be suggested as one bogus batch.
-        const issueDate = inv.issueDate
-          ? new Date(inv.issueDate).toDateString()
-          : `undated-${inv.id}`;
-        const key = `${inv.user?.address}_${inv.paymentToken?.address || "ETH"
-          }_${issueDate}`;
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(inv);
-        return acc;
-      }, {});
-
-    Object.entries(groups).forEach(([key, invoices]) => {
-      if (invoices.length >= 2) {
-        const totalAmount = ethers.formatUnits(
-          sumBaseUnits(invoices),
-          invoices[0].paymentToken.decimals
-        );
-        suggestions.push({
-          id: key,
-          invoices,
-          sender: invoices[0].user,
-          token: invoices[0].paymentToken,
-          totalAmount,
-          reason: `${invoices.length} invoices from same sender on same day`,
-          type: "same_day_sender",
-        });
-      }
-    });
-
-    return suggestions;
   };
 
   // ESTIMATED GAS FOR THE TRANSACTIONS A PAYMENT WILL SEND
@@ -807,11 +774,10 @@ function ReceivedInvoice() {
     setPage(0);
   }, [address, chainId]);
 
-  // Selection and batch actions only see the loaded page, so neither a
-  // selection nor a suggestion may outlive the page it was built from.
+  // Selection and batch actions only see the loaded page, so a selection may
+  // not outlive the page it was built from.
   useEffect(() => {
     setSelectedInvoices(new Set());
-    setBatchSuggestions([]);
     setBulkExportOpen(false);
   }, [page, rowsPerPage, address, chainId]);
 
@@ -859,7 +825,6 @@ function ReceivedInvoice() {
 
         if (res.length === 0) {
           setReceivedInvoice([]);
-          setBatchSuggestions([]);
           setSelectedInvoices(new Set());
           return;
         }
@@ -946,8 +911,6 @@ function ReceivedInvoice() {
         setSelectedInvoices((prev) =>
           filterSelectionToPage(prev, decryptedInvoices)
         );
-        const suggestions = findBatchSuggestions(decryptedInvoices);
-        setBatchSuggestions(suggestions);
         const fee = await contract.devFee();
         if (cancelled) return;
         setFee(fee);
