@@ -176,9 +176,9 @@ export function filterAndSortInvoices(
       }
 
       if (cmp === 0) {
-        const idA = String(a.id || "");
-        const idB = String(b.id || "");
-        cmp = idA.localeCompare(idB);
+        const idA = String(a.id ?? "");
+        const idB = String(b.id ?? "");
+        cmp = idA.localeCompare(idB, undefined, { numeric: true });
       }
 
       return sortDir === "desc" ? -cmp : cmp;
