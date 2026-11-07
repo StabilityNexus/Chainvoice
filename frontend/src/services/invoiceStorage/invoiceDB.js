@@ -1,8 +1,9 @@
 import { openDB } from 'idb';
 
 const DB_NAME = 'chainvoice-invoices';
-const DB_VERSION = 2; // Bumped to force re-creation of stores
+const DB_VERSION = 3; // v3 adds the payment transaction recovery store
 const STORE_NAME = 'invoices';
+const TRANSACTION_STORE_NAME = 'transactions';
 
 /**
  * Open (or create) the IndexedDB database for local invoice storage.
@@ -27,6 +28,26 @@ async function getDB() {
         if (!store.indexNames.contains('by-receiver')) store.createIndex('by-receiver', 'to');
         if (!store.indexNames.contains('by-chain')) store.createIndex('by-chain', 'chainId');
         if (!store.indexNames.contains('by-invoiceId')) store.createIndex('by-invoiceId', 'invoiceId');
+
+        // Payment transaction recovery records live in the same local database
+        // but in their own store, so invoice backup/restore stays unchanged.
+        if (!db.objectStoreNames.contains(TRANSACTION_STORE_NAME)) {
+          const transactionStore = db.createObjectStore(TRANSACTION_STORE_NAME, {
+            keyPath: 'key',
+          });
+          transactionStore.createIndex('by-wallet-chain', 'walletChainKey');
+          transactionStore.createIndex('by-submitted-at', 'submittedAt');
+        } else {
+          const transactionStore = db.transaction.objectStore(
+            TRANSACTION_STORE_NAME
+          );
+          if (!transactionStore.indexNames.contains('by-wallet-chain')) {
+            transactionStore.createIndex('by-wallet-chain', 'walletChainKey');
+          }
+          if (!transactionStore.indexNames.contains('by-submitted-at')) {
+            transactionStore.createIndex('by-submitted-at', 'submittedAt');
+          }
+        }
       },
     }).catch((err) => {
       dbPromise = null; // Reset so next call retries
@@ -179,5 +200,5 @@ export async function deleteInvoice(chainId, invoiceId) {
   }
 }
 
-export { DB_NAME, STORE_NAME };
+export { DB_NAME, DB_VERSION, STORE_NAME, TRANSACTION_STORE_NAME, getDB };
 
