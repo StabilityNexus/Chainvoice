@@ -1108,7 +1108,7 @@ function CreateInvoicesBatch() {
                       </div>
                     )}
                     {tokenNetworkMessage && (
-                      <div className="bg-red-50 p-3 rounded-lg border border-red-200 mt-3">
+                      <div role="alert" className="bg-red-50 p-3 rounded-lg border border-red-200 mt-3">
                         <div className="flex items-center gap-2">
                           <XCircle className="h-5 w-5 text-red-500" />
                           <p className="text-sm text-red-600">
