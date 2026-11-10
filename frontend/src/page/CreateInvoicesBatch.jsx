@@ -98,6 +98,9 @@ function CreateInvoicesBatch() {
 
   const itemRefs = useRef({});
 
+  // One chain for every token read, list and reset, as on Send Invoice.
+  const tokenChainId = chainId || 1;
+
   // Token selection state
   const {
     nativeToken,
@@ -107,7 +110,7 @@ function CreateInvoicesBatch() {
     tokenVerificationState, setTokenVerificationState,
     verifiedToken, setVerifiedToken,
     beginTokenRequest,
-  } = usePaymentToken(chainId || 1);
+  } = usePaymentToken(tokenChainId);
   const tokenNetworkMessage = {
     "unsupported-network": t("errors.connectToVerify"),
     "rpc-wrong-network": t("errors.tokenRpcWrongNetwork"),
@@ -176,7 +179,7 @@ function CreateInvoicesBatch() {
   const resolveTokenDecimals = async (tokenAddress, fallbackDecimals) => {
     return resolvePaymentTokenDecimals(tokenAddress, fallbackDecimals, nativeToken, async () => {
       try {
-        const provider = await getCheckedTokenReadProvider(chainId || 1);
+        const provider = await getCheckedTokenReadProvider(tokenChainId);
         if (!provider) return null;
 
         const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
@@ -388,7 +391,7 @@ function CreateInvoicesBatch() {
     setTokenVerificationState("verifying");
 
     try {
-      const provider = await getCheckedTokenReadProvider(chainId);
+      const provider = await getCheckedTokenReadProvider(tokenChainId);
       if (!isCurrent()) return;
       if (!provider) {
         setTokenVerificationState("unsupported-network");
@@ -1031,7 +1034,7 @@ function CreateInvoicesBatch() {
                         toast.success(`Selected ${token.symbol}`);
                         return true;
                       }}
-                      chainId={account?.chainId || 1}
+                      chainId={tokenChainId}
                       disabled={loading}
                       className="w-full"
                       allowCustom={false}
