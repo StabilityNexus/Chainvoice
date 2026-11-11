@@ -1,4 +1,11 @@
 import { ZeroAddress } from "ethers";
+import { TokenRpcUnavailableError } from "./tokenReadProvider.js";
+
+/** A missing symbol is a token problem, but a failed RPC is not. */
+export function symbolOrUnknown(error) {
+  if (error instanceof TokenRpcUnavailableError) throw error;
+  return "UNKNOWN";
+}
 
 export function validateTokenDecimals(decimals) {
   if (
@@ -104,7 +111,7 @@ export async function verifyTokenContract({
 }) {
   try {
     const [symbol, name, rawDecimals] = await Promise.all([
-      contract.symbol().catch(() => "UNKNOWN"),
+      contract.symbol().catch(symbolOrUnknown),
       contract.name().catch(() => "Unknown Token"),
       contract.decimals(),
     ]);

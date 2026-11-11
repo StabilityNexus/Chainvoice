@@ -17,7 +17,7 @@ import {
 } from "../utils/paymentToken.js";
 import {
   getCheckedTokenReadProvider,
-  TokenRpcWrongNetworkError,
+  tokenRpcErrorState,
 } from "../utils/tokenReadProvider.js";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import {
@@ -111,10 +111,12 @@ function CreateInvoicesBatch() {
     verifiedToken, setVerifiedToken,
     beginTokenRequest,
   } = usePaymentToken(tokenChainId);
-  const tokenNetworkMessage = {
+  const tokenNetworkMessages = {
     "unsupported-network": t("errors.connectToVerify"),
     "rpc-wrong-network": t("errors.tokenRpcWrongNetwork"),
-  }[tokenVerificationState];
+    "rpc-unavailable": t("errors.tokenRpcUnavailable"),
+  };
+  const tokenNetworkMessage = tokenNetworkMessages[tokenVerificationState];
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   const [clientAddressErrors, setClientAddressErrors] = useState({});
   const [rowTotalErrors, setRowTotalErrors] = useState({});
@@ -423,11 +425,9 @@ function CreateInvoicesBatch() {
 
       console.error("Verification failed:", error);
       setVerifiedToken(null);
-      const wrongNetwork = error instanceof TokenRpcWrongNetworkError;
-      setTokenVerificationState(wrongNetwork ? "rpc-wrong-network" : "error");
-      toast.error(
-        t(wrongNetwork ? "errors.tokenRpcWrongNetwork" : "errors.tokenVerifyFailed")
-      );
+      const errorState = tokenRpcErrorState(error);
+      setTokenVerificationState(errorState);
+      toast.error(tokenNetworkMessages[errorState] ?? t("errors.tokenVerifyFailed"));
     }
   };
 

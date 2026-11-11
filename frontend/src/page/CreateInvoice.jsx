@@ -13,11 +13,12 @@ import {
   getChainName,
   getLinkChainMismatch,
   resolveTokenDecimals as resolvePaymentTokenDecimals,
+  symbolOrUnknown,
   validateTokenDecimals,
 } from "../utils/paymentToken.js";
 import {
   getCheckedTokenReadProvider,
-  TokenRpcWrongNetworkError,
+  tokenRpcErrorState,
 } from "../utils/tokenReadProvider.js";
 import { useTranslation } from "../hooks/useTranslation";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
@@ -132,6 +133,7 @@ function CreateInvoice() {
   const tokenNetworkMessage = {
     "unsupported-network": t("tokenNetworkUnsupported"),
     "rpc-wrong-network": t("tokenRpcWrongNetwork"),
+    "rpc-unavailable": t("tokenRpcUnavailable"),
   }[tokenVerificationState];
 
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
@@ -215,7 +217,7 @@ function CreateInvoice() {
 
       const contract = new ethers.Contract(address, ERC20_ABI, provider);
       const [symbol, name, decimals] = await Promise.all([
-        contract.symbol().catch(() => "UNKNOWN"),
+        contract.symbol().catch(symbolOrUnknown),
         contract.name().catch(() => "Unknown Token"),
         contract.decimals(),
       ]);
@@ -241,9 +243,7 @@ function CreateInvoice() {
 
       console.error("Verification failed:", error);
       setVerifiedToken(null);
-      setTokenVerificationState(
-        error instanceof TokenRpcWrongNetworkError ? "rpc-wrong-network" : "error"
-      );
+      setTokenVerificationState(tokenRpcErrorState(error));
     }
   }, [
     beginTokenRequest,

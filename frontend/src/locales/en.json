@@ -29,6 +29,7 @@
       "connectToVerify": "Connect your wallet to a supported network to verify the token.",
       "tokenVerifyFailed": "Token verification failed. Please check the address.",
       "tokenRpcWrongNetwork": "The public RPC for this network answered for a different network, so the token can't be checked. Try again later.",
+      "tokenRpcUnavailable": "The public RPC for this network could not complete the token check. Try again later.",
       "reverted": "The transaction failed on-chain, so no invoices were created. Try again; if it keeps failing, your wallet may have set the gas limit too low.",
       "rejected": "The contract rejected this batch, so nothing was sent. Check the invoice details and try again.",
       "generic": "Couldn't create the invoices. Please try again."
@@ -74,7 +75,8 @@
     "nativeCoinUnsupported": "The native coin is not supported on this network.",
     "tokenDecimalsFetchFailed": "Failed to fetch token decimals for selected token",
     "tokenNetworkUnsupported": "This network has no public RPC set up, so the token can't be checked here. Switch to a supported network.",
-    "tokenRpcWrongNetwork": "The public RPC for this network answered for a different network, so the token can't be checked. Try again later."
+    "tokenRpcWrongNetwork": "The public RPC for this network answered for a different network, so the token can't be checked. Try again later.",
+    "tokenRpcUnavailable": "The public RPC for this network could not complete the token check. Try again later."
   },
   "invoiceVerification": {
     "received": {
