@@ -60,7 +60,29 @@
     },
     "waitForBatch": "Wait for the batch payment to finish.",
     "waitForPayment": "Wait for the current payment to finish.",
-    "batchPartlyPaid": "Paid {{paid}} of {{total}} invoices, then the {{symbol}} payment failed. Check error details for more information."
+    "batchPartlyPaid": "Paid {{paid}} of {{total}} invoices, then the {{symbol}} payment failed. Check error details for more information.",
+    "financialSummary": {
+      "title": "Financial Summary",
+      "loading": "Calculating financial summary...",
+      "error": "Financial summary unavailable: {{reason}}",
+      "empty": "No invoices found.",
+      "totalInvoices": "Total invoices",
+      "paid": "Paid",
+      "outstanding": "Outstanding",
+      "cancelled": "Cancelled",
+      "totalInvoiced": "Total invoiced",
+      "paidAmount": "Paid amount",
+      "outstandingAmount": "Outstanding amount",
+      "cancelledAmount": "Cancelled amount",
+      "defaultToken": "Token",
+      "tokenChain": "{{symbol}} — Chain {{chainId}}",
+      "errors": {
+        "rpcUrl": "No RPC URL is configured for chain {{chainId}}.",
+        "unsupportedNetwork": "Chainvoice is not configured for this network.",
+        "tokenDecimals": "Token decimals are unavailable for {{tokenAddress}} on chain {{chainId}}.",
+        "retrievalFailed": "Unable to retrieve the financial summary. Please check your connection and try again."
+      }
+    }
   },
   "tokenPicker": {
     "testnetNotice": "Select the native coin or use Input Custom Token for testnet ERC-20 tokens.",

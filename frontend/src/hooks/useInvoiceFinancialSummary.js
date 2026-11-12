@@ -6,6 +6,9 @@ import { createTokenMetadataReader } from "@/utils/chainInvoice";
 import { summarizeInvoices } from "@/utils/invoiceFinancialSummary";
 import { getWagmiChainInfo } from "@/utils/wagmiChainHelpers";
 import { fetchAllInvoicePages } from "@/utils/fetchAllInvoicePages";
+import { useTranslation } from "@/hooks/useTranslation";
+
+class FinancialSummaryUserError extends Error {}
 
 export function useInvoiceFinancialSummary({
   address,
@@ -15,6 +18,8 @@ export function useInvoiceFinancialSummary({
   refreshTrigger,
   invoiceType,
 }) {
+  const { t } = useTranslation("receivedInvoices.financialSummary");
+
   const [summary, setSummary] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -40,8 +45,8 @@ export function useInvoiceFinancialSummary({
           chain?.rpcUrls?.default?.http?.[0];
 
         if (!rpcUrl) {
-          throw new Error(
-            `No RPC URL configured for chain ${chainId}.`
+          throw new FinancialSummaryUserError(
+            t("errors.rpcUrl", { chainId })
           );
         }
 
@@ -49,7 +54,9 @@ export function useInvoiceFinancialSummary({
           import.meta.env[`VITE_CONTRACT_ADDRESS_${chainId}`];
 
         if (!contractAddress) {
-          throw new Error("Unsupported network.");
+          throw new FinancialSummaryUserError(
+            t("errors.unsupportedNetwork")
+          );
         }
 
         const provider = new JsonRpcProvider(rpcUrl);
@@ -75,9 +82,14 @@ export function useInvoiceFinancialSummary({
             ? contract.getSentInvoices.bind(contract)
             : contract.getReceivedInvoices.bind(contract);
 
+        // Pin every pagination request to one consistent blockchain snapshot.
+        const blockTag = await provider.getBlockNumber();
+
         const allInvoices = await fetchAllInvoicePages(
           view,
-          address
+          address,
+          undefined,
+          blockTag
         );
 
         const normalizedInvoices = [];
@@ -90,8 +102,11 @@ export function useInvoiceFinancialSummary({
             token.decimals < 0 ||
             token.decimals > 255
           ) {
-            throw new Error(
-              `Token decimals are unavailable for ${raw[4]} on chain ${chainId}.`
+            throw new FinancialSummaryUserError(
+              t("errors.tokenDecimals", {
+                tokenAddress: raw[4],
+                chainId,
+              })
             );
           }
 
@@ -120,9 +135,9 @@ export function useInvoiceFinancialSummary({
         if (!cancelled) {
           setSummary([]);
           setError(
-            err instanceof Error
+            err instanceof FinancialSummaryUserError
               ? err.message
-              : "Unable to calculate the financial summary."
+              : t("errors.retrievalFailed")
           );
         }
       } finally {
@@ -144,6 +159,7 @@ export function useInvoiceFinancialSummary({
     tokens,
     refreshTrigger,
     invoiceType,
+    t,
   ]);
 
   return { summary, loading, error };

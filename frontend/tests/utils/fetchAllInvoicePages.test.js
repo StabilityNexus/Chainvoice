@@ -1,5 +1,7 @@
+
 import { jest } from "@jest/globals";
 import { fetchAllInvoicePages } from "../../src/utils/fetchAllInvoicePages";
+
 describe("fetchAllInvoicePages", () => {
   test("fetches all invoices across multiple pages", async () => {
     const invoices = Array.from({ length: 51 }, (_, i) => ({
@@ -19,14 +21,67 @@ describe("fetchAllInvoicePages", () => {
     expect(view).toHaveBeenNthCalledWith(2, "0xUser", 50, 50);
   });
 
-  test("returns an empty array when there are no invoices", async () => {
+  test("uses the same blockTag for every page request", async () => {
+    const invoices = Array.from({ length: 101 }, (_, i) => ({
+      id: i + 1,
+    }));
+    const blockTag = 12345;
+
+    const view = jest.fn(async (_user, offset, limit) => [
+      invoices.slice(offset, offset + limit),
+      invoices.length,
+    ]);
+
+    const result = await fetchAllInvoicePages(
+      view,
+      "0xUser",
+      50,
+      blockTag
+    );
+
+    expect(result).toHaveLength(101);
+    expect(view).toHaveBeenCalledTimes(3);
+
+    expect(view).toHaveBeenNthCalledWith(
+      1,
+      "0xUser",
+      0,
+      50,
+      { blockTag }
+    );
+
+    expect(view).toHaveBeenNthCalledWith(
+      2,
+      "0xUser",
+      50,
+      50,
+      { blockTag }
+    );
+
+    expect(view).toHaveBeenNthCalledWith(
+      3,
+      "0xUser",
+      100,
+      50,
+      { blockTag }
+    );
+  });
+
+  test("uses the pinned blockTag when the invoice list is empty", async () => {
+    const blockTag = 12345;
     const view = jest.fn().mockResolvedValue([[], 0]);
 
     await expect(
-      fetchAllInvoicePages(view, "0xUser")
+      fetchAllInvoicePages(view, "0xUser", 50, blockTag)
     ).resolves.toEqual([]);
 
     expect(view).toHaveBeenCalledTimes(1);
+    expect(view).toHaveBeenCalledWith(
+      "0xUser",
+      0,
+      50,
+      { blockTag }
+    );
   });
 
   test("rejects an invoice count that changes between pages", async () => {
@@ -68,6 +123,16 @@ describe("fetchAllInvoicePages", () => {
     await expect(
       fetchAllInvoicePages(view, "0xUser", 0)
     ).rejects.toThrow(/Invalid invoice page size/);
+
+    expect(view).not.toHaveBeenCalled();
+  });
+
+  test("rejects an invalid blockTag", async () => {
+    const view = jest.fn();
+
+    await expect(
+      fetchAllInvoicePages(view, "0xUser", 50, -1)
+    ).rejects.toThrow(/Invalid block tag/);
 
     expect(view).not.toHaveBeenCalled();
   });

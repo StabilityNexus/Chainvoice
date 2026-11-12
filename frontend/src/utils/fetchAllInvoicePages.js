@@ -1,11 +1,21 @@
+
 import { MAX_PAGE_LIMIT } from "./invoicePagination.js";
+
 export async function fetchAllInvoicePages(
   view,
   user,
-  pageSize = MAX_PAGE_LIMIT
+  pageSize = MAX_PAGE_LIMIT,
+  blockTag
 ) {
   if (!Number.isSafeInteger(pageSize) || pageSize <= 0) {
     throw new Error("Invalid invoice page size.");
+  }
+
+  if (
+    blockTag !== undefined &&
+    (!Number.isSafeInteger(blockTag) || blockTag < 0)
+  ) {
+    throw new Error("Invalid block tag.");
   }
 
   const allInvoices = [];
@@ -16,7 +26,12 @@ export async function fetchAllInvoicePages(
     total === null || offset < total;
     offset += pageSize
   ) {
-    const [page, pageTotal] = await view(user, offset, pageSize);
+    const result =
+      blockTag === undefined
+        ? await view(user, offset, pageSize)
+        : await view(user, offset, pageSize, { blockTag });
+
+    const [page, pageTotal] = result;
     const currentTotal = Number(pageTotal);
 
     if (!Number.isSafeInteger(currentTotal) || currentTotal < 0) {

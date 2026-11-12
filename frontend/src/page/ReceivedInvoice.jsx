@@ -1213,6 +1213,11 @@ function ReceivedInvoice() {
               Export Selected ({selectedOnPage.length})
             </Button>
           </div>
+          <InvoiceFinancialSummary
+            summary={financialSummary}
+            loading={summaryLoading}
+            error={summaryError}
+          />
 
           {/* Without a registered public key, senders have nothing to encrypt
               to, so invoices arrive as on-chain summaries with no detail. */}
@@ -1597,11 +1602,6 @@ function ReceivedInvoice() {
               )}
             </Paper>
           )}
-          <InvoiceFinancialSummary
-            summary={financialSummary}
-            loading={summaryLoading}
-            error={summaryError}
-          />
           <InvoiceFilterBar
             filters={filters}
             setFilter={setFilter}
