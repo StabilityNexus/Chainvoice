@@ -25,7 +25,8 @@ import { getReceivedInvoices as getLocalReceivedInvoices, getInvoiceById, storeI
 import { verifyInvoiceHash } from "@/services/relay/invoiceHashUtils.js";
 import { fetchInvoiceMessages, pollInvoiceMessages } from "@/services/relay/relayInvoiceMessaging.js";
 import { useRelayKeys } from "@/hooks/useRelayKeys";
-
+import InvoiceFinancialSummary from "@/components/InvoiceFinancialSummary";
+import { useInvoiceFinancialSummary } from "@/hooks/useInvoiceFinancialSummary";
 import { ERC20_ABI } from "@/contractsABI/ERC20_ABI";
 import toast from "react-hot-toast";
 import { formatInvoiceDate } from "@/utils/invoiceAmounts";
@@ -226,7 +227,19 @@ function ReceivedInvoice() {
   }, [filters.sortBy, filters.sortDir]);
 
   const { tokens } = useTokenList(chainId || 1);
-
+  const {
+    summary: financialSummary,
+    loading: summaryLoading,
+    error: summaryError,
+  } = useInvoiceFinancialSummary({
+    walletClient,
+    address,
+    chainId,
+    chain,
+    tokens,
+    refreshTrigger,
+    invoiceType: "received",
+  });
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
@@ -1584,7 +1597,11 @@ function ReceivedInvoice() {
               )}
             </Paper>
           )}
-
+          <InvoiceFinancialSummary
+            summary={financialSummary}
+            loading={summaryLoading}
+            error={summaryError}
+          />
           <InvoiceFilterBar
             filters={filters}
             setFilter={setFilter}
