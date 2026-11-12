@@ -21,7 +21,8 @@ import { getSentInvoices as getLocalSentInvoices, getInvoiceById, updateInvoiceS
 import { sendEncryptedInvoice } from "@/services/relay/relayInvoiceMessaging.js";
 import ShareInvoiceDialog from "@/components/ShareInvoiceDialog";
 import { fetchPublicKeyFromChain } from "@/services/relay/relayKeyManager.js";
-
+import InvoiceFinancialSummary from "@/components/InvoiceFinancialSummary";
+import { useInvoiceFinancialSummary } from "@/hooks/useInvoiceFinancialSummary";
 import toast from "react-hot-toast";
 import { formatInvoiceDate } from "@/utils/invoiceAmounts";
 import {
@@ -177,7 +178,19 @@ function SentInvoice() {
 
   // Get tokens from the hook
   const { tokens } = useTokenList(chainId || 1);
-
+  const {
+    summary: financialSummary,
+    loading: summaryLoading,
+    error: summaryError,
+  } = useInvoiceFinancialSummary({
+    walletClient,
+    address,
+    chainId,
+    chain,
+    tokens,
+    refreshTrigger,
+    invoiceType: "sent",
+  });
   const handleChangePage = (event, newPage) => {
     setPage(newPage);
   };
@@ -727,7 +740,11 @@ function SentInvoice() {
               </Button>
             )}
           </div>
-
+          <InvoiceFinancialSummary
+            summary={financialSummary}
+            loading={summaryLoading}
+            error={summaryError}
+          />
           <InvoiceFilterBar
             filters={filters}
             setFilter={setFilter}
