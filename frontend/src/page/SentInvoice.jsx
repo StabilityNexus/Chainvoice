@@ -199,6 +199,8 @@ function SentInvoice() {
     setSentInvoices([]);
     setTotalInvoices(0);
     setPage(0);
+    setCancelConfirmOpen(false);
+    setInvoiceToCancel(null);
   }, [address, chainId]);
 
   // The export selection only ever refers to the page it was made on.
