@@ -76,6 +76,7 @@ import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
 import { useTranslation } from "@/hooks/useTranslation";
 import { getCancelErrorKey } from "@/utils/paymentErrors";
+import { isCancelTargetCurrent } from "@/utils/cancelTarget";
 
 
 const columns = [
@@ -998,7 +999,7 @@ function SentInvoice() {
                                           cancelKey(invoice.id)
                                         )}
                                         onClick={() => {
-                                          setInvoiceToCancel(invoice);
+                                          setInvoiceToCancel({ invoice, chainId, address });
                                           setCancelConfirmOpen(true);
                                         }}
                                         sx={{
@@ -1613,12 +1614,12 @@ function SentInvoice() {
               <Typography variant="body1" className="mb-3">
                 You&apos;re about to cancel this invoice sent to{" "}
                 <span className="font-medium">
-                  {invoiceToCancel?.client.fname}{" "}
-                  {invoiceToCancel?.client.lname}
+                  {invoiceToCancel?.invoice.client.fname}{" "}
+                  {invoiceToCancel?.invoice.client.lname}
                 </span>
                 .
               </Typography>
-              {invoiceToCancel?.isPaid ? (
+              {invoiceToCancel?.invoice.isPaid ? (
                 <Alert severity="error" className="mt-3">
                   Payment was already received - cancelling will not reverse the
                   transaction
@@ -1637,7 +1638,9 @@ function SentInvoice() {
             </Button>
             <Button
               onClick={() => {
-                handleCancelInvoice(invoiceToCancel.id);
+                if (isCancelTargetCurrent(invoiceToCancel, chainId, address)) {
+                  handleCancelInvoice(invoiceToCancel.invoice.id);
+                }
                 setCancelConfirmOpen(false);
               }}
               color="error"
