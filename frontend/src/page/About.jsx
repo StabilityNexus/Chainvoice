@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FiShield,
@@ -12,6 +12,7 @@ import {
   FiPlus,
   FiCreditCard,
   FiArrowUp,
+  FiCopy,
 } from "react-icons/fi";
 import Footer from "@/components/Footer";
 
@@ -20,6 +21,8 @@ function About() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [showScrollTop, setShowScrollTop] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const codeBlockRef = useRef(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -61,6 +64,18 @@ function About() {
 
   const scrollToTop = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const copyCode = async () => {
+    if (!codeBlockRef.current) return;
+
+    try {
+      await navigator.clipboard.writeText(codeBlockRef.current.innerText);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch (error) {
+      console.error("Failed to copy code:", error);
+    }
   };
 
   const features = [
@@ -279,8 +294,24 @@ function About() {
                   <div className="w-3 h-3 rounded-full bg-green-500"></div>
                 </div>
                 <span className="text-gray-500">Chainvoice.sol</span>
+                <button
+                  type="button"
+                  onClick={copyCode}
+                  aria-label={copied ? "Code copied" : "Copy code"}
+                  title={copied ? "Copied!" : "Copy code"}
+                  className="ml-auto text-gray-500 hover:text-white transition-colors"
+                >
+                  {copied ? (
+                    <FiCheckCircle aria-hidden="true" />
+                  ) : (
+                    <FiCopy aria-hidden="true" />
+                  )}
+                </button>
               </div>
-              <div className="p-6 space-y-2 text-[#d4d4d4]">
+              <div
+                ref={codeBlockRef}
+                className="p-6 space-y-2 text-[#d4d4d4]"
+              >
                 <p>
                   <span className="text-[#C586C0]">function</span>{" "}
                   <span className="text-[#DCDCAA]">createInvoice</span>(
