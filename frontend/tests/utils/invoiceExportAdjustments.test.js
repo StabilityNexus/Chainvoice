@@ -61,10 +61,16 @@ describe("invoice adjustment export formatting", () => {
   });
 
   it("formats discounts and taxes in CSV exports", () => {
-    const csv = generateCSVContent(makeInvoice(), 0);
+    const [header, ...dataRows] = generateCSVContent(makeInvoice(), 0).split("\n");
+    const columns = header.split(",");
+    const discountIndex = columns.indexOf("Discount");
+    const taxIndex = columns.indexOf("Tax");
+    const rows = dataRows.map((row) => row.split(","));
 
-    expect(csv).toContain("10%");
-    expect(csv).toContain("10 USDC");
-    expect(csv).toContain("0%");
+    expect(rows).toHaveLength(2);
+    expect(rows[0][discountIndex]).toBe("10%");
+    expect(rows[0][taxIndex]).toBe("10 USDC");
+    expect(rows[1][discountIndex]).toBe("10 USDC");
+    expect(rows[1][taxIndex]).toBe("0%");
   });
 });

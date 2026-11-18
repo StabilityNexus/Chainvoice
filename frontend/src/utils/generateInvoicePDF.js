@@ -412,10 +412,10 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   const colPositions = {
     description: 25,
     qty: 90,
-    price: 108,
-    discount: 132,
-    tax: 148,
-    amount: 175
+    price: 106,
+    discount: 128,
+    tax: 152,
+    amount: 178
   };
   
   const headers = ["DESCRIPTION", "QTY", "PRICE", "DISCOUNT", "TAX", "AMOUNT"];
@@ -495,12 +495,16 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
       pdf.text(item.description || "N/A", colPositions.description, yPos + 6, { maxWidth: 65 });
       pdf.text(String(item.qty || 0), colPositions.qty, yPos + 6, { align: "right" });
       pdf.text(unitPriceDisplay, colPositions.price, yPos + 6, { align: "right" });
+      pdf.setFontSize(8);
       pdf.text(formatInvoiceDiscount(item, tokenSymbol), colPositions.discount, yPos + 6, {
         align: "right",
+        maxWidth: 20,
       });
       pdf.text(formatInvoiceTax(item, tokenSymbol), colPositions.tax, yPos + 6, {
         align: "right",
+        maxWidth: 22,
       });
+      pdf.setFontSize(9);
       
       pdf.setFont("helvetica", "bold");
       pdf.text(

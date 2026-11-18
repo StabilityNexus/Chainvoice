@@ -26,6 +26,11 @@ describe("invoiceAdjustmentFormat.formatAdjustment", () => {
       "10 USDC",
     );
   });
+
+  test("appends numeric token symbols to fixed amounts", () => {
+    expect(formatAdjustment("11", "amount", "1", DEFAULT_DISCOUNT_TYPE)).toBe("11 1");
+    expect(formatAdjustment("", "amount", "0", DEFAULT_DISCOUNT_TYPE)).toBe("0 0");
+  });
 });
 
 describe("invoiceAdjustmentFormat invoice helpers", () => {

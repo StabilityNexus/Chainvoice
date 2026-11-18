@@ -17,7 +17,8 @@ export const formatAdjustment = (value, type, tokenSymbol, fallbackType) => {
   if ((type || fallbackType) === "percentage") return `${raw}%`;
 
   const symbol = tokenSymbol === undefined || tokenSymbol === null ? "" : String(tokenSymbol).trim();
-  if (!symbol || endsWithSymbol(raw, symbol)) return raw;
+  const isNumericAmount = /^-?\d+(?:\.\d+)?$/.test(raw);
+  if (!symbol || (!isNumericAmount && endsWithSymbol(raw, symbol))) return raw;
   return `${raw} ${symbol}`;
 };
 
