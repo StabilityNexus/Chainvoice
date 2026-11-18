@@ -7,6 +7,7 @@ import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import { getWagmiChainInfo } from "../utils/wagmiChainHelpers";
 import ImageWithFallback from "./ImageWithFallback";
 import { useTranslation } from "@/hooks/useTranslation";
+import { formatInvoiceDiscount, formatInvoiceTax } from "../utils/invoiceAdjustmentFormat";
 
 const InvoicePreview = ({
   invoice,
@@ -360,10 +361,10 @@ const InvoicePreview = ({
                         {unitPriceDisplay}
                       </td>
                       <td className="px-3 py-3 text-xs sm:text-sm text-right text-gray-700 whitespace-nowrap">
-                        {item.discount || "0"}
+                        {formatInvoiceDiscount(item, tokenSymbol)}
                       </td>
                       <td className="px-3 py-3 text-xs sm:text-sm text-right text-gray-700 whitespace-nowrap">
-                        {item.tax || "0%"}
+                        {formatInvoiceTax(item, tokenSymbol)}
                       </td>
                       <td className="px-4 py-3 text-xs sm:text-sm font-semibold text-right text-gray-900 whitespace-nowrap">
                         {item.amount} {tokenSymbol}

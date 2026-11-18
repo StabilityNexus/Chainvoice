@@ -18,7 +18,8 @@ import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
-import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
+import { formatInvoiceTotal, resolveChainMeta } from "@/utils/invoiceExportHelpers";
+import { formatInvoiceDiscount, formatInvoiceTax } from "@/utils/invoiceAdjustmentFormat";
 import { getPaymentErrorMessage } from "@/utils/paymentErrors";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
 import { getReceivedInvoices as getLocalReceivedInvoices, getInvoiceById, storeInvoice, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
@@ -2318,10 +2319,16 @@ function ReceivedInvoice() {
                             {drawerState.selectedInvoice.paymentToken?.symbol}
                           </td>
                           <td className="p-3 text-sm text-right">
-                            {item.discount || "0"}
+                            {formatInvoiceDiscount(
+                              item,
+                              resolveChainMeta(drawerState.selectedInvoice).tokenSymbol,
+                            )}
                           </td>
                           <td className="p-3 text-sm text-right">
-                            {item.tax || "0%"}
+                            {formatInvoiceTax(
+                              item,
+                              resolveChainMeta(drawerState.selectedInvoice).tokenSymbol,
+                            )}
                           </td>
                           <td className="p-3 text-sm font-medium text-right">
                             {item.amount}{" "}

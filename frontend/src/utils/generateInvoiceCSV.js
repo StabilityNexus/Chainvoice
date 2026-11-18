@@ -8,6 +8,7 @@ import {
   buildParty,
   toISODate,
 } from "./invoiceExportHelpers";
+import { formatInvoiceDiscount, formatInvoiceTax } from "./invoiceAdjustmentFormat";
 
 /**
  * Generate CSV string from invoice data
@@ -144,8 +145,8 @@ export const generateCSVContent = (invoice, fee = 0) => {
           escapeCSV(item.description || "N/A"),
           escapeCSV(item.qty || 0),
           escapeCSV(item.unitPrice || 0),
-          escapeCSV(item.discount || "0"),
-          escapeCSV(item.tax || "0%"),
+          escapeCSV(formatInvoiceDiscount(item, tokenSymbol)),
+          escapeCSV(formatInvoiceTax(item, tokenSymbol)),
           escapeCSV(item.amount || 0),
           isFirstRow ? escapeCSV(invoice.amountDue) : "",
           isFirstRow ? escapeCSV(networkFee) : "",

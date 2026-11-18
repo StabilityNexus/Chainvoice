@@ -4,6 +4,7 @@ import {
   formatNetworkFeeValue,
   resolveInvoicePaymentContext,
 } from "./invoicePaymentSymbols";
+import { formatInvoiceDiscount, formatInvoiceTax } from "./invoiceAdjustmentFormat";
 
 /**
  * Load logo image with multiple fallback methods
@@ -494,8 +495,12 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
       pdf.text(item.description || "N/A", colPositions.description, yPos + 6, { maxWidth: 65 });
       pdf.text(String(item.qty || 0), colPositions.qty, yPos + 6, { align: "right" });
       pdf.text(unitPriceDisplay, colPositions.price, yPos + 6, { align: "right" });
-      pdf.text(String(item.discount || "0"), colPositions.discount, yPos + 6, { align: "right" });
-      pdf.text(String(item.tax || "0%"), colPositions.tax, yPos + 6, { align: "right" });
+      pdf.text(formatInvoiceDiscount(item, tokenSymbol), colPositions.discount, yPos + 6, {
+        align: "right",
+      });
+      pdf.text(formatInvoiceTax(item, tokenSymbol), colPositions.tax, yPos + 6, {
+        align: "right",
+      });
       
       pdf.setFont("helvetica", "bold");
       pdf.text(

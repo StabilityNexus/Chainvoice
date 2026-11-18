@@ -2,6 +2,7 @@
 
 import { ethers } from "ethers";
 import { getWagmiChainInfo } from "./wagmiChainHelpers";
+import { formatInvoiceDiscount, formatInvoiceTax } from "./invoiceAdjustmentFormat";
 
 /**
  * Resolve chain and token metadata for an invoice.
@@ -56,12 +57,12 @@ export const buildParty = (person, fallback = null) => ({
 /**
  * Normalize an invoice item with safe defaults.
  */
-export const normalizeItem = (item) => ({
+export const normalizeItem = (item, tokenSymbol) => ({
   description: item.description || "N/A",
   quantity: item.qty || 0,
   unitPrice: item.unitPrice || 0,
-  discount: item.discount || "0",
-  tax: item.tax || "0%",
+  discount: formatInvoiceDiscount(item, tokenSymbol),
+  tax: formatInvoiceTax(item, tokenSymbol),
   amount: item.amount || 0,
 });
 
