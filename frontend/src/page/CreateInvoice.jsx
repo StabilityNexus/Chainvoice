@@ -6,7 +6,6 @@ import {
   Contract,
   ethers,
   formatUnits,
-  JsonRpcProvider,
 } from "ethers";
 import { useAccount, useConfig, useWalletClient } from "wagmi";
 import { usePaymentToken } from "../hooks/usePaymentToken.js";
@@ -14,8 +13,13 @@ import {
   getChainName,
   getLinkChainMismatch,
   resolveTokenDecimals as resolvePaymentTokenDecimals,
+  symbolOrUnknown,
   validateTokenDecimals,
 } from "../utils/paymentToken.js";
+import {
+  getCheckedTokenReadProvider,
+  tokenRpcErrorState,
+} from "../utils/tokenReadProvider.js";
 import { useTranslation } from "../hooks/useTranslation";
 import { ChainvoiceABI } from "../contractsABI/ChainvoiceABI";
 import {
@@ -79,19 +83,6 @@ import {
   createEmptyInvoiceItem,
 } from "@/utils/productCatalogInvoiceHelpers";
 
-/** Public RPC URLs by chain ID for token verification when visitor has no wallet (e.g. opening invoice request link in incognito). */
-const CHAIN_ID_TO_PUBLIC_RPC = {
-  1: "https://ethereum-rpc.publicnode.com",
-  61: "https://etc.etcdesktop.com",
-  137: "https://polygon-bor-rpc.publicnode.com",
-  56: "https://bsc-dataseed.binance.org",
-  8453: "https://mainnet.base.org",
-  11155111: "https://ethereum-sepolia-rpc.publicnode.com",
-  63: "https://0xrpc.io/mordor",
-  80002: "https://polygon-amoy.drpc.org",
-  5115: "https://rpc.testnet.citrea.xyz",
-};
-
 function CreateInvoice() {
   const { data: walletClient } = useWalletClient();
   const { isConnected } = useAccount();
@@ -139,6 +130,11 @@ function CreateInvoice() {
     verifiedToken, setVerifiedToken,
     beginTokenRequest,
   } = usePaymentToken(chainIdForTokens);
+  const tokenNetworkMessage = {
+    "unsupported-network": t("tokenNetworkUnsupported"),
+    "rpc-wrong-network": t("tokenRpcWrongNetwork"),
+    "rpc-unavailable": t("tokenRpcUnavailable"),
+  }[tokenVerificationState];
 
   const [showWalletAlert, setShowWalletAlert] = useState(!isConnected);
   // Holds inline validation error for client wallet address
@@ -195,7 +191,7 @@ function CreateInvoice() {
 
   /**
    * Fetches ERC-20 token symbol, name, and decimals.
-   * When chainIdForRpc is provided (e.g. from invoice link URL), uses public RPC so it works without a connected wallet.
+   * Reads through the public RPC of chainIdForRpc, so it works without a connected wallet.
    */
   const verifyToken = useCallback(async (address, chainIdForRpc) => {
     const isCurrent = beginTokenRequest();
@@ -212,21 +208,16 @@ function CreateInvoice() {
     setVerifiedToken(null);
 
     try {
-      let provider;
-      const rpcUrl =
-        chainIdForRpc && CHAIN_ID_TO_PUBLIC_RPC[Number(chainIdForRpc)];
-
-      if (rpcUrl) {
-        provider = new JsonRpcProvider(rpcUrl);
-      } else if (typeof window !== "undefined" && window.ethereum) {
-        provider = new BrowserProvider(window.ethereum);
-      } else {
-        throw new Error("No Ethereum provider found");
+      const provider = await getCheckedTokenReadProvider(chainIdForRpc);
+      if (!isCurrent()) return;
+      if (!provider) {
+        setTokenVerificationState("unsupported-network");
+        return;
       }
 
       const contract = new ethers.Contract(address, ERC20_ABI, provider);
       const [symbol, name, decimals] = await Promise.all([
-        contract.symbol().catch(() => "UNKNOWN"),
+        contract.symbol().catch(symbolOrUnknown),
         contract.name().catch(() => "Unknown Token"),
         contract.decimals(),
       ]);
@@ -252,7 +243,7 @@ function CreateInvoice() {
 
       console.error("Verification failed:", error);
       setVerifiedToken(null);
-      setTokenVerificationState("error");
+      setTokenVerificationState(tokenRpcErrorState(error));
     }
   }, [
     beginTokenRequest,
@@ -267,17 +258,8 @@ function CreateInvoice() {
     async (tokenAddress, fallbackDecimals) => {
       return resolvePaymentTokenDecimals(tokenAddress, fallbackDecimals, nativeToken, async () => {
         try {
-          let provider;
-          const rpcUrl =
-            chainIdForTokens && CHAIN_ID_TO_PUBLIC_RPC[Number(chainIdForTokens)];
-
-          if (rpcUrl) {
-            provider = new JsonRpcProvider(rpcUrl);
-          } else if (typeof window !== "undefined" && window.ethereum) {
-            provider = new BrowserProvider(window.ethereum);
-          } else {
-            return null;
-          }
+          const provider = await getCheckedTokenReadProvider(chainIdForTokens);
+          if (!provider) return null;
 
           const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
           const decimals = await contract.decimals();
@@ -1287,7 +1269,7 @@ function CreateInvoice() {
                               setTokenVerificationState("idle");
                               setVerifiedToken(null);
                             } else if (ethers.isAddress(address)) {
-                              verifyToken(address);
+                              verifyToken(address, chainIdForTokens);
                             }
                           }}
                           className="h-12 bg-gray-50 text-gray-700 border-gray-200"
@@ -1329,6 +1311,17 @@ function CreateInvoice() {
                             </div>
                           </div>
                         )}
+
+                        {tokenNetworkMessage && (
+                          <div role="alert" className="bg-background p-3 rounded-lg border border-destructive mt-3">
+                            <div className="flex items-center gap-3">
+                              <XCircle className="h-5 w-5 text-destructive" />
+                              <p className="text-sm text-foreground">
+                                {tokenNetworkMessage}
+                              </p>
+                            </div>
+                          </div>
+                        )}
                       </>
                     )}
                   </div>
@@ -1343,7 +1336,7 @@ function CreateInvoice() {
                           Your client will need to have sufficient balance of the
                           chosen token to be able to pay your invoice.
                         </>
-                      ) : customTokenAddress ? (
+                      ) : tokenNetworkMessage ? null : customTokenAddress ? (
                         <>
                           <span className="font-medium text-gray-700">Note:</span>{" "}
                           Please wait for token verification to complete before

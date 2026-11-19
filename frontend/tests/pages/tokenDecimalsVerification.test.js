@@ -4,6 +4,7 @@ import {
   validateTokenDecimals,
   verifyTokenContract,
 } from "../../src/utils/paymentToken.js";
+import { TokenRpcUnavailableError } from "../../src/utils/tokenReadProvider.js";
 
 describe("validateTokenDecimals", () => {
   it.each([0, 18, 80])(
@@ -67,6 +68,51 @@ describe("ERC-20 token verification", () => {
     ).rejects.toThrow("decimals call failed");
 
     expect(setVerifiedToken).toHaveBeenLastCalledWith(null);
+    expect(setTokenVerificationState).toHaveBeenLastCalledWith("error");
+  });
+
+  it("passes an RPC failure on symbol through instead of calling it a bad token", async () => {
+    const setVerifiedToken = jest.fn();
+    const setTokenVerificationState = jest.fn();
+    const rpcDown = new TokenRpcUnavailableError(1, new Error("limit exceeded"));
+
+    const contract = {
+      symbol: jest.fn().mockRejectedValue(rpcDown),
+      name: jest.fn().mockResolvedValue("USD Coin"),
+      decimals: jest.fn().mockResolvedValue(6n),
+    };
+
+    await expect(
+      verifyTokenContract({
+        contract,
+        address,
+        isCurrent: () => true,
+        setVerifiedToken,
+        setTokenVerificationState,
+      })
+    ).rejects.toBe(rpcDown);
+    expect(setVerifiedToken).not.toHaveBeenCalledWith(expect.objectContaining({ symbol: "UNKNOWN" }));
+  });
+
+  it("still treats a token without a symbol as a bad token", async () => {
+    const setVerifiedToken = jest.fn();
+    const setTokenVerificationState = jest.fn();
+
+    const contract = {
+      symbol: jest.fn().mockRejectedValue(new Error("execution reverted")),
+      name: jest.fn().mockResolvedValue("No Symbol"),
+      decimals: jest.fn().mockResolvedValue(18n),
+    };
+
+    await expect(
+      verifyTokenContract({
+        contract,
+        address,
+        isCurrent: () => true,
+        setVerifiedToken,
+        setTokenVerificationState,
+      })
+    ).rejects.toThrow("Unable to read a valid token symbol");
     expect(setTokenVerificationState).toHaveBeenLastCalledWith("error");
   });
 
