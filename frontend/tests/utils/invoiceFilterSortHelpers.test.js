@@ -74,6 +74,21 @@ describe("filterAndSortInvoices helper", () => {
     expect(desc.map((i) => i.id)).toEqual(["4", "3", "2", "1"]);
   });
 
+  it("breaks sort-key ties by numeric id across digit boundaries", () => {
+    const issueDate = "2026-10-20T00:00:00";
+    const invoices = [8n, 9n, 10n, 11n].map((id) => ({
+      id,
+      issueDate,
+      amountDue: "1",
+    }));
+
+    const desc = filterAndSortInvoices(invoices);
+    expect(desc.map((i) => String(i.id))).toEqual(["11", "10", "9", "8"]);
+
+    const asc = filterAndSortInvoices(invoices, { sortBy: "date", sortDir: "asc" });
+    expect(asc.map((i) => String(i.id))).toEqual(["8", "9", "10", "11"]);
+  });
+
   it("sorts by amountDue ascending and descending with precision-safe BigInt logic", () => {
     const largeAmountInvoices = [
       { id: "1", amountDue: "9007199254740993" },
