@@ -9,9 +9,9 @@ import DashboardIcon from "@mui/icons-material/Dashboard";
 import { motion, AnimatePresence } from "framer-motion";
 import CloseIcon from "@mui/icons-material/Close";
 import MenuIcon from "@mui/icons-material/Menu";
-import InfoIcon from "@mui/icons-material/Info";
 import { cn } from "@/lib/utils";
 import { SHELL } from "@/utils/layout";
+import { UserIcon } from "lucide-react";
 
 function Navbar() {
   const { address, isConnected } = useAccount();
@@ -118,7 +118,7 @@ function Navbar() {
   const publicItems = [
     {
       name: "About",
-      icon: <InfoIcon className="text-current" />,
+      icon: <UserIcon className="text-current" />,
       path: "/about",
     },
   ];
