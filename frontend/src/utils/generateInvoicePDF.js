@@ -5,6 +5,55 @@ import {
   resolveInvoicePaymentContext,
 } from "./invoicePaymentSymbols";
 
+const DATE_PREFIX = /^(\d{4})-(\d{2})-(\d{2})(?:$|[Tt ])/;
+
+const isRealCalendarDate = (year, month, day) => {
+  const date = new Date(year, month - 1, day);
+  return (
+    date.getFullYear() === year &&
+    date.getMonth() === month - 1 &&
+    date.getDate() === day
+  );
+};
+
+const parsePdfDate = (value) => {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === "string") {
+    const match = DATE_PREFIX.exec(value.trim());
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      // The Date constructor rolls impossible dates such as 2026-02-30 over
+      // into the next month, so reject them instead of printing a wrong day.
+      if (!isRealCalendarDate(year, month, day)) return null;
+      // A date-only value is a calendar date, not an instant. Parsing it with
+      // new Date("YYYY-MM-DD") treats it as UTC midnight, which shows the
+      // previous day in timezones behind UTC, so build it in local time.
+      if (match[0].length === 10) {
+        return new Date(year, month - 1, day);
+      }
+    }
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+const formatPdfDate = (value) => {
+  if (!value) return "N/A";
+  const date = parsePdfDate(value);
+  if (!date) return "N/A";
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
 /**
  * Load logo image with multiple fallback methods
  * Returns base64 data URL or null
@@ -393,16 +442,8 @@ export const generateInvoicePDF = async (invoice, fee = 0) => {
   pdf.setTextColor(...darkGray);
   pdf.setFontSize(9);
   pdf.setFont("helvetica", "normal");
-  const issueDate = new Date(invoice.issueDate).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-  const dueDate = new Date(invoice.dueDate).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  const issueDate = formatPdfDate(invoice.issueDate);
+  const dueDate = formatPdfDate(invoice.dueDate);
   pdf.text(`Issued: ${issueDate}`, 25, yPos + 5.5);
   pdf.text(`Due: ${dueDate}`, 160, yPos + 5.5);
 

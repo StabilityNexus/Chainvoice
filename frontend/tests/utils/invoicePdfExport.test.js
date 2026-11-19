@@ -1,3 +1,4 @@
+/* global process */
 import { afterEach, beforeAll, beforeEach, describe, expect, it, jest } from "@jest/globals";
 import { PDFDocument } from "pdf-lib";
 import JSZip from "jszip";
@@ -111,6 +112,8 @@ describe("generateInvoicePDF", () => {
     expect(text).toContain("(Bob Payer)");
     expect(text).toContain("(Design work)");
     expect(text).toContain("(Native Currency)");
+    expect(text).toContain("(Issued: Mar 1, 2026)");
+    expect(text).toContain("(Due: Mar 31, 2026)");
     expect(text).toContain("(0.0005 ETH)"); // network fee
     expect(text).toContain("(1.5005 ETH)"); // amount + fee
     expect(text).toContain("(Page 1 of 1)");
@@ -159,6 +162,64 @@ describe("generateInvoicePDF", () => {
     const pdf = await generateInvoicePDF(makeInvoice({ items: [] }), FEE_WEI);
 
     expect(pdfText(pdf)).toContain("(No items in this invoice)");
+  });
+
+  it.each([
+    ["null", null, null],
+    ["undefined", undefined, undefined],
+    ["empty", "", ""],
+    ["invalid", "not-a-date", "2026-99-99"],
+    ["impossible", "2026-02-30", "2026-02-30T00:00:00Z"],
+  ])("shows N/A for %s dates", async (_label, issueDate, dueDate) => {
+    const text = pdfText(
+      await generateInvoicePDF(makeInvoice({ issueDate, dueDate }), FEE_WEI)
+    );
+
+    expect(text).toContain("(Issued: N/A)");
+    expect(text).toContain("(Due: N/A)");
+    expect(text).not.toContain("Jan 1, 1970");
+  });
+
+  it("keeps a valid date when the other one is missing", async () => {
+    const text = pdfText(
+      await generateInvoicePDF(
+        makeInvoice({ dueDate: null }),
+        FEE_WEI
+      )
+    );
+
+    expect(text).toContain("(Issued: Mar 1, 2026)");
+    expect(text).toContain("(Due: N/A)");
+  });
+
+  it("keeps a date-only value on its calendar day behind UTC", async () => {
+    const previousTZ = process.env.TZ;
+    process.env.TZ = "America/Los_Angeles";
+    try {
+      const text = pdfText(
+        await generateInvoicePDF(
+          makeInvoice({ issueDate: "2026-03-01", dueDate: "2026-03-31" }),
+          FEE_WEI
+        )
+      );
+
+      expect(text).toContain("(Issued: Mar 1, 2026)");
+      expect(text).toContain("(Due: Mar 31, 2026)");
+    } finally {
+      if (previousTZ === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = previousTZ;
+      }
+    }
+  });
+
+  it("accepts a real leap day", async () => {
+    const text = pdfText(
+      await generateInvoicePDF(makeInvoice({ issueDate: "2028-02-29" }), FEE_WEI)
+    );
+
+    expect(text).toContain("(Issued: Feb 29, 2028)");
   });
 
   it("rejects a missing invoice", async () => {
