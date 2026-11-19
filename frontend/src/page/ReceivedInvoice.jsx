@@ -83,8 +83,11 @@ import CloseIcon from "@mui/icons-material/Close";
 import ErrorIcon from "@mui/icons-material/Error";
 import { useTokenList } from "@/hooks/useTokenList";
 import WalletConnectionAlert from "@/components/WalletConnectionAlert";
+import PaymentRecoveryPanel from "@/components/PaymentRecoveryPanel";
 import TableSortLabel from "@mui/material/TableSortLabel";
 import { useInvoiceFilterSort } from "@/hooks/useInvoiceFilterSort";
+import { useTransactionRecovery } from "@/hooks/useTransactionRecovery";
+import { TRANSACTION_OPERATION } from "@/services/transactionRecovery/transactionRecovery.js";
 import InvoiceFilterBar from "@/components/InvoiceFilterBar";
 import { PAGE_CONTAINER } from "@/utils/layout";
 import { cn } from "@/lib/utils";
@@ -181,6 +184,23 @@ function ReceivedInvoice() {
     pageContextRef.current = pageContextKey;
   }, [pageContextKey]);
 
+  const {
+    unresolvedTransactions,
+    unresolvedPaymentInvoiceIds,
+    isRefreshing: isRefreshingTransactions,
+    isReady: isRecoveryReady,
+    settledVersion,
+    refresh: refreshTransactions,
+    trackTransaction,
+    settleTransaction,
+    failTransaction,
+  } = useTransactionRecovery();
+
+  // A recovered payment may have changed the invoice's on-chain state.
+  useEffect(() => {
+    if (settledVersion > 0) setRefreshTrigger((previous) => previous + 1);
+  }, [settledVersion]);
+
   // Bulk export dialog
   const [bulkExportOpen, setBulkExportOpen] = useState(false);
   const [bulkExportFormat, setBulkExportFormat] = useState("csv");
@@ -244,6 +264,17 @@ function ReceivedInvoice() {
     return tReceivedInvoices(`errors.${key}`, params);
   };
 
+  const waitForTrackedTransaction = async (tx, record) => {
+    try {
+      const receipt = await tx.wait();
+      await settleTransaction(record, receipt);
+      return receipt;
+    } catch (error) {
+      await failTransaction(record, error);
+      throw error;
+    }
+  };
+
   // Helper functions
   const detectBatchFromMetadata = (invoice) => {
     if (invoice.batchInfo) {
@@ -260,7 +291,11 @@ function ReceivedInvoice() {
   const findBatchSuggestions = (invoices) => {
     const suggestions = [];
     const groups = invoices
-      .filter(isInvoicePayable)
+      .filter(
+        (inv) =>
+          isInvoicePayable(inv) &&
+          !unresolvedPaymentInvoiceIds.has(String(inv.id))
+      )
       .reduce((acc, inv) => {
         // Undated on-chain-only invoices would otherwise all share the
         // "Invalid Date" key and be suggested as one bogus batch.
@@ -419,7 +454,11 @@ function ReceivedInvoice() {
   const selectedOnPage = receivedInvoices.filter((invoice) =>
     selectedInvoices.has(invoice.id)
   );
-  const payableSelected = selectedOnPage.filter(isInvoicePayable);
+  const payableSelected = selectedOnPage.filter(
+    (invoice) =>
+      isInvoicePayable(invoice) &&
+      !unresolvedPaymentInvoiceIds.has(String(invoice.id))
+  );
 
   const handleSelectInvoice = (invoiceId) => {
     setSelectedInvoices((prev) => {
@@ -434,7 +473,11 @@ function ReceivedInvoice() {
   };
 
   const handleSelectAll = () => {
-    const payableInvoices = filteredAndSortedInvoices.filter(isInvoicePayable);
+    const payableInvoices = filteredAndSortedInvoices.filter(
+      (invoice) =>
+        isInvoicePayable(invoice) &&
+        !unresolvedPaymentInvoiceIds.has(String(invoice.id))
+    );
     setSelectedInvoices(new Set(payableInvoices.map((inv) => inv.id)));
   };
 
@@ -485,9 +528,16 @@ function ReceivedInvoice() {
       return;
     }
 
+    if (!isRecoveryReady) {
+      toast("Checking saved payments. Please try again in a moment.");
+      return;
+    }
+
     // Captured before the transaction so the result can be matched against
     // the list that is on screen when it resolves.
     const contextKey = pageContextRef.current;
+    const transactionChainId = chainId;
+    const transactionWallet = address;
 
     setPaymentLoading((prev) => ({ ...prev, [invoiceId]: true }));
     setPaymentError("");
@@ -568,8 +618,15 @@ function ReceivedInvoice() {
             contractAddress,
             amountDue
           );
+          const approvalRecord = await trackTransaction({
+            tx: approveTx,
+            chainId: transactionChainId,
+            wallet: transactionWallet,
+            invoiceIds: [invoiceId],
+            operationType: TRANSACTION_OPERATION.APPROVAL,
+          });
           toast("Approval transaction submitted. Please wait...");
-          await approveTx.wait();
+          await waitForTrackedTransaction(approveTx, approvalRecord);
           toast.success(`${tokenSymbol} approval completed successfully!`);
         }
 
@@ -577,20 +634,34 @@ function ReceivedInvoice() {
         const tx = await contract.payInvoice(BigInt(invoiceId), {
           value: paymentValue,
         });
+        const paymentRecord = await trackTransaction({
+          tx,
+          chainId: transactionChainId,
+          wallet: transactionWallet,
+          invoiceIds: [invoiceId],
+          operationType: TRANSACTION_OPERATION.PAYMENT,
+        });
         toast(
           "Payment transaction submitted. Please wait for confirmation..."
         );
-        await tx.wait();
+        await waitForTrackedTransaction(tx, paymentRecord);
         toast.success(`Payment successful! Paid with ${tokenSymbol}`);
       } else {
         toast("Submitting payment transaction...");
         const tx = await contract.payInvoice(BigInt(invoiceId), {
           value: paymentValue,
         });
+        const paymentRecord = await trackTransaction({
+          tx,
+          chainId: transactionChainId,
+          wallet: transactionWallet,
+          invoiceIds: [invoiceId],
+          operationType: TRANSACTION_OPERATION.PAYMENT,
+        });
         toast(
           "Payment transaction submitted. Please wait for confirmation..."
         );
-        await tx.wait();
+        await waitForTrackedTransaction(tx, paymentRecord);
         toast.success(`Payment successful! Paid with ${nativeSymbol}`);
       }
 
@@ -620,6 +691,10 @@ function ReceivedInvoice() {
   // UNIFORM BATCH PAYMENT
   const handleBatchPayment = async () => {
     if (!walletClient || payableSelected.length === 0) return;
+    if (!isRecoveryReady) {
+      toast("Checking saved payments. Please try again in a moment.");
+      return;
+    }
     if (loading) {
       toast.error("Invoices are still loading. Please try again in a moment.");
       return;
@@ -649,6 +724,8 @@ function ReceivedInvoice() {
     // ones were paid.
     let paidCount = 0;
     let failedSymbol = null;
+    const transactionChainId = chainId;
+    const transactionWallet = address;
 
     setBatchLoading(true);
     setPaymentError("");
@@ -745,14 +822,28 @@ function ReceivedInvoice() {
               contractAddress,
               totalBaseUnits
             );
-            await approveTx.wait();
+            const approvalRecord = await trackTransaction({
+              tx: approveTx,
+              chainId: transactionChainId,
+              wallet: transactionWallet,
+              invoiceIds: invoices.map((invoice) => invoice.id),
+              operationType: TRANSACTION_OPERATION.APPROVAL,
+            });
+            await waitForTrackedTransaction(approveTx, approvalRecord);
             toast.success(`${symbol} approved successfully!`);
           }
 
           const tx = await contract.payInvoicesBatch(invoiceIds, {
             value: totalFee,
           });
-          await tx.wait();
+          const paymentRecord = await trackTransaction({
+            tx,
+            chainId: transactionChainId,
+            wallet: transactionWallet,
+            invoiceIds: invoices.map((invoice) => invoice.id),
+            operationType: TRANSACTION_OPERATION.PAYMENT,
+          });
+          await waitForTrackedTransaction(tx, paymentRecord);
           paidCount += invoices.length;
           toast.success(
             `Successfully paid ${invoices.length} invoices with ${symbol}!`
@@ -761,7 +852,14 @@ function ReceivedInvoice() {
           const tx = await contract.payInvoicesBatch(invoiceIds, {
             value: totalBaseUnits + totalFee,
           });
-          await tx.wait();
+          const paymentRecord = await trackTransaction({
+            tx,
+            chainId: transactionChainId,
+            wallet: transactionWallet,
+            invoiceIds: invoices.map((invoice) => invoice.id),
+            operationType: TRANSACTION_OPERATION.PAYMENT,
+          });
+          await waitForTrackedTransaction(tx, paymentRecord);
           paidCount += invoices.length;
           toast.success(
             `Successfully paid ${invoices.length} invoices with ${nativeSymbol}!`
@@ -1163,7 +1261,11 @@ function ReceivedInvoice() {
 
   const formatDate = formatInvoiceDate;
 
-  const unpaidInvoices = filteredAndSortedInvoices.filter(isInvoicePayable);
+  const unpaidInvoices = filteredAndSortedInvoices.filter(
+    (invoice) =>
+      isInvoicePayable(invoice) &&
+      !unresolvedPaymentInvoiceIds.has(String(invoice.id))
+  );
   const selectedCount = payableSelected.length;
   const grouped = getGroupedInvoices(payableSelected);
   const visibleSelectedCount = filteredAndSortedInvoices.filter((invoice) =>
@@ -1360,6 +1462,12 @@ function ReceivedInvoice() {
               </Box>
             </Alert>
           </Snackbar>
+
+          <PaymentRecoveryPanel
+            transactions={unresolvedTransactions}
+            isRefreshing={isRefreshingTransactions}
+            onRefresh={refreshTransactions}
+          />
 
           {/* Smart Batch Suggestions */}
           {batchSuggestions.length > 0 && (
@@ -1898,7 +2006,12 @@ function ReceivedInvoice() {
                                     size="small"
                                     onClick={() => payInvoice(invoice)}
                                     disabled={
-                                      paymentLoading[invoice.id] || batchLoading
+                                      paymentLoading[invoice.id] ||
+                                      batchLoading ||
+                                      !isRecoveryReady ||
+                                      unresolvedPaymentInvoiceIds.has(
+                                        String(invoice.id)
+                                      )
                                     }
                                     sx={{
                                       bgcolor: paymentLoading[invoice.id]
@@ -1924,9 +2037,13 @@ function ReceivedInvoice() {
                                       ) : null
                                     }
                                   >
-                                    {paymentLoading[invoice.id]
-                                      ? "Processing..."
-                                      : "Pay Now"}
+                                    {unresolvedPaymentInvoiceIds.has(
+                                      String(invoice.id)
+                                    )
+                                      ? "Payment pending"
+                                      : paymentLoading[invoice.id]
+                                        ? "Processing..."
+                                        : "Pay Now"}
                                   </Button>
                                 )}
                                 {invoice.isCancelled && (

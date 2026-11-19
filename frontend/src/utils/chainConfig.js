@@ -87,3 +87,17 @@ export function isChainDeployed(chainId, env = import.meta.env) {
 export function getDeployedChains(chains = chainConfig, env = import.meta.env) {
   return chains.filter((chain) => isChainDeployed(chain.id, env));
 }
+
+export function getChainConfig(chainId, chains = chainConfig) {
+  const normalizedChainId = Number(chainId);
+  if (!Number.isSafeInteger(normalizedChainId)) return null;
+  return chains.find((chain) => chain.id === normalizedChainId) || null;
+}
+
+export function getTransactionExplorerUrl(chainId, hash, chains = chainConfig) {
+  if (typeof hash !== "string" || !hash) return null;
+  const chain = getChainConfig(chainId, chains);
+  const explorerUrl = chain?.blockExplorers?.default?.url;
+  if (!explorerUrl) return null;
+  return `${explorerUrl.replace(/\/+$/, "")}/tx/${hash}`;
+}
