@@ -15,7 +15,11 @@ import { getWagmiChainInfo } from "@/utils/wagmiChainHelpers";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import { generateInvoicePDF } from "@/utils/generateInvoicePDF";
-import { formatInvoiceTotal } from "@/utils/invoiceExportHelpers";
+import {
+  formatInvoiceTotal,
+  formatItemDiscount,
+  formatItemTax,
+} from "@/utils/invoiceExportHelpers";
 import { useInvoiceExport } from "@/hooks/useInvoiceExport";
 import { getSentInvoices as getLocalSentInvoices, getInvoiceById, updateInvoiceStatus } from "../services/invoiceStorage/invoiceDB.js";
 import { sendEncryptedInvoice } from "@/services/relay/relayInvoiceMessaging.js";
@@ -1401,10 +1405,16 @@ function SentInvoice() {
                           {drawerState.selectedInvoice.paymentToken?.symbol}
                         </td>
                         <td className="p-3 text-sm text-right">
-                          {item.discount || "0"}
+                          {formatItemDiscount(
+                            item,
+                            drawerState.selectedInvoice.paymentToken?.symbol
+                          )}
                         </td>
                         <td className="p-3 text-sm text-right">
-                          {item.tax || "0%"}
+                          {formatItemTax(
+                            item,
+                            drawerState.selectedInvoice.paymentToken?.symbol
+                          )}
                         </td>
                         <td className="p-3 text-sm font-medium text-right">
                           {item.amount}{" "}
