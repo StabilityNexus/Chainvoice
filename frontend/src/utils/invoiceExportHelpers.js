@@ -56,14 +56,33 @@ export const buildParty = (person, fallback = null) => ({
 /**
  * Normalize an invoice item with safe defaults.
  */
-export const normalizeItem = (item) => ({
+export const normalizeItem = (item, symbol = "") => ({
   description: item.description || "N/A",
   quantity: item.qty || 0,
   unitPrice: item.unitPrice || 0,
-  discount: item.discount || "0",
-  tax: item.tax || "0%",
+  discount: formatItemDiscount(item, symbol),
+  discountType: item.discountType || "amount",
+  tax: formatItemTax(item, symbol),
+  taxType: item.taxType || "percentage",
   amount: item.amount || 0,
 });
+
+/**
+ * Format a discount or tax value by its type: "10%" for a percentage,
+ * "10 USDC" for a fixed amount. Empty values show as 0.
+ */
+export const formatItemAdjustment = (value, type, symbol = "") => {
+  const raw = String(value ?? "").trim().replace(/%$/, "").trim();
+  const shown = raw === "" ? "0" : raw;
+  return type === "percentage" ? `${shown}%` : `${shown} ${symbol || ""}`.trim();
+};
+
+// Items saved without a type use the same defaults as invoiceCalculations.
+export const formatItemDiscount = (item, symbol) =>
+  formatItemAdjustment(item?.discount, item?.discountType || "amount", symbol);
+
+export const formatItemTax = (item, symbol) =>
+  formatItemAdjustment(item?.tax, item?.taxType || "percentage", symbol);
 
 /**
  * Convert a date value to a locale-formatted string for CSV / PDF display.
