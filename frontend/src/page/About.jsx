@@ -74,7 +74,7 @@ function About() {
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } catch (error) {
-      alert("Failed to copy code", error);
+      alert("copy code manually", error);
     }
   };
 
