@@ -17,6 +17,11 @@ updates:
         update-types:
           - "minor"
           - "patch"
+    # react-day-picker 8 only accepts date-fns 2 or 3, so date-fns 4 breaks
+    # `npm ci`. Remove this once react-day-picker is upgraded to v9.
+    ignore:
+      - dependency-name: "date-fns"
+        update-types: ["version-update:semver-major"]
 
   # Workflow actions. They are pinned to commit SHAs with the version in a
   # trailing comment; Dependabot updates both.
