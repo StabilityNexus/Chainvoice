@@ -62,7 +62,7 @@ export const normalizeItem = (item) => ({
   unitPrice: item.unitPrice || 0,
   discount: item.discount || "0",
   discountType: item.discountType || "amount",
-  tax: item.tax || "0%",
+  tax: item.tax || (item.taxType === "amount" ? "0" : "0%"),
   taxType: item.taxType || "percentage",
   amount: item.amount || 0,
 });

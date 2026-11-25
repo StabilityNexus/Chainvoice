@@ -70,4 +70,8 @@ describe("normalizeItem", () => {
       taxType: "percentage",
     });
   });
+
+  it("does not give an empty fixed tax a percentage default", () => {
+    expect(normalizeItem({ tax: "", taxType: "amount" })).toMatchObject({ tax: "0", taxType: "amount" });
+  });
 });
