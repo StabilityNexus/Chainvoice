@@ -38,7 +38,7 @@ export const generateJSONContent = (invoice, fee = 0) => {
       decimals: invoice.paymentToken?.decimals ?? 18,
       chainId: chainId || null,
     },
-    items: (invoice.items || []).map((item) => normalizeItem(item, tokenSymbol)),
+    items: (invoice.items || []).map(normalizeItem),
     subtotal: invoice.amountDue || "0",
     networkFee: networkFee,
     networkFeeCurrency: nativeSymbol,

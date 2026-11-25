@@ -52,13 +52,22 @@ describe("formatItemTax", () => {
 });
 
 describe("normalizeItem", () => {
-  it("formats discount and tax by type and keeps the types for JSON export", () => {
+  it("keeps raw discount and tax values for JSON export, with the types carrying the unit", () => {
     const item = { description: "Design", qty: 1, unitPrice: "200", discount: "10", discountType: "percentage", tax: "4", taxType: "amount", amount: "184" };
-    expect(normalizeItem(item, "USDC")).toMatchObject({
-      discount: "10%",
+    expect(normalizeItem(item)).toMatchObject({
+      discount: "10",
       discountType: "percentage",
-      tax: "4 USDC",
+      tax: "4",
       taxType: "amount",
+    });
+  });
+
+  it("keeps the old defaults when discount and tax are missing", () => {
+    expect(normalizeItem({})).toMatchObject({
+      discount: "0",
+      discountType: "amount",
+      tax: "0%",
+      taxType: "percentage",
     });
   });
 });

@@ -56,13 +56,13 @@ export const buildParty = (person, fallback = null) => ({
 /**
  * Normalize an invoice item with safe defaults.
  */
-export const normalizeItem = (item, symbol = "") => ({
+export const normalizeItem = (item) => ({
   description: item.description || "N/A",
   quantity: item.qty || 0,
   unitPrice: item.unitPrice || 0,
-  discount: formatItemDiscount(item, symbol),
+  discount: item.discount || "0",
   discountType: item.discountType || "amount",
-  tax: formatItemTax(item, symbol),
+  tax: item.tax || "0%",
   taxType: item.taxType || "percentage",
   amount: item.amount || 0,
 });
