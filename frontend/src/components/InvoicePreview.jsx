@@ -5,6 +5,7 @@ import UnpaidIcon from "@mui/icons-material/Pending";
 import CancelIcon from "@mui/icons-material/Cancel";
 import CurrencyExchangeIcon from "@mui/icons-material/CurrencyExchange";
 import { getWagmiChainInfo } from "../utils/wagmiChainHelpers";
+import { formatItemDiscount, formatItemTax } from "../utils/invoiceExportHelpers";
 import ImageWithFallback from "./ImageWithFallback";
 import { useTranslation } from "@/hooks/useTranslation";
 
@@ -360,10 +361,10 @@ const InvoicePreview = ({
                         {unitPriceDisplay}
                       </td>
                       <td className="px-3 py-3 text-xs sm:text-sm text-right text-gray-700 whitespace-nowrap">
-                        {item.discount || "0"}
+                        {formatItemDiscount(item, tokenSymbol)}
                       </td>
                       <td className="px-3 py-3 text-xs sm:text-sm text-right text-gray-700 whitespace-nowrap">
-                        {item.tax || "0%"}
+                        {formatItemTax(item, tokenSymbol)}
                       </td>
                       <td className="px-4 py-3 text-xs sm:text-sm font-semibold text-right text-gray-900 whitespace-nowrap">
                         {item.amount} {tokenSymbol}

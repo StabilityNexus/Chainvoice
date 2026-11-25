@@ -7,6 +7,8 @@ import {
   resolveStatus,
   buildParty,
   toISODate,
+  formatItemDiscount,
+  formatItemTax,
 } from "./invoiceExportHelpers";
 
 /**
@@ -144,8 +146,8 @@ export const generateCSVContent = (invoice, fee = 0) => {
           escapeCSV(item.description || "N/A"),
           escapeCSV(item.qty || 0),
           escapeCSV(item.unitPrice || 0),
-          escapeCSV(item.discount || "0"),
-          escapeCSV(item.tax || "0%"),
+          escapeCSV(formatItemDiscount(item, tokenSymbol)),
+          escapeCSV(formatItemTax(item, tokenSymbol)),
           escapeCSV(item.amount || 0),
           isFirstRow ? escapeCSV(invoice.amountDue) : "",
           isFirstRow ? escapeCSV(networkFee) : "",
