@@ -6,10 +6,13 @@ import {
   Contract,
   ethers,
   formatUnits,
-  JsonRpcProvider,
 } from "ethers";
 import { useAccount, useConfig, useWalletClient } from "wagmi";
 import { usePaymentToken } from "../hooks/usePaymentToken.js";
+import {
+  getTokenChainId,
+  getTokenReadProvider,
+} from "../utils/tokenReadProvider.js";
 import {
   getChainName,
   getLinkChainMismatch,
@@ -79,19 +82,6 @@ import {
   createEmptyInvoiceItem,
 } from "@/utils/productCatalogInvoiceHelpers";
 
-/** Public RPC URLs by chain ID for token verification when visitor has no wallet (e.g. opening invoice request link in incognito). */
-const CHAIN_ID_TO_PUBLIC_RPC = {
-  1: "https://ethereum-rpc.publicnode.com",
-  61: "https://etc.etcdesktop.com",
-  137: "https://polygon-bor-rpc.publicnode.com",
-  56: "https://bsc-dataseed.binance.org",
-  8453: "https://mainnet.base.org",
-  11155111: "https://ethereum-sepolia-rpc.publicnode.com",
-  63: "https://0xrpc.io/mordor",
-  80002: "https://polygon-amoy.drpc.org",
-  5115: "https://rpc.testnet.citrea.xyz",
-};
-
 function CreateInvoice() {
   const { data: walletClient } = useWalletClient();
   const { isConnected } = useAccount();
@@ -101,10 +91,7 @@ function CreateInvoice() {
   const [searchParams] = useSearchParams();
   const urlChainParam = searchParams.get("chain");
   const searchParamsKey = searchParams.toString();
-  const chainIdForTokens = account?.chainId ?? (
-    urlChainParam && !Number.isNaN(parseInt(urlChainParam, 10))
-      ? parseInt(urlChainParam, 10)
-      : 1);
+  const chainIdForTokens = getTokenChainId(account?.chainId, urlChainParam);
   const { tokens, loading: loadingTokens, error: tokenListError } = useTokenList(chainIdForTokens);
   const [dueDate, setDueDate] = useState(new Date());
   const [issueDate] = useState(() => new Date());
@@ -195,9 +182,9 @@ function CreateInvoice() {
 
   /**
    * Fetches ERC-20 token symbol, name, and decimals.
-   * When chainIdForRpc is provided (e.g. from invoice link URL), uses public RPC so it works without a connected wallet.
+   * Reads through the public RPC of chainIdForTokens, so it works without a connected wallet.
    */
-  const verifyToken = useCallback(async (address, chainIdForRpc) => {
+  const verifyToken = useCallback(async (address) => {
     const isCurrent = beginTokenRequest();
 
     if (address.toLowerCase() === ethers.ZeroAddress && nativeToken) {
@@ -212,16 +199,9 @@ function CreateInvoice() {
     setVerifiedToken(null);
 
     try {
-      let provider;
-      const rpcUrl =
-        chainIdForRpc && CHAIN_ID_TO_PUBLIC_RPC[Number(chainIdForRpc)];
-
-      if (rpcUrl) {
-        provider = new JsonRpcProvider(rpcUrl);
-      } else if (typeof window !== "undefined" && window.ethereum) {
-        provider = new BrowserProvider(window.ethereum);
-      } else {
-        throw new Error("No Ethereum provider found");
+      const provider = getTokenReadProvider(chainIdForTokens);
+      if (!provider) {
+        throw new Error("No public RPC for this network");
       }
 
       const contract = new ethers.Contract(address, ERC20_ABI, provider);
@@ -256,6 +236,7 @@ function CreateInvoice() {
     }
   }, [
     beginTokenRequest,
+    chainIdForTokens,
     nativeToken,
     setSelectedToken,
     setUseCustomToken,
@@ -267,17 +248,8 @@ function CreateInvoice() {
     async (tokenAddress, fallbackDecimals) => {
       return resolvePaymentTokenDecimals(tokenAddress, fallbackDecimals, nativeToken, async () => {
         try {
-          let provider;
-          const rpcUrl =
-            chainIdForTokens && CHAIN_ID_TO_PUBLIC_RPC[Number(chainIdForTokens)];
-
-          if (rpcUrl) {
-            provider = new JsonRpcProvider(rpcUrl);
-          } else if (typeof window !== "undefined" && window.ethereum) {
-            provider = new BrowserProvider(window.ethereum);
-          } else {
-            return null;
-          }
+          const provider = getTokenReadProvider(chainIdForTokens);
+          if (!provider) return null;
 
           const contract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
           const decimals = await contract.decimals();
@@ -388,7 +360,7 @@ function CreateInvoice() {
       }
       setUseCustomToken(true);
       setCustomTokenAddress(urlTokenAddress);
-      verifyToken(urlTokenAddress, chainIdForTokens);
+      verifyToken(urlTokenAddress);
     };
 
     processUrlToken();
