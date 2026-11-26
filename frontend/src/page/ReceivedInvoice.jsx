@@ -12,6 +12,7 @@ import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { getWagmiChainInfo } from "@/utils/wagmiChainHelpers";
+import { visibleInvoiceIds } from "@/utils/batchSelection";
 import { BrowserProvider, Contract, ethers } from "ethers";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
@@ -176,6 +177,8 @@ function ReceivedInvoice() {
   // user paged (or switched wallet/network) while its transaction was pending.
   const pageContextKey = `${address}-${chainId}-${page}-${rowsPerPage}`;
   const pageContextRef = useRef(pageContextKey);
+  // The page whose invoices are in receivedInvoices; a failed fetch leaves it behind.
+  const [loadedPageKey, setLoadedPageKey] = useState(null);
   useEffect(() => {
     pageContextRef.current = pageContextKey;
   }, [pageContextKey]);
@@ -294,10 +297,14 @@ function ReceivedInvoice() {
     return suggestions;
   };
 
-  // Suggestions follow the active filters, so a hidden invoice is never suggested.
+  // Suggestions follow the active filters, so a hidden invoice is never suggested,
+  // and only the loaded page counts, so a failed page fetch cannot leave old ones.
   const batchSuggestions = useMemo(
-    () => findBatchSuggestions(filteredAndSortedInvoices),
-    [filteredAndSortedInvoices]
+    () =>
+      loadedPageKey === pageContextKey
+        ? findBatchSuggestions(filteredAndSortedInvoices)
+        : [],
+    [filteredAndSortedInvoices, loadedPageKey, pageContextKey]
   );
 
   // ESTIMATED GAS FOR THE TRANSACTIONS A PAYMENT WILL SEND
@@ -467,10 +474,10 @@ function ReceivedInvoice() {
   };
 
   const selectBatchSuggestion = (suggestion) => {
-    const visibleIds = new Set(filteredAndSortedInvoices.map((inv) => inv.id));
-    const invoiceIds = suggestion.invoices
-      .map((inv) => inv.id)
-      .filter((id) => visibleIds.has(id));
+    const invoiceIds = visibleInvoiceIds(
+      suggestion.invoices,
+      filteredAndSortedInvoices
+    );
     setSelectedInvoices(new Set(invoiceIds));
     toast.success(`Selected ${invoiceIds.length} invoices for batch payment`);
   };
@@ -866,6 +873,7 @@ function ReceivedInvoice() {
 
         if (res.length === 0) {
           setReceivedInvoice([]);
+          setLoadedPageKey(pageContextKey);
           setSelectedInvoices(new Set());
           return;
         }
@@ -948,6 +956,7 @@ function ReceivedInvoice() {
 
         if (cancelled) return;
         setReceivedInvoice(decryptedInvoices);
+        setLoadedPageKey(pageContextKey);
         // A refetch of the same page may no longer carry every selected invoice.
         setSelectedInvoices((prev) =>
           filterSelectionToPage(prev, decryptedInvoices)
