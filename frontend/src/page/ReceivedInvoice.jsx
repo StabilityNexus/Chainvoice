@@ -13,7 +13,7 @@ import TableRow from "@mui/material/TableRow";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { getWagmiChainInfo } from "@/utils/wagmiChainHelpers";
 import { BrowserProvider, Contract, ethers } from "ethers";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
@@ -171,7 +171,6 @@ function ReceivedInvoice() {
   const [selectedInvoices, setSelectedInvoices] = useState(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
   const singlePaymentInFlight = Object.values(paymentLoading).some(Boolean);
-  const [batchSuggestions, setBatchSuggestions] = useState([]);
 
   // Identifies the list on screen, so a payment handler can tell whether the
   // user paged (or switched wallet/network) while its transaction was pending.
@@ -294,6 +293,12 @@ function ReceivedInvoice() {
 
     return suggestions;
   };
+
+  // Suggestions follow the active filters, so a hidden invoice is never suggested.
+  const batchSuggestions = useMemo(
+    () => findBatchSuggestions(filteredAndSortedInvoices),
+    [filteredAndSortedInvoices]
+  );
 
   // ESTIMATED GAS FOR THE TRANSACTIONS A PAYMENT WILL SEND
   // One estimator per transaction; the batch flow sends one per token group.
@@ -462,7 +467,10 @@ function ReceivedInvoice() {
   };
 
   const selectBatchSuggestion = (suggestion) => {
-    const invoiceIds = suggestion.invoices.map((inv) => inv.id);
+    const visibleIds = new Set(filteredAndSortedInvoices.map((inv) => inv.id));
+    const invoiceIds = suggestion.invoices
+      .map((inv) => inv.id)
+      .filter((id) => visibleIds.has(id));
     setSelectedInvoices(new Set(invoiceIds));
     toast.success(`Selected ${invoiceIds.length} invoices for batch payment`);
   };
@@ -811,7 +819,6 @@ function ReceivedInvoice() {
   // selection nor a suggestion may outlive the page it was built from.
   useEffect(() => {
     setSelectedInvoices(new Set());
-    setBatchSuggestions([]);
     setBulkExportOpen(false);
   }, [page, rowsPerPage, address, chainId]);
 
@@ -859,7 +866,6 @@ function ReceivedInvoice() {
 
         if (res.length === 0) {
           setReceivedInvoice([]);
-          setBatchSuggestions([]);
           setSelectedInvoices(new Set());
           return;
         }
@@ -946,8 +952,6 @@ function ReceivedInvoice() {
         setSelectedInvoices((prev) =>
           filterSelectionToPage(prev, decryptedInvoices)
         );
-        const suggestions = findBatchSuggestions(decryptedInvoices);
-        setBatchSuggestions(suggestions);
         const fee = await contract.devFee();
         if (cancelled) return;
         setFee(fee);
