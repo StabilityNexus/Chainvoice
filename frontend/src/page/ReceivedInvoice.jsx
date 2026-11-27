@@ -12,8 +12,12 @@ import TablePagination from "@mui/material/TablePagination";
 import TableRow from "@mui/material/TableRow";
 import { ChainvoiceABI } from "@/contractsABI/ChainvoiceABI";
 import { getWagmiChainInfo } from "@/utils/wagmiChainHelpers";
+import {
+  findBatchSuggestions,
+  visibleInvoiceIds,
+} from "@/utils/batchSelection";
 import { BrowserProvider, Contract, ethers } from "ethers";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccount, useWalletClient } from "wagmi";
 import DescriptionIcon from "@mui/icons-material/Description";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
@@ -171,12 +175,13 @@ function ReceivedInvoice() {
   const [selectedInvoices, setSelectedInvoices] = useState(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
   const singlePaymentInFlight = Object.values(paymentLoading).some(Boolean);
-  const [batchSuggestions, setBatchSuggestions] = useState([]);
 
   // Identifies the list on screen, so a payment handler can tell whether the
   // user paged (or switched wallet/network) while its transaction was pending.
   const pageContextKey = `${address}-${chainId}-${page}-${rowsPerPage}`;
   const pageContextRef = useRef(pageContextKey);
+  // The page whose invoices are in receivedInvoices; a failed fetch leaves it behind.
+  const [loadedPageKey, setLoadedPageKey] = useState(null);
   useEffect(() => {
     pageContextRef.current = pageContextKey;
   }, [pageContextKey]);
@@ -257,43 +262,15 @@ function ReceivedInvoice() {
     return null;
   };
 
-  const findBatchSuggestions = (invoices) => {
-    const suggestions = [];
-    const groups = invoices
-      .filter(isInvoicePayable)
-      .reduce((acc, inv) => {
-        // Undated on-chain-only invoices would otherwise all share the
-        // "Invalid Date" key and be suggested as one bogus batch.
-        const issueDate = inv.issueDate
-          ? new Date(inv.issueDate).toDateString()
-          : `undated-${inv.id}`;
-        const key = `${inv.user?.address}_${inv.paymentToken?.address || "ETH"
-          }_${issueDate}`;
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(inv);
-        return acc;
-      }, {});
-
-    Object.entries(groups).forEach(([key, invoices]) => {
-      if (invoices.length >= 2) {
-        const totalAmount = ethers.formatUnits(
-          sumBaseUnits(invoices),
-          invoices[0].paymentToken.decimals
-        );
-        suggestions.push({
-          id: key,
-          invoices,
-          sender: invoices[0].user,
-          token: invoices[0].paymentToken,
-          totalAmount,
-          reason: `${invoices.length} invoices from same sender on same day`,
-          type: "same_day_sender",
-        });
-      }
-    });
-
-    return suggestions;
-  };
+  // Suggestions follow the active filters, so a hidden invoice is never suggested,
+  // and only the loaded page counts, so a failed page fetch cannot leave old ones.
+  const batchSuggestions = useMemo(
+    () =>
+      loadedPageKey === pageContextKey
+        ? findBatchSuggestions(filteredAndSortedInvoices)
+        : [],
+    [filteredAndSortedInvoices, loadedPageKey, pageContextKey]
+  );
 
   // ESTIMATED GAS FOR THE TRANSACTIONS A PAYMENT WILL SEND
   // One estimator per transaction; the batch flow sends one per token group.
@@ -462,7 +439,10 @@ function ReceivedInvoice() {
   };
 
   const selectBatchSuggestion = (suggestion) => {
-    const invoiceIds = suggestion.invoices.map((inv) => inv.id);
+    const invoiceIds = visibleInvoiceIds(
+      suggestion.invoices,
+      filteredAndSortedInvoices
+    );
     setSelectedInvoices(new Set(invoiceIds));
     toast.success(`Selected ${invoiceIds.length} invoices for batch payment`);
   };
@@ -811,7 +791,6 @@ function ReceivedInvoice() {
   // selection nor a suggestion may outlive the page it was built from.
   useEffect(() => {
     setSelectedInvoices(new Set());
-    setBatchSuggestions([]);
     setBulkExportOpen(false);
   }, [page, rowsPerPage, address, chainId]);
 
@@ -859,7 +838,7 @@ function ReceivedInvoice() {
 
         if (res.length === 0) {
           setReceivedInvoice([]);
-          setBatchSuggestions([]);
+          setLoadedPageKey(pageContextKey);
           setSelectedInvoices(new Set());
           return;
         }
@@ -942,12 +921,11 @@ function ReceivedInvoice() {
 
         if (cancelled) return;
         setReceivedInvoice(decryptedInvoices);
+        setLoadedPageKey(pageContextKey);
         // A refetch of the same page may no longer carry every selected invoice.
         setSelectedInvoices((prev) =>
           filterSelectionToPage(prev, decryptedInvoices)
         );
-        const suggestions = findBatchSuggestions(decryptedInvoices);
-        setBatchSuggestions(suggestions);
         const fee = await contract.devFee();
         if (cancelled) return;
         setFee(fee);
