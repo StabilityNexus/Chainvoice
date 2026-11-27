@@ -61,6 +61,7 @@ import {
   getLineAmountDetails,
   getSafeLineAmountDisplay,
   INVOICE_DECIMALS,
+  formatInvoiceAmountDisplay,
 } from "@/utils/invoiceCalculations";
 import {
   getClientAddressError,
@@ -170,7 +171,7 @@ function CreateInvoicesBatch() {
         };
       })
     );
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [invoiceRows.map((r) => JSON.stringify(r.itemData)).join(",")]);
 
 
@@ -287,7 +288,7 @@ function CreateInvoicesBatch() {
       if (/[^0-9.]/.test(value)) return;
       const parts = value.split(".");
       if (parts.length > 2) return;
-      
+
       const numValue = parseFloat(value);
       if (
         (name === "discount" && invoiceRows[rowIndex]?.itemData[itemIndex]?.discountType === "percentage" && (numValue < 0 || numValue > 100)) ||
@@ -498,13 +499,13 @@ function CreateInvoicesBatch() {
       setRowTotalErrors(validation.totalErrors || {});
       setRowItemErrors(validation.itemErrors || {});
       setFieldErrors(validation.fieldErrors || {});
-      
+
       // eslint-disable-next-line no-unused-vars
-      const hasFieldErrors = Object.keys(validation.addressErrors || {}).length > 0 || 
+      const hasFieldErrors = Object.keys(validation.addressErrors || {}).length > 0 ||
                              Object.keys(validation.totalErrors || {}).length > 0 ||
                              Object.keys(validation.itemErrors || {}).length > 0 ||
                              Object.keys(validation.fieldErrors || {}).length > 0;
-                             
+
       toast.error(validation.errorMessage || "Please fix the required fields");
       return null;
     }
@@ -848,9 +849,17 @@ function CreateInvoicesBatch() {
     await createInvoicesRequest();
   };
 
-  const totalBatchAmount = invoiceRows.reduce((sum, row) => {
-    return sum + (parseFloat(row.totalAmountDue) || 0);
-  }, 0);
+  const totalBatchAmountWei = invoiceRows.reduce((sum, row) => {
+    return sum + ethers.parseUnits(
+      String(row.totalAmountDue || "0"),
+      INVOICE_DECIMALS
+    );
+  }, 0n);
+
+  const totalBatchAmount = formatUnits(
+    totalBatchAmountWei,
+    INVOICE_DECIMALS
+  );
 
   const validInvoices = invoiceRows.filter(
     (row) => row.clientAddress && parseFloat(row.totalAmountDue) > 0
@@ -971,7 +980,7 @@ function CreateInvoicesBatch() {
             </div>
             <div>
               <div className="text-xl sm:text-2xl font-bold">
-                {totalBatchAmount.toFixed(4)}
+                {formatInvoiceAmountDisplay(totalBatchAmount)}
               </div>
               <div className="text-gray-300 text-xs sm:text-sm">
                 Total Amount (
@@ -1196,7 +1205,7 @@ function CreateInvoicesBatch() {
                           : "No client"}
                       </div>
                       <div className="font-semibold text-gray-800">
-                        {parseFloat(row.totalAmountDue).toFixed(4)}{" "}
+                        {formatInvoiceAmountDisplay(row.totalAmountDue)}{" "}
                         {useCustomToken
                           ? verifiedToken?.symbol || "TOKEN"
                           : selectedToken?.symbol || "TOKEN"}
@@ -1376,9 +1385,9 @@ function CreateInvoicesBatch() {
                         {row.itemData.map((item, itemIndex) => (
                           <div
                             className="flex flex-col md:grid gap-3 md:gap-2 items-start py-3 px-4 border-b border-gray-100 last:border-0 relative"
-                            style={{ 
+                            style={{
                               gridTemplateColumns: 'repeat(16, minmax(0, 1fr))',
-                              zIndex: Math.max(1, row.itemData.length - itemIndex) 
+                              zIndex: Math.max(1, row.itemData.length - itemIndex)
                             }}
                             key={item.id}
                           >
@@ -1537,7 +1546,7 @@ function CreateInvoicesBatch() {
                                   Amount
                                 </label>
                                 <div className="bg-gray-100 px-3 py-2 rounded border text-gray-700 font-mono text-sm">
-                                  {item.amount === "" ? "-" : (Number(item.amount) || 0).toFixed(4)}
+                                  {item.amount === "" ? "-" : formatInvoiceAmountDisplay(item.amount)}
                                 </div>
                               </div>
                               <div className="md:col-span-1 flex justify-center md:justify-center">
@@ -1588,7 +1597,7 @@ function CreateInvoicesBatch() {
                               Total:
                             </span>
                             <span className="font-bold text-base sm:text-lg text-gray-900">
-                              {parseFloat(row.totalAmountDue).toFixed(4)}{" "}
+                              {formatInvoiceAmountDisplay(row.totalAmountDue)}{" "}
                               {useCustomToken
                                 ? verifiedToken?.symbol || "TOKEN"
                                 : selectedToken?.symbol || "TOKEN"}

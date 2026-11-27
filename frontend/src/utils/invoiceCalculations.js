@@ -48,7 +48,7 @@ export const getLineAmountDetails = (item) => {
   }
 
   const lineTotalWei = (qtyWei * unitPriceWei) / ONE_INVOICE_UNIT;
-  
+
   const discountType = item?.discountType || "amount";
   const taxType = item?.taxType || "percentage";
 
@@ -85,4 +85,17 @@ export const getSafeLineAmountDisplay = (item) => {
   if (!valid) return "";
   const safeAmount = amountWei < 0n ? 0n : amountWei;
   return formatUnits(safeAmount, INVOICE_DECIMALS);
+};
+
+export const formatInvoiceAmountDisplay = (value) => {
+  const normalized = String(value ?? "").trim();
+
+  if (!normalized) return "";
+
+  const formatted = normalized.replace(
+    /(\.\d*?[1-9])0+$|\.0+$/,
+    "$1"
+  );
+
+  return /^-?0(?:\.0*)?$/.test(formatted) ? "0" : formatted;
 };
